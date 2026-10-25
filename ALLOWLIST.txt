@@ -4,3 +4,6 @@ README.md
 ALLOWLIST.txt
 requirements.txt
 ae_escalation_spot_check.ipynb
+data/weekly_ae_activity_20261011.csv
+data/bank-holidays_20261024.json
+data/MANIFEST.tsv

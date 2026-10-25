@@ -14,7 +14,7 @@
 *.pickle
 *.h5
 *.hdf5
-data/
+data/*
 datasets/
 
 # Model weights
@@ -42,3 +42,10 @@ __pycache__/
 Thumbs.db
 
 # PDF files are not ignored: the report PDF is a deliverable.
+
+# The PHS weekly A&E file, the frozen GOV.UK bank holidays and their manifest, published with
+# the project. data/* above ignores the folder's contents, not the folder, so these lines can
+# bring each file back.
+!data/weekly_ae_activity_20261011.csv
+!data/bank-holidays_20261024.json
+!data/MANIFEST.tsv
