@@ -25,6 +25,7 @@ Systems (agentic_system.py, the scenario set run through Workflow with its
 RecordingStore, replayed by the notebook without the model).
 """
 
+import shutil
 import tempfile
 import time
 from dataclasses import dataclass
@@ -33,16 +34,17 @@ from pathlib import Path
 import pandas as pd
 from pydantic import BaseModel
 
+from . import agents as ag
 from . import evaluation as ev
 from . import tools as tl
-from .agents import BriefGraph, BriefOutcome
+from .agents import BriefGraph, BriefOutcome, load_prompts
 from .approval import ApprovalQueue, read_decisions
 from .backtest import site_sizes
 from .briefs import CitedFigure
 from .coordinator import Coordinator
 from .design import NATIONAL, REPLAY
 from .figures import ledger_numbers, plain, within_rounding
-from .gateway import AuditLog, ModelGateway, RecordingStore
+from .gateway import AuditLog, ModelGateway, RecordingStore, ReplayMiss
 
 # The probe's count for the approved design (build spec, section 2, item 7).
 EXPECTED = {"total": 7, "by_source": {"latch": 4, "demand": 2, "surge": 1}}
@@ -207,6 +209,12 @@ class Paths:
         return self._recordings / "briefs.jsonl"
 
     @property
+    def prompts(self):
+        """The prompt files this label ran with, kept beside its
+        recordings."""
+        return self._recordings / "prompts"
+
+    @property
     def notify(self):
         return self._recordings / "notify.jsonl"
 
@@ -242,6 +250,24 @@ class Paths:
     def outbox(self):
         name = f"notifications_{self.backend}_{self.label}.jsonl"
         return self.base / "outbox" / name
+
+
+def label_prompts(paths, live):
+    """The prompts a labelled run uses: copied from the package when the
+    label is first recorded, and read from that copy ever after, so a
+    round's recordings still replay after the prompt-tuning round changes
+    the package's prompts (review P2-10)."""
+    folder = paths.prompts
+    if live and not folder.exists():
+        folder.mkdir(parents=True)
+        for source in sorted(ag.PROMPTS_PATH.glob("*.md")):
+            shutil.copyfile(source, folder / source.name)
+    if not folder.exists():
+        raise ReplayMiss(
+            f"no prompts were kept in {folder}; the replay needs the "
+            "prompts the label ran with"
+        )
+    return load_prompts(folder)
 
 
 class ReplaySetResult(BaseModel):
@@ -295,7 +321,14 @@ def run_set(
         log=log,
         digest=digest,
     )
-    graph = BriefGraph(run, holidays, settings, gateway, log=log)
+    graph = BriefGraph(
+        run,
+        holidays,
+        settings,
+        gateway,
+        prompts=label_prompts(paths, live),
+        log=log,
+    )
     budget = settings.agents.run_budget_s
 
     def within_budget():
@@ -388,7 +421,13 @@ def coordinate_approved(
         log=log,
         digest=digest,
     )
-    coordinator = Coordinator(settings, gateway, outbox=outbox, log=log)
+    coordinator = Coordinator(
+        settings,
+        gateway,
+        outbox=outbox,
+        prompts=label_prompts(paths, live),
+        log=log,
+    )
     return [
         coordinator.coordinate(item)
         for item in queue.items()

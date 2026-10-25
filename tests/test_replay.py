@@ -223,3 +223,34 @@ def test_a_run_past_its_budget_is_stopped(
             live=True,
             chat_model=stand_in(),
         )
+
+
+# --- the prompts are kept with each label (review P2-10) ---------------------
+
+
+def test_a_label_keeps_its_prompts_and_replays_from_them(
+    replay_run, holidays, settings, tmp_path, monkeypatch
+):
+    from ae_escalation import agents as ag
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    live = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    kept = sorted(p.name for p in paths.prompts.glob("*.md"))
+    assert kept == ["coordinator.md", "investigator.md", "reviewer.md"]
+    for name in kept:
+        assert (paths.prompts / name).read_text() == (
+            ag.PROMPTS_PATH / name
+        ).read_text()
+    # The tuning round changes the package's prompts; round 1 still replays.
+    tuned = tmp_path / "tuned"
+    tuned.mkdir()
+    for name in kept:
+        text = (ag.PROMPTS_PATH / name).read_text()
+        (tuned / name).write_text(text.replace("Plan them.", "Plan well."))
+    monkeypatch.setattr(ag, "PROMPTS_PATH", tuned)
+    again = rp.run_set(replay_run, holidays, settings, paths, live=False)
+    assert [o.status for o in again.outcomes] == [
+        o.status for o in live.outcomes
+    ]
