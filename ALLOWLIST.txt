@@ -58,3 +58,7 @@ ae_escalation/template.py
 tests/test_template.py
 ae_escalation/replay.py
 tests/test_replay.py
+ae_escalation/adequacy.py
+ae_escalation/live.py
+tests/test_adequacy.py
+tests/test_live.py
