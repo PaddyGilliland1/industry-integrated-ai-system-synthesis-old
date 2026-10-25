@@ -170,10 +170,9 @@ def test_the_level_line_names_its_source(latch, surge):
 
 def test_it_shows_no_gru_no_chance_no_calendar_and_no_ranking(demand, latch):
     for brief in (demand, latch):
-        # The band line is the rule's, printed in both briefs alike: it
-        # names the flag's threshold, never a week's own stated chance.
-        band = tl.level_band(brief.level, brief.level_source)
-        low = brief.text().replace(band, "").lower()
+        # The band line is checked too: it is printed in both briefs alike,
+        # and quotes no chance, since the track record stands in for one.
+        low = brief.text().lower()
         for word in (
             "gru",
             "chance",
@@ -184,7 +183,6 @@ def test_it_shows_no_gru_no_chance_no_calendar_and_no_ranking(demand, latch):
             "best",
         ):
             assert word not in low, word
-        assert "primary" not in band.lower()
 
 
 def test_every_number_and_date_in_it_comes_from_a_tool_result(demand, latch):

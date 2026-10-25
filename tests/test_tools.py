@@ -1,6 +1,7 @@
 """The Investigator's read-only tools and the code's screen: typed in and
 out, every one as of an origin, none returning the flag's stated chance."""
 
+import re
 import typing
 
 import numpy as np
@@ -251,76 +252,64 @@ def test_the_screen_at_the_latch_week_names_four_latch_briefs(run):
         assert e.level_meaning == tl.LEVEL_MEANING
 
 
-LEVEL_1 = (
-    "Level 1 means usual demand for the time of year, below 1.05 times the "
-    "seasonal baseline; levels 2 to 4 mean unusually high. "
+CAPACITY = "simulated capacity, a seasonal baseline of past demand"
+NOT_HIGH = (
+    "the rule found no week ahead unusually high for the time of year. It "
+    "says nothing about demand below the usual"
 )
+FLAGGED = (
+    "the rule flagged a week ahead as reaching 1.05 times its " + CAPACITY
+)
+SURGE = (
+    "Level {} from the surge: the latest released week was {} times "
+    + CAPACITY
+    + ", taken at its lowest over the four weeks ahead."
+)
+HELD = "Level {}, held: the level the flag gave in the week before the alarm, "
+BANDS = [
+    (1, "flag", f"Level 1 from the flag: {NOT_HIGH}."),
+    (
+        2,
+        "flag",
+        f"Level 2 from the flag: going by past forecast errors, {FLAGGED}.",
+    ),
+    (1, "surge", SURGE.format(1, "below 1.05")),
+    (2, "surge", SURGE.format(2, "1.05 to under 1.10")),
+    (3, "surge", SURGE.format(3, "1.10 to under 1.15")),
+    (4, "surge", SURGE.format(4, "at least 1.15")),
+    (
+        1,
+        "held",
+        HELD.format(1)
+        + f"when {NOT_HIGH}, and is kept until a person approves a latch "
+        "reset.",
+    ),
+    (
+        2,
+        "held",
+        HELD.format(2)
+        + f"when {FLAGGED}. It is kept until a person approves a latch "
+        "reset.",
+    ),
+]
 
 
-@pytest.mark.parametrize(
-    "level, source, line",
-    [
-        (
-            1,
-            "flag",
-            LEVEL_1 + "From the flag, going by past forecast errors, no "
-            "week ahead has at least an even chance of reaching 1.05 times "
-            "the seasonal baseline.",
-        ),
-        (
-            2,
-            "flag",
-            "Level 2 from the flag means that, going by past forecast "
-            "errors, one of the four weeks ahead has at least an even chance "
-            "of reaching 1.05 times the seasonal baseline.",
-        ),
-        (
-            1,
-            "surge",
-            LEVEL_1 + "From the surge, the latest released week was below "
-            "1.05 times the lowest seasonal baseline of the four weeks ahead.",
-        ),
-        (
-            2,
-            "surge",
-            "Level 2 from the surge means the latest released week was 1.05 "
-            "to under 1.10 times the lowest seasonal baseline of the four "
-            "weeks ahead.",
-        ),
-        (
-            3,
-            "surge",
-            "Level 3 from the surge means the latest released week was 1.10 "
-            "to under 1.15 times the lowest seasonal baseline of the four "
-            "weeks ahead.",
-        ),
-        (
-            4,
-            "surge",
-            "Level 4 from the surge means the latest released week was at "
-            "least 1.15 times the lowest seasonal baseline of the four weeks "
-            "ahead.",
-        ),
-        (
-            1,
-            "held",
-            LEVEL_1 + "Held, it is the level the flag gave in the week before "
-            "the alarm, when no week ahead had at least an even chance of "
-            "reaching 1.05 times the seasonal baseline. It is kept until a "
-            "person approves a latch reset.",
-        ),
-        (
-            2,
-            "held",
-            "Level 2, held, is the level the flag gave in the week before the "
-            "alarm, when one of the four weeks ahead had at least an even "
-            "chance of reaching 1.05 times the seasonal baseline. It is kept "
-            "until a person approves a latch reset.",
-        ),
-    ],
-)
+@pytest.mark.parametrize("level, source, line", BANDS)
 def test_each_level_states_what_its_source_means(level, source, line):
     assert tl.level_band(level, source) == line
+
+
+@pytest.mark.parametrize("level, source", [b[:2] for b in BANDS])
+def test_no_band_line_quotes_a_chance_or_calls_level_1_usual(level, source):
+    # The track record says how often flags were borne out, so no line may
+    # state the flag's chance, which runs about twice what happens; and
+    # level 1 covers demand far below the usual, so none calls it usual.
+    line = tl.level_band(level, source)
+    assert not re.search(r"chance|probab|likel|%|usual demand", line, re.I)
+    assert "seasonal baseline" not in line.replace(CAPACITY, "")
+    if "simulated capacity" in line:
+        first = line.index("simulated capacity")
+        assert line[first:].startswith(CAPACITY)
 
 
 @pytest.mark.parametrize("level, source", [(3, "flag"), (4, "held")])
@@ -331,7 +320,7 @@ def test_a_level_its_source_cannot_give_is_refused(level, source):
 
 def test_each_replay_briefs_band_line_is_true_of_the_rule(run):
     # What each line says, checked on the run itself: the flag's chance at
-    # the origin, the latest week over the lowest seasonal baseline ahead,
+    # the origin, the latest week over the lowest simulated capacity ahead,
     # and the flag in the week before a held episode's alarm.
     from ae_escalation import replay as rp
     from ae_escalation import rules as ru

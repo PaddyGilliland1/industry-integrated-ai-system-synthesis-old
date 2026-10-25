@@ -82,69 +82,58 @@ def level_band(level, source):
     """The line that follows the level's meaning in every brief: what this
     level means from its source, built from the rule's constants.
 
-    The meaning line alone reads as if every level were unusually high, so
-    level 1 also says it is usual demand. Each clause says what rules.py
-    does. The flag (exceed_prob, any_at_least) is raised when, by the
-    primary's forecast and its past errors, a week ahead has at least an
-    even chance of reaching the first cut times its capacity, and gives
-    level 2, or 1 when not raised. The line says "past forecast errors"
-    without naming the primary, since the template brief never names one.
-    A surge level (run_realtime) is the band of the latest released week
-    over the capacity of each week ahead, which is its band over the lowest
-    of them. A held level (demand_level) is the flag's level in the week
-    before the alarm.
+    It never states the flag's chance, which runs about twice what happens:
+    the track record says how often flags were borne out. Level 1 says only
+    that the rule found nothing unusually high, since demand far below the
+    usual is level 1 too. Capacity is named by its defined term, with its
+    first-use gloss. Each clause says what rules.py does. The flag
+    (exceed_prob, any_at_least) gives level 2 when, by the primary's
+    forecasts and their past errors, it flags a week ahead as reaching the
+    first cut times its capacity, and 1 otherwise. The line says "past
+    forecast errors" without naming the primary, since the template brief
+    never names one. A surge level (run_realtime) is the band of the latest
+    released week over the capacity of each week ahead, which is its band
+    over the lowest of them. A held level (demand_level) is the flag's level
+    in the week before the alarm.
     """
     cuts = [f"{c:.2f}" for c in ru.CUTS]
     top = len(cuts) + 1
-    chance = (
-        "an even chance"
-        if ru.FLAG_P == 0.5
-        else f"a {100 * ru.FLAG_P:g}% chance"
+    capacity = "simulated capacity, a seasonal baseline of past demand"
+    not_high = (
+        "the rule found no week ahead unusually high for the time of year. "
+        "It says nothing about demand below the usual"
     )
-    reach = f"{cuts[0]} times the seasonal baseline"
-    held = "It is kept until a person approves a latch reset."
-    level_1 = (
-        f"Level 1 means usual demand for the time of year, below {cuts[0]} "
-        f"times the seasonal baseline; levels 2 to {top} mean unusually high."
+    flagged = (
+        f"the rule flagged a week ahead as reaching {cuts[0]} times its "
+        f"{capacity}"
     )
+    held = (
+        f"Level {level}, held: the level the flag gave in the week before the "
+        "alarm, when "
+    )
+    kept = "kept until a person approves a latch reset."
     if source == "flag" and level == 1:
-        return (
-            f"{level_1} From the flag, going by past forecast errors, no week "
-            f"ahead has at least {chance} of reaching {reach}."
-        )
+        return f"Level 1 from the flag: {not_high}."
     if source == "flag" and level == 2:
         return (
-            "Level 2 from the flag means that, going by past forecast errors, "
-            f"one of the {AHEAD} weeks ahead has at least {chance} of "
-            f"reaching {reach}."
+            "Level 2 from the flag: going by past forecast errors, "
+            f"{flagged}."
         )
     if source == "held" and level == 1:
-        return (
-            f"{level_1} Held, it is the level the flag gave in the week "
-            f"before the alarm, when no week ahead had at least {chance} of "
-            f"reaching {reach}. {held}"
-        )
+        return f"{held}{not_high}, and is {kept}"
     if source == "held" and level == 2:
-        return (
-            "Level 2, held, is the level the flag gave in the week before the "
-            f"alarm, when one of the {AHEAD} weeks ahead had at least "
-            f"{chance} of reaching {reach}. {held}"
-        )
+        return f"{held}{flagged}. It is {kept}"
     if source == "surge" and 1 <= level <= top:
-        lowest = f"the lowest seasonal baseline of the {AHEAD} weeks ahead"
         if level == 1:
-            return (
-                f"{level_1} From the surge, the latest released week was "
-                f"below {cuts[0]} times {lowest}."
-            )
-        band = (
-            f"at least {cuts[-1]}"
-            if level == top
-            else f"{cuts[level - 2]} to under {cuts[level - 1]}"
-        )
+            band = f"below {cuts[0]}"
+        elif level == top:
+            band = f"at least {cuts[-1]}"
+        else:
+            band = f"{cuts[level - 2]} to under {cuts[level - 1]}"
         return (
-            f"Level {level} from the surge means the latest released week "
-            f"was {band} times {lowest}."
+            f"Level {level} from the surge: the latest released week was "
+            f"{band} times {capacity}, taken at its lowest over the {AHEAD} "
+            "weeks ahead."
         )
     raise ValueError(f"the rule gives no level {level} from the {source}")
 
