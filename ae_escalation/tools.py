@@ -55,7 +55,23 @@ MEASURES = {
     "unflagged_busy_pct": ("get_track_record", "%"),
     "holidays": ("get_calendar", "count"),
 }
-Measure = Literal[tuple(MEASURES)]
+Measure = Literal[
+    "point",
+    "low_80",
+    "high_80",
+    "low_95",
+    "high_95",
+    "spread",
+    "history",
+    "error",
+    "targets",
+    "flags",
+    "borne_out",
+    "unflagged",
+    "unflagged_busy",
+    "unflagged_busy_pct",
+    "holidays",
+]
 
 
 class Request(BaseModel):

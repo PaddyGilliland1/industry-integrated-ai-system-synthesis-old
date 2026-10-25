@@ -29,7 +29,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -49,7 +49,7 @@ class AuditLog:
         self.entries = []
         # While a resumed run repeats what the stopped run already logged,
         # a function that says so; each entry it writes then is marked.
-        self.replaying = None
+        self.replaying: Callable[[], bool] | None = None
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 

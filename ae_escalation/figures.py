@@ -191,7 +191,10 @@ def _day_range(m):
     """The two dates of "27 to 18 Jul 2021": the first day in the second's
     month, or in the month before when it is the larger. None if either is
     not a real date."""
-    year, month, day = _date_value(m)
+    # The pattern always gives the second day and its month by name.
+    month = MONTHS[m.group("mon")[:3].lower()]
+    day = int(m.group("d"))
+    year = int(m.group("y")) if m.group("y") else None
     first = int(m.group("d1"))
     first_month, first_year = month, year
     if first > day:
@@ -200,9 +203,9 @@ def _day_range(m):
             first_year = year - 1
     pair = ((first_year, first_month, first), (year, month, day))
     try:
-        for value in pair:
-            if value[0]:
-                date(*value)
+        for y, mo, d in pair:
+            if y is not None:
+                date(y, mo, d)
     except ValueError:
         return None
     return pair
@@ -232,10 +235,10 @@ def tokens(text):
             # "may" in lower case is the verb, not the month.
             if mon == "may":
                 continue
+            year, month, day = value = _date_value(m)
             try:
-                value = _date_value(m)
-                if value[0] and value[2]:
-                    date(*value)
+                if year is not None and day is not None:
+                    date(year, month, day)
             except ValueError:
                 continue
             found.append(Token("date", m.group(0), m.start(), value))

@@ -328,3 +328,7 @@ def test_the_tools_never_change_the_run(run):
     )
     tl.screen_at(run, ORIGIN)
     pd.testing.assert_frame_equal(run.frame, before)
+
+
+def test_the_measure_type_lists_every_measure_the_tools_return():
+    assert typing.get_args(tl.Measure) == tuple(tl.MEASURES)
