@@ -16,10 +16,11 @@ language-model review, and on every edit:
   figure's week, and the rule's level;
 - the level field must equal the rule's.
 
-The same check runs on each drafted staff notification before the outbox:
-any number or date in it must match a tool result for the same hospital and
-week, or a value code set for that action, such as its level or reply
-deadline.
+The same check runs on each drafted staff notification before the outbox,
+as it will be written (review P1-2): a number must be a figure the approved
+brief's text states, or the action's level, and a date one of the action's
+weeks, its reply deadline, the brief's origin or release, or a date the
+brief's text states.
 
 "Within rounding" means the tool's value, rounded to the places the brief
 writes, gives the brief's number: 1,203 matches 1,202.66 and 4.3 matches
