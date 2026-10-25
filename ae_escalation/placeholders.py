@@ -616,6 +616,16 @@ def _word_problems(field, text):
 # --- the placeholders themselves ---------------------------------------------
 
 SIGNS = "+-\u2212\u00b1~\u2248<>"
+# A week token straight after a figure, with at most a comma, a bracket and
+# one linking word between them: "{F1} for {WEEK1}", "{F1} ({WEEK1})".
+ECHO = re.compile(
+    r"\s*[,(]?\s*(?i:(?:for|in|at|on|of|by|from|to|until|through|during"
+    r"|over|across|around)\s+)?(?i:the\s+week\s+(?:of\s+)?)?"
+    r"\{(?P<token>WEEK(?P<k>[1-4])|ORIGIN|LATCHED)\}"
+)
+# What a figure's label names its week for: a forecast, a range end, the
+# spread, an actual and a count of bank holidays in one week.
+WEEK_MEASURES = (*FORECAST_MEASURES, "history", "holidays")
 UNIT_AFTER = re.compile(
     r"\s*(?:(?:attendances?|outlooks?|(?:un)?flagged|flags?|weeks?"
     r"|(?:bank\s+)?holidays?|patients?)\b|%|per\s?cent\b)",
@@ -684,6 +694,40 @@ def _figure_problems(text, m, figures, ctx, fail):
         )
 
 
+def _echo_problem(text, m, figures, ctx, fail):
+    """A week token straight after a figure whose label already names that
+    week, as in "{F1} for {WEEK1}": the reader would see the week twice,
+    once in the label and once in the words."""
+    n = int(m.group("n"))
+    echo = ECHO.match(text, m.end())
+    if echo is None or n > len(figures):
+        return
+    fig = figures[n - 1]
+    if fig.measure not in WEEK_MEASURES:
+        return
+    horizon, week = resolved(fig, ctx)
+    token, k = echo.group("token"), echo.group("k")
+    if ctx is None:
+        # With no brief there is no week to compare, so a forecast's
+        # release horizon stands for it.
+        same = k is not None and horizon == int(k)
+    else:
+        said = {"ORIGIN": ctx.origin, "LATCHED": ctx.latched_since}.get(token)
+        if k is not None:
+            said = ctx.targets[int(k) - 1]
+        same = week is not None and week == said
+    if not same:
+        return
+    found = text[m.start() : echo.end()]
+    named = week_text(week) if week else f"release horizon {horizon}"
+    fail(
+        m.start(),
+        found,
+        f"{found}: {m.group(0)}'s label already names {named}, so the week "
+        f"would read twice; write {m.group(0)} without {{{token}}}",
+    )
+
+
 def _placeholder_problems(field, text, figures, ctx):
     """Every placeholder that names nothing code knows, or that sits where
     its value cannot be read as written."""
@@ -719,6 +763,7 @@ def _placeholder_problems(field, text, figures, ctx):
                 )
             last = (start, end)
             _figure_problems(text, m, figures, ctx, fail)
+            _echo_problem(text, m, figures, ctx, fail)
         elif name == "LATCHED" and ctx is not None and not ctx.latched_since:
             fail(start, whole, f"{whole}: this brief's drift latch is not set")
         elif name == "DEADLINE" and (ctx is None or not ctx.notification):

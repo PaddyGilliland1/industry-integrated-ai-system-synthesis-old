@@ -117,7 +117,7 @@ def true_draft(ledger, entry):
         cite(round(forecast["spread_pct"]["1"], 1), "T1", "spread", horizon=1),
     ]
     return BriefDraft(
-        summary="{PRIMARY} forecasts {F1} for {WEEK1}.",
+        summary="The forecasts put demand above the usual, starting at {F1}.",
         expected_range="The likely range runs from {F2} to {F3}.",
         model_agreement=(
             "The forecasts spread {F4}, so the lowest is the one to trust "

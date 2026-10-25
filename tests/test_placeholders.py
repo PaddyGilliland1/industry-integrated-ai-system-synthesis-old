@@ -419,6 +419,54 @@ def test_a_placeholder_misused_fails_with_a_named_problem(text, named, says):
     assert mine and says in mine[0].reason, got
 
 
+# --- a figure's label names its week, so the words never repeat it ----------
+
+# Ninewells' actual at the origin, w/e 13 Jun 2021, as F10.
+ACTUAL_AT_ORIGIN = cite(1194, "history", "T5", week=date(2021, 6, 13))
+
+
+@pytest.mark.parametrize(
+    "text, found",
+    [
+        ("{PRIMARY} forecasts {F1} for {WEEK1}.", "{F1} for {WEEK1}"),
+        ("Demand reaches {F1} in {WEEK1}.", "{F1} in {WEEK1}"),
+        ("Demand reaches {F3} by {WEEK3}.", "{F3} by {WEEK3}"),
+        ("Demand reaches {F1} ({WEEK1}).", "{F1} ({WEEK1}"),
+        ("Demand reaches {F1}, {WEEK1}.", "{F1}, {WEEK1}"),
+        ("The range starts at {F6} for {WEEK1}.", "{F6} for {WEEK1}"),
+        ("It ran at {F10} in {ORIGIN}.", "{F10} in {ORIGIN}"),
+    ],
+)
+def test_a_week_token_after_a_figure_naming_that_week_is_refused(text, found):
+    got = problems(text, figures=[*FIGURES, ACTUAL_AT_ORIGIN])
+    mine = [p for p in got if p.found == found]
+    assert mine, got
+    # The problem says why: the week would read twice.
+    assert "label already names w/e" in mine[0].reason
+    assert "twice" in mine[0].reason
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Another week stays: the misdescription is in plain view.
+        "{PRIMARY} forecasts {F1} for {WEEK4}.",
+        # A back-test error is for no one week.
+        "Its error is {F4} for {WEEK1}.",
+        # A week token before the figure is not an echo of its label.
+        "From {WEEK1}, demand starts at {F1}.",
+        "Demand climbs from {F1} to {F3} over the weeks ahead.",
+    ],
+)
+def test_a_week_token_the_label_does_not_name_is_not_an_echo(text):
+    assert not [p for p in problems(text) if "twice" in p.reason]
+
+
+def test_with_no_brief_an_echo_is_found_by_its_release_horizon():
+    got = ph.problems({"summary": "It is {F1} for {WEEK1}."}, FIGURES, None)
+    assert [p.found for p in got] == ["{F1} for {WEEK1}"]
+
+
 def test_every_problem_in_every_field_is_named_at_once():
     texts = {
         "summary": "SA-MA forecasts {F2} at release horizon 1 over 2 weeks' "
@@ -475,12 +523,21 @@ def test_the_draft_refuses_a_figure_written_out_even_with_no_context():
 
 def test_a_good_draft_passes_and_reads_with_its_labels():
     good = br.BriefDraft.model_validate(
-        draft("{PRIMARY} forecasts {F1} for {WEEK1}."), context={"text": CTX}
+        draft("Demand starts the weeks ahead at {F1}."), context={"text": CTX}
     )
     assert ph.render(good.summary, good.cited_figures, CTX) == (
-        "SA-MA (the primary model) forecasts 1,120 attendances (SA-MA "
-        "forecast for w/e 27 Jun 2021) for w/e 27 Jun 2021."
+        "Demand starts the weeks ahead at 1,120 attendances (SA-MA forecast "
+        "for w/e 27 Jun 2021)."
     )
+
+
+def test_the_draft_refuses_an_echo_through_its_validator():
+    with pytest.raises(ValidationError) as info:
+        br.BriefDraft.model_validate(
+            draft("{PRIMARY} forecasts {F1} for {WEEK1}."),
+            context={"text": CTX},
+        )
+    assert any("twice" in p for p in br.problems_of(info.value))
 
 
 def test_a_cited_figure_must_say_what_it_is():

@@ -893,7 +893,7 @@ def test_the_plant_after_a_summary_with_no_full_stop_is_caught(
     from ae_escalation import replay as rp
 
     d = good_draft(run)
-    d["summary"] = "{PRIMARY} forecasts {F1}, against {F8}"
+    d["summary"] = "{PRIMARY} forecasts {F1}, against {F5}"
     d["cited_figures"].append(
         figure(835, "T1", "point", model="seasonal naive", horizon=1)
     )

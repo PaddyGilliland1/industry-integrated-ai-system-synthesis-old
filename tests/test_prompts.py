@@ -144,6 +144,22 @@ def test_the_investigator_writes_none_of_the_fact_lines():
     )
 
 
+@pytest.mark.parametrize("agent", ["investigator", "coordinator"])
+def test_each_writer_is_told_never_to_echo_what_a_label_names(agent):
+    system = PROMPTS[agent]["SYSTEM"]
+    assert "never restate them beside it" in system
+    assert '"{F1} for {WEEK1}"' in system
+    assert "code refuses a week token straight after a figure" in system
+
+
+def test_no_worked_example_echoes_a_label():
+    investigator = json.dumps(example_brief())
+    coordinator = PROMPTS["coordinator"]["SYSTEM"].split("Example:")[1]
+    for text in (investigator, coordinator):
+        assert "{PRIMARY} forecasts {F" not in text
+        assert not re.search(r"\{F\d+\} (?:for|in|by) \{WEEK", text)
+
+
 def test_the_reviewer_refuses_an_untrusted_forecast_given_as_guidance():
     system = PROMPTS["reviewer"]["SYSTEM"]
     assert "an untrusted forecast something to plan on" in system

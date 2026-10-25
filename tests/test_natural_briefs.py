@@ -1,11 +1,12 @@
-"""Briefs as a careful model would write them under the token rules, one
-for each kind in the replay set, pass the rules and the code check against
-the real tool results and read plainly. Every sentence that once passed the
-check while giving a figure the wrong model, release horizon or week is
-written here the way a model would now write it: each is either refused
-with a named problem, or passes with the figure written beside its true
-label, so the misdescription is in plain view for the Reviewer and the
-duty manager."""
+"""Briefs as a careful model would write them under the token rules, both
+demand briefs and one of each other kind in the replay set, and a staff
+notification, pass the rules and the code check against the real tool
+results and read plainly, with no figure's label echoed in the words.
+Every sentence that once passed the check while giving a figure the wrong
+model, release horizon or week is written here the way a model would now
+write it: each is either refused with a named problem, or passes with the
+figure written beside its true label, so the misdescription is in plain
+view for the Reviewer and the duty manager."""
 
 import pytest
 
@@ -33,9 +34,10 @@ def h1(model):
 
 
 NATURAL = {
-    "demand": (
+    "lorn_islands_demand": (
         "2023-04-09",
         "C121H",
+        "demand",
         {
             "summary": "Plan for demand above the usual for the time of "
             "year, climbing through the weeks ahead from {F1} to {F2}. There "
@@ -65,9 +67,44 @@ NATURAL = {
             ],
         },
     ),
-    "surge": (
+    "ninewells_demand": (
+        "2021-06-13",
+        "T101H",
+        "demand",
+        {
+            "summary": "Plan for demand above the usual for the time of "
+            "year across the weeks ahead: {F1} to start with and {F2} by the "
+            "end. The latest released week, {F3}, already ran above both.",
+            "expected_range": "The range to plan within runs from {F4} to "
+            "{F5}; by the end it stretches up to {F6}.",
+            "model_agreement": "The simple models disagree by {F7}. Trust "
+            "least the model with the weakest record here, {F8}: it puts "
+            "demand at {F9}, well below the rest.",
+            "watch_points": [
+                "Check whether extra shifts or bank staff are needed from "
+                "{WEEK1} to {WEEK4}.",
+                "Hold new leave requests until the duty manager's check is "
+                "done.",
+                "Compare each released week with the range before changing "
+                "cover again.",
+            ],
+            "cited_figures": [
+                figure(1120, "T1", "point", **h1("SA-MA")),
+                figure(1086, "T1", "point", model="SA-MA", horizon=4),
+                figure(1194, "T5", "history", week="2021-06-13"),
+                figure(982, "T1", "low_80", **h1("SA-MA")),
+                figure(1291, "T1", "high_80", **h1("SA-MA")),
+                figure(1399, "T1", "high_80", model="SA-MA", horizon=4),
+                figure(25.5, "T1", "spread", horizon=1),
+                figure(24.5, "T2", "error", **h1("seasonal naive")),
+                figure(835, "T1", "point", **h1("seasonal naive")),
+            ],
+        },
+    ),
+    "edinburgh_surge": (
         "2019-10-06",
         "S314H",
+        "surge",
         {
             "summary": "Demand broke above the forecasts in {LATCHED} and is "
             "still running high, at {F1}. The forecasts are untrusted until "
@@ -90,9 +127,10 @@ NATURAL = {
             ],
         },
     ),
-    "latch": (
+    "scotland_latch": (
         "2020-03-22",
         "Scotland",
+        "latch",
         {
             "summary": "Demand fell sharply, from {F1} to {F2}, far below "
             "every forecast for the weeks ahead, and the drift alarm set the "
@@ -120,13 +158,14 @@ NATURAL = {
 }
 # The calls each brief makes after CALLS, as T5 onwards.
 NATURAL_EXTRA = {
-    "demand": [],
-    "surge": [("get_history", {"weeks": 2})],
-    "latch": [("get_history", {"weeks": 2})],
+    "lorn_islands_demand": [],
+    "ninewells_demand": [("get_history", {"weeks": 2})],
+    "edinburgh_surge": [("get_history", {"weeks": 2})],
+    "scotland_latch": [("get_history", {"weeks": 2})],
 }
 
 SHOWN = {
-    "demand": (
+    "lorn_islands_demand": (
         "Demand brief: Lorn & Islands Hospital, week ending 09 Apr 2023, "
         "released Tue 18 Apr 2023\n"
         "Demand level 2, from the flag.\n"
@@ -160,7 +199,42 @@ SHOWN = {
         "and the coronation bank holiday in w/e 14 May 2023.\n"
         "- Hold new leave requests until the duty manager's check is done."
     ),
-    "surge": (
+    "ninewells_demand": (
+        "Demand brief: Ninewells Hospital, week ending 13 Jun 2021, released "
+        "Tue 22 Jun 2021\n"
+        "Demand level 2, from the flag.\n"
+        "The demand level shows demand unusually high for the time of year. "
+        "It is not pressure, need or priority.\n"
+        "Drift alarm: none.\n"
+        "Summary: Plan for demand above the usual for the time of year "
+        "across the weeks ahead: 1,120 attendances (SA-MA forecast for w/e "
+        "27 Jun 2021) to start with and 1,086 attendances (SA-MA forecast "
+        "for w/e 18 Jul 2021) by the end. The latest released week, 1,194 "
+        "attendances (actual, w/e 13 Jun 2021), already ran above both.\n"
+        "Expected range: The range to plan within runs from 982 attendances "
+        "(low end of SA-MA's 80% range for w/e 27 Jun 2021) to 1,291 "
+        "attendances (high end of SA-MA's 80% range for w/e 27 Jun 2021); by "
+        "the end it stretches up to 1,399 attendances (high end of SA-MA's "
+        "80% range for w/e 18 Jul 2021).\n"
+        "Model agreement: The simple models disagree by 25.5% (spread of the "
+        "four models' forecasts for w/e 27 Jun 2021). Trust least the model "
+        "with the weakest record here, 24.5% (seasonal naive back-test "
+        "error, release horizon 1): it puts demand at 835 attendances "
+        "(seasonal naive forecast for w/e 27 Jun 2021), well below the "
+        "rest.\n"
+        "Back-test error: SA-MA's back-test error at release horizon 1 is "
+        "11.5%.\n"
+        "Track record: no past flag to judge; of 136 unflagged outlooks, 29 "
+        "turned busy.\n"
+        "Bank holidays ahead: none in the four weeks ahead.\n"
+        "Watch points:\n"
+        "- Check whether extra shifts or bank staff are needed from w/e 27 "
+        "Jun 2021 to w/e 18 Jul 2021.\n"
+        "- Hold new leave requests until the duty manager's check is done.\n"
+        "- Compare each released week with the range before changing cover "
+        "again."
+    ),
+    "edinburgh_surge": (
         "Demand brief: Royal Infirmary of Edinburgh at Little France, week "
         "ending 06 Oct 2019, released Tue 15 Oct 2019\n"
         "Demand level 2, from the latest released actual (surge).\n"
@@ -187,7 +261,7 @@ SHOWN = {
         "- Check each released week against cover before changing staffing "
         "again."
     ),
-    "latch": (
+    "scotland_latch": (
         "Demand brief: Scotland, week ending 22 Mar 2020, released Tue 31 "
         "Mar 2020\n"
         "Demand level 1, from the flag held from the week before the alarm "
@@ -237,12 +311,11 @@ def screened(run, origin, hospital):
     return next(e for e in tl.screen_at(run, origin) if e.hospital == hospital)
 
 
-@pytest.mark.parametrize("kind", sorted(NATURAL))
-def test_a_natural_brief_of_each_kind_passes_and_reads_plainly(
-    replay_run, holidays, kind
-):
-    origin, hospital, written = NATURAL[kind]
-    entry = screened(replay_run, origin, hospital)
+def natural_brief(run, holidays, key):
+    """One natural brief, assembled as the graph assembles it, with the
+    ledger of the calls its draft cites."""
+    origin, hospital, kind, written = NATURAL[key]
+    entry = screened(run, origin, hospital)
     assert entry.kind == kind
     draft = br.BriefDraft.model_validate(
         written, context={"text": ag.entry_context(entry)}
@@ -250,16 +323,59 @@ def test_a_natural_brief_of_each_kind_passes_and_reads_plainly(
     brief = br.DemandBrief.assemble(
         entry,
         draft,
-        br.brief_facts(replay_run, holidays, entry),
-        brief_id=kind,
+        br.brief_facts(run, holidays, entry),
+        brief_id=key,
         backend="local",
         model="m",
         model_digest=None,
     )
-    ledger = ledger_for(replay_run, holidays, entry, NATURAL_EXTRA[kind])
+    ledger = ledger_for(run, holidays, entry, NATURAL_EXTRA[key])
+    return entry, brief, ledger
+
+
+@pytest.mark.parametrize("key", sorted(NATURAL))
+def test_a_natural_brief_of_each_kind_passes_and_reads_plainly(
+    replay_run, holidays, key
+):
+    entry, brief, ledger = natural_brief(replay_run, holidays, key)
     result = check_brief(brief, ledger, entry.level)
     assert result.passed, result.failures
-    assert brief.text(written_by=False) == SHOWN[kind]
+    assert brief.text(written_by=False) == SHOWN[key]
+
+
+# Lorn & Islands' check-cover notification, as a careful model would write
+# it for the approved demand brief above.
+NOTIFIED = (
+    "{HOSPITAL}, {LEVEL}: please check whether extra shifts or bank staff "
+    "are needed from {WEEK1} to {WEEK4}, as demand climbs to {F2}. Please "
+    "reply by {DEADLINE}."
+)
+NOTIFIED_SHOWN = (
+    "Lorn & Islands Hospital, demand level 2: please check whether extra "
+    "shifts or bank staff are needed from w/e 23 Apr 2023 to w/e 14 May "
+    "2023, as demand climbs to 202 attendances (SA-MA forecast for w/e 14 "
+    "May 2023). Please reply by 10:00 UK time on Thu 20 Apr 2023."
+)
+
+
+def test_a_natural_notification_passes_and_reads_plainly(
+    replay_run, holidays, settings
+):
+    from types import SimpleNamespace
+
+    from ae_escalation import coordinator as co
+
+    _, brief, _ = natural_brief(replay_run, holidays, "lorn_islands_demand")
+    item = SimpleNamespace(current=brief, brief_id="li", state="approved")
+    action = next(
+        a for a in co.plan(item, settings) if a.code == "check-cover"
+    )
+    ctx = co.notification_context(brief, action)
+    co.Notification.model_validate(
+        {"message": NOTIFIED},
+        context={"text": ctx, "figures": brief.cited_figures},
+    )
+    assert ph.render(NOTIFIED, brief.cited_figures, ctx) == NOTIFIED_SHOWN
 
 
 # --- the probes, written as a model would now write them ---------------------
@@ -934,8 +1050,14 @@ NOTICES = [
         "w/e",
     ),
     (
-        "the range's low end as the expectation, in tokens",
+        "the range's low end as the expectation, its week said again",
         "Expect {F6} for {WEEK1}. Reply by {DEADLINE}.",
+        "refused",
+        "twice",
+    ),
+    (
+        "the range's low end as the expectation, in tokens",
+        "Expect {F6}. Reply by {DEADLINE}.",
         "shown",
         "982 attendances (low end of SA-MA's 80% range for w/e 27 Jun",
     ),

@@ -89,4 +89,14 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
    - Reason: the release horizon beside the week said the same thing twice, and the briefs read
      clunkily.
    - No amendment: code still writes each figure with what it is.
-
+4. **No echoes** (a new placeholder rule, my own design). A figure's label already names its model,
+   measure and week, so the Investigator's and the coordinator's prompts say never to restate them
+   beside it: no "{PRIMARY} forecasts {F1}" and no "{F1} for {WEEK1}". Code refuses a week token
+   straight after a figure whose label names the same week, with at most a comma, a bracket or one
+   linking word between them, and names the problem: the week would read twice. A week token the label
+   does not name is left alone, so a figure given to the wrong week stays in plain view. The worked
+   examples and the natural-brief tests read without echoes, and those tests now hold both demand
+   briefs and a staff notification.
+   - Scope: the rule covers `{ORIGIN}` and `{LATCHED}` as well as `{WEEK1}` to `{WEEK4}`, since each
+     is a week a label can name. A model named again beside its own figure is left to the prompts.
+   - No amendment: option A is unchanged; this only refuses words that repeat a label.

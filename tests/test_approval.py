@@ -404,7 +404,10 @@ def test_code_marks_an_edit_that_changes_a_date_or_figure_as_factual(
 ):
     log = gw.AuditLog()
     moved = edited_copy(
-        good, summary=good.summary.replace("{WEEK1}", "{WEEK2}")
+        good,
+        watch_points=[
+            w.replace("{WEEK1}", "{WEEK2}") for w in good.watch_points
+        ],
     )
     q = queue(tmp_path, verified, log=log)
     item = q.decide(decide("nw", "edit", edited=moved))

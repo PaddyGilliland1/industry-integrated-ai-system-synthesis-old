@@ -58,13 +58,15 @@ def good_draft(run, **changes):
     sama = next(x for x in f.forecasts if x.model == "SA-MA")
     h1 = {"model": "SA-MA", "horizon": 1}
     draft = {
-        "summary": "{PRIMARY} forecasts {F1} for {WEEK1}.",
+        "summary": "The forecasts put demand above the usual, starting at "
+        "{F1}.",
         "expected_range": "The likely range runs from {F2} to {F3}.",
         "model_agreement": (
             "The forecasts spread {F4}, so trust the lowest of them less."
         ),
         "watch_points": [
-            "Check whether extra shifts or bank staff are needed this week."
+            "Check whether extra shifts or bank staff are needed from "
+            "{WEEK1} to {WEEK4}."
         ],
         "cited_figures": [
             figure(round(sama.point), "T1", "point", **h1),
@@ -134,7 +136,7 @@ def answer(messages):
         return AIMessage(
             content=json.dumps(
                 {
-                    "summary": "{PRIMARY} forecasts {F1} for {WEEK1}.",
+                    "summary": "Demand starts the weeks ahead at {F1}.",
                     "expected_range": "See the summary.",
                     "model_agreement": "The models broadly agree.",
                     "watch_points": [

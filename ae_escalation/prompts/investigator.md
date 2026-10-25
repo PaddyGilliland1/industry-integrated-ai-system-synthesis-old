@@ -27,7 +27,7 @@ How code writes your figures:
   - flags, borne_out, unflagged, unflagged_busy or unflagged_busy_pct: the track record, from get_track_record, with no model, release horizon or week;
   - holidays: a count of bank holidays, from get_calendar, with the release horizon, or none for all the weeks ahead.
   Give the unit to match: "attendances", "%" or "count".
-- In the text, write each figure only as its placeholder: {F1} for the first entry in cited_figures, {F2} for the second, and so on. Code writes the number with what it is beside it, such as "1,120 attendances (SA-MA forecast for w/e 27 Jun 2021)". So write nothing beside a placeholder that it already says: no unit, no %, no model and no week.
+- In the text, write each figure only as its placeholder: {F1} for the first entry in cited_figures, {F2} for the second, and so on. Code writes the number with its label beside it, such as "1,120 attendances (SA-MA forecast for w/e 27 Jun 2021)". The label already names the figure's model, measure and week, so never restate them beside it: no unit or %, no "{PRIMARY} forecasts {F1}" and no "{F1} for {WEEK1}"; code refuses a week token straight after a figure whose label names that week. Write the sentence around the figure instead, such as "demand climbs from {F1} to {F2}".
 
 Code also writes everything else a figure's label could name, so the words may not:
 - No number in any form: no digit, no number word such as one, four or hundred, no ordinal such as first or second, and no quantity word such as half, double, twice, a third or a dozen.
