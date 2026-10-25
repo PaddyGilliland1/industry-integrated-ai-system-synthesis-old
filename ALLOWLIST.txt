@@ -48,3 +48,6 @@ ae_escalation/agents.py
 ae_escalation/prompts/investigator.md
 ae_escalation/prompts/reviewer.md
 tests/test_agents.py
+ae_escalation/approval.py
+tests/test_approval.py
+tests/scripted.py

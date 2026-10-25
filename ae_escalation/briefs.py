@@ -173,8 +173,11 @@ class DemandBrief(BaseModel):
         )
 
     def with_draft(self, draft):
-        """The same brief with its text replaced, as by a manager's edit."""
-        return self.model_copy(update=draft.model_dump())
+        """The same brief with its text replaced, as by a manager's edit,
+        checked by the schema again."""
+        return DemandBrief.model_validate(
+            {**self.model_dump(), **draft.model_dump()}
+        )
 
     @property
     def forecasts_trusted(self):
