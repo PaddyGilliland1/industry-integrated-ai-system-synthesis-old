@@ -9,6 +9,7 @@ import json
 
 from langchain_core.messages import AIMessage
 
+from ae_escalation import gateway as gw
 from ae_escalation import tools as tl
 
 ORIGIN = "2021-06-13"
@@ -138,3 +139,51 @@ def planted_draft(run):
 
 def reply(draft):
     return AIMessage(content=json.dumps(draft))
+
+
+def last_human(messages):
+    return next(m.content for m in reversed(messages) if m.type == "human")
+
+
+def answer(messages):
+    """A stand-in that answers every kind of call in the replay set: no
+    tools, a draft with no figures, a pass on wording, and notifications
+    that state only the deadline it was given."""
+    ask = last_human(messages)
+    if "Write the demand brief now" in ask:
+        return AIMessage(
+            content=json.dumps(
+                {
+                    "summary": "The forecasts are described without figures.",
+                    "expected_range": "See the forecasts.",
+                    "model_agreement": "The models broadly agree.",
+                    "backtest_error": "The hospital's own error is shown.",
+                    "track_record": "The track record is shown.",
+                    "watch_points": ["Check whether extra shifts are needed."],
+                    "cited_figures": [],
+                }
+            )
+        )
+    if '"passes"' in ask:
+        return AIMessage(content='{"passes": true, "problems": []}')
+    if "The actions, set by code" in ask:
+        codes = [
+            line.split(":")[0][2:]
+            for line in ask.splitlines()
+            if line.startswith("- ")
+        ]
+        return AIMessage(
+            content=json.dumps(
+                {
+                    "notifications": [
+                        {"action_code": c, "message": "Please check cover."}
+                        for c in codes
+                    ]
+                }
+            )
+        )
+    return AIMessage(content="I have what I need.")
+
+
+def stand_in():
+    return gw.ScriptedModel(script=[answer] * 200)
