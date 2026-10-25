@@ -130,26 +130,23 @@ SHOWN = {
         "Demand brief: Lorn & Islands Hospital, week ending 09 Apr 2023, "
         "released Tue 18 Apr 2023\n"
         "Demand level 2, from the flag.\n"
-        "The demand level shows demand unusually high for the time of year."
-        " It is not pressure, need or priority.\n"
+        "The demand level shows demand unusually high for the time of year. "
+        "It is not pressure, need or priority.\n"
         "Drift alarm: none.\n"
         "Summary: Plan for demand above the usual for the time of year, "
         "climbing through the weeks ahead from 185 attendances (SA-MA "
-        "forecast, release horizon 1, w/e 23 Apr 2023) to 202 attendances "
-        "(SA-MA forecast, release horizon 4, w/e 14 May 2023). There is no "
-        "drift alarm and the simple models broadly agree, so the forecasts "
-        "can be planned on.\n"
+        "forecast for w/e 23 Apr 2023) to 202 attendances (SA-MA forecast "
+        "for w/e 14 May 2023). There is no drift alarm and the simple "
+        "models broadly agree, so the forecasts can be planned on.\n"
         "Expected range: The range to plan within runs from 164 attendances "
-        "(low end of SA-MA's 80% range, release horizon 1, w/e 23 Apr 2023) "
-        "to 214 attendances (high end of SA-MA's 80% range, release horizon "
-        "1, w/e 23 Apr 2023), and by the bank holiday weeks it reaches 242 "
-        "attendances (high end of SA-MA's 80% range, release horizon 4, w/e "
-        "14 May 2023).\n"
+        "(low end of SA-MA's 80% range for w/e 23 Apr 2023) to 214 "
+        "attendances (high end of SA-MA's 80% range for w/e 23 Apr 2023), "
+        "and by the bank holiday weeks it reaches 242 attendances (high end "
+        "of SA-MA's 80% range for w/e 14 May 2023).\n"
         "Model agreement: The simple models broadly agree, within 10.7% "
-        "(spread of the four models' forecasts, release horizon 1, w/e 23 "
-        "Apr 2023) of each other. Trust least the model with the weakest "
-        "record here, 18.7% (seasonal naive back-test error, release horizon"
-        " 1).\n"
+        "(spread of the four models' forecasts for w/e 23 Apr 2023) of each "
+        "other. Trust least the model with the weakest record here, 18.7% "
+        "(seasonal naive back-test error, release horizon 1).\n"
         "Back-test error: SA-MA's back-test error at release horizon 1 is "
         "8.1%.\n"
         "Track record: of 21 flagged outlooks, 13 were borne out; of 208 "
@@ -167,8 +164,8 @@ SHOWN = {
         "Demand brief: Royal Infirmary of Edinburgh at Little France, week "
         "ending 06 Oct 2019, released Tue 15 Oct 2019\n"
         "Demand level 2, from the latest released actual (surge).\n"
-        "The demand level shows demand unusually high for the time of year."
-        " It is not pressure, need or priority.\n"
+        "The demand level shows demand unusually high for the time of year. "
+        "It is not pressure, need or priority.\n"
         "Drift alarm: latched since w/e 29 Sep 2019, after an upward "
         "breach; surge: forecasts untrusted.\n"
         "Summary: Demand broke above the forecasts in w/e 29 Sep 2019 and "
@@ -178,8 +175,8 @@ SHOWN = {
         "Expected range: No forecast range can be trusted while the drift "
         "latch is set. Judge cover from each released week instead.\n"
         "Model agreement: The simple models disagree by 16% (spread of the "
-        "four models' forecasts, release horizon 1, w/e 20 Oct 2019, "
-        "untrusted), and none is trusted after the breach.\n"
+        "four models' forecasts for w/e 20 Oct 2019, untrusted), and none "
+        "is trusted after the breach.\n"
         "Back-test error: linear's back-test error at release horizon 1 is "
         "3.5%.\n"
         "Track record: of 4 flagged outlooks, 4 were borne out; of 58 "
@@ -195,8 +192,8 @@ SHOWN = {
         "Mar 2020\n"
         "Demand level 1, from the flag held from the week before the alarm "
         "(held).\n"
-        "The demand level shows demand unusually high for the time of year."
-        " It is not pressure, need or priority.\n"
+        "The demand level shows demand unusually high for the time of year. "
+        "It is not pressure, need or priority.\n"
         "Drift alarm: latched since w/e 22 Mar 2020, after a downward "
         "breach; held: forecasts untrusted.\n"
         "Summary: Demand fell sharply, from 23,950 attendances (actual, w/e "
@@ -207,12 +204,11 @@ SHOWN = {
         "Expected range: No forecast range can be trusted while the drift "
         "latch is set. Judge cover from each released week instead.\n"
         "Model agreement: The simple models disagree by 14.1% (spread of "
-        "the four models' forecasts, release horizon 1, w/e 05 Apr 2020, "
-        "untrusted), from 23,164 attendances (SA-MA forecast, release "
-        "horizon 1, w/e 05 Apr 2020, untrusted) to 26,968 attendances "
-        "(linear forecast, release horizon 1, w/e 05 Apr 2020, untrusted). "
-        "Trust the highest least: it sits furthest from the latest released"
-        " week.\n"
+        "the four models' forecasts for w/e 05 Apr 2020, untrusted), from "
+        "23,164 attendances (SA-MA forecast for w/e 05 Apr 2020, untrusted) "
+        "to 26,968 attendances (linear forecast for w/e 05 Apr 2020, "
+        "untrusted). Trust the highest least: it sits furthest from the "
+        "latest released week.\n"
         "Back-test error: linear's back-test error at release horizon 1 is "
         "3.5%.\n"
         "Track record: of 9 flagged outlooks, 5 were borne out; of 77 "
@@ -316,7 +312,7 @@ PROBES = [
         "{PRIMARY} forecasts {A}.",
         [NAIVE],
         "shown",
-        "835 attendances (seasonal naive forecast, release horizon 1",
+        "835 attendances (seasonal naive forecast for w/e 27 Jun 2021)",
     ),
     (
         "horizon 3's figure at horizon 1, in digits",
@@ -330,7 +326,7 @@ PROBES = [
         "For {WEEK1}, {PRIMARY} forecasts {A}.",
         [POINT_H3],
         "shown",
-        "1,057 attendances (SA-MA forecast, release horizon 3, w/e 11 Jul",
+        "1,057 attendances (SA-MA forecast for w/e 11 Jul 2021)",
     ),
     (
         "horizon 1's figure on horizon 4's week, in digits",
@@ -344,7 +340,7 @@ PROBES = [
         "{PRIMARY} forecasts {A} for {WEEK4}.",
         [POINT],
         "shown",
-        "(SA-MA forecast, release horizon 1, w/e 27 Jun 2021) for w/e 18 Jul",
+        "(SA-MA forecast for w/e 27 Jun 2021) for w/e 18 Jul 2021",
     ),
     (
         "seasonal naive's error given to SA-MA, in digits",
@@ -479,14 +475,14 @@ PROBES = [
         "{PRIMARY} forecasts {A} for {WEEK1}.",
         [POINT_H4_BY_WEEK],
         "shown",
-        "1,086 attendances (SA-MA forecast, release horizon 4, w/e 18 Jul",
+        "1,086 attendances (SA-MA forecast for w/e 18 Jul 2021)",
     ),
     (
         "the spread stated as the back-test error",
         "Its back-test error is {A}.",
         [SPREAD],
         "shown",
-        "25.5% (spread of the four models' forecasts, release horizon 1",
+        "25.5% (spread of the four models' forecasts for w/e 27 Jun",
     ),
     (
         "the spread cited as SA-MA's",
@@ -514,7 +510,7 @@ PROBES = [
         "{PRIMARY} forecasts {A}.",
         [LOW],
         "shown",
-        "982 attendances (low end of SA-MA's 80% range, release horizon 1",
+        "982 attendances (low end of SA-MA's 80% range for w/e 27 Jun",
     ),
     (
         "an ISO week label",
@@ -585,7 +581,7 @@ PROBES = [
         "The range runs from {A} to {B}.",
         [POINT, HIGH],
         "shown",
-        "from 1,120 attendances (SA-MA forecast, release horizon 1",
+        "from 1,120 attendances (SA-MA forecast for w/e 27 Jun 2021)",
     ),
     # Weeks named in words.
     (
@@ -766,8 +762,7 @@ PROBES = [
         "The range runs from {A} to {B}.",
         [LOW, HIGH],
         "shown",
-        "(low end of SA-MA's 80% range, release horizon 1, w/e 27 Jun "
-        "2021) to",
+        "(low end of SA-MA's 80% range for w/e 27 Jun 2021) to",
     ),
     # Other hospitals and places.
     ("a city", "Edinburgh is busier.", [], "refused", "Edinburgh"),
@@ -930,7 +925,7 @@ NOTICES = [
         "the spread as above normal, in tokens",
         "Demand is {F8} above normal. Reply by {DEADLINE}.",
         "shown",
-        "25.5% (spread of the four models' forecasts, release horizon 1",
+        "25.5% (spread of the four models' forecasts for w/e 27 Jun",
     ),
     (
         "the range's low end as the expectation",
@@ -942,7 +937,7 @@ NOTICES = [
         "the range's low end as the expectation, in tokens",
         "Expect {F6} for {WEEK1}. Reply by {DEADLINE}.",
         "shown",
-        "982 attendances (low end of SA-MA's 80% range, release horizon 1",
+        "982 attendances (low end of SA-MA's 80% range for w/e 27 Jun",
     ),
 ]
 

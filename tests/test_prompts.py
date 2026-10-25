@@ -52,17 +52,16 @@ The demand level shows demand unusually high for the time of year. It is not \
 pressure, need or priority.
 Drift alarm: none.
 Summary: Plan for demand above the usual for the time of year, starting at \
-1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021). The \
-simple models disagree, so plan within the range below.
+1,120 attendances (SA-MA forecast for w/e 27 Jun 2021). The simple models \
+disagree, so plan within the range below.
 Expected range: The range to plan within runs from 982 attendances (low end \
-of SA-MA's 80% range, release horizon 1, w/e 27 Jun 2021) to 1,291 \
-attendances (high end of SA-MA's 80% range, release horizon 1, w/e 27 Jun \
-2021).
+of SA-MA's 80% range for w/e 27 Jun 2021) to 1,291 attendances (high end of \
+SA-MA's 80% range for w/e 27 Jun 2021).
 Model agreement: The simple models disagree by 25.5% (spread of the four \
-models' forecasts, release horizon 1, w/e 27 Jun 2021). Trust least the model \
-with the weakest record here, 24.5% (seasonal naive back-test error, release \
-horizon 1): it puts demand at 835 attendances (seasonal naive forecast, \
-release horizon 1, w/e 27 Jun 2021), well below the rest.
+models' forecasts for w/e 27 Jun 2021). Trust least the model with the \
+weakest record here, 24.5% (seasonal naive back-test error, release horizon \
+1): it puts demand at 835 attendances (seasonal naive forecast for w/e 27 \
+Jun 2021), well below the rest.
 Back-test error: SA-MA's back-test error at release horizon 1 is 11.5%.
 Track record: no past flag to judge; of 136 unflagged outlooks, 29 turned \
 busy.

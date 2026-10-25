@@ -20,8 +20,8 @@ live run records.
 - **P3-16, tool false positives, no action.** The US spelling in `Decimal.normalize`, and the multi-line
   docstrings the comment audit flags.
 - **What the code proves, for the case study.** Each number a reader sees is a tool's value. In the
-  agent's text it is written beside its true label: its measure, model, release horizon and week. In
-  the fact lines, the back-test error, the track record and the bank holidays, code writes the whole
+  agent's text it is written beside its true label: its measure, model and week, or a back-test
+  error's release horizon. In the fact lines, the back-test error, the track record and the bank holidays, code writes the whole
   sentence from its own tool call. The code does not prove what a sentence says about a figure, such
   as calling an actual a forecast. The Reviewer judges that, and so can the duty manager, who sees
   every label.
@@ -77,4 +77,16 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
    never to give a forecast as what to plan on, and the Reviewer's third check names an untrusted
    forecast offered as something to plan on.
    - No amendment: this implements D-DATA-11 and D-ARCH-28 as ruled.
+3. **Shorter labels, the same facts** (option A, ruled on 25 Oct 2026, unchanged). Within one brief
+   every forecast comes from one origin, so a forecast's week names its release horizon. A forecast, a
+   range end or the spread is now labelled by its model, measure and week alone: "185 attendances
+   (SA-MA forecast for w/e 23 Apr 2023)", "164 attendances (low end of SA-MA's 80% range for w/e 23 Apr
+   2023)", "10.7% (spread of the four models' forecasts for w/e 23 Apr 2023)". A back-test error is for
+   no one week, so it keeps its release horizon: "18.7% (seasonal naive back-test error, release horizon
+   1)". An actual keeps its week: "788 attendances (actual, w/e 14 Jun 2020)". Notifications use the same
+   labels. The figure check is unchanged: it still matches each figure's release horizon and week to
+   its tool result.
+   - Reason: the release horizon beside the week said the same thing twice, and the briefs read
+     clunkily.
+   - No amendment: code still writes each figure with what it is.
 

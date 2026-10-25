@@ -180,8 +180,8 @@ def test_drafts_that_pass_are_written_to_the_outbox_never_sent(
         "Ninewells Hospital, demand level 2: please check whether extra "
         "shifts or bank staff are needed for the weeks from w/e 27 Jun 2021 "
         "to w/e 18 Jul 2021; SA-MA (the primary model) forecasts 1,120 "
-        "attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021). "
-        "Please reply by 10:00 UK time on Thu 24 Jun 2021."
+        "attendances (SA-MA forecast for w/e 27 Jun 2021). Please reply by "
+        "10:00 UK time on Thu 24 Jun 2021."
     )
 
 
@@ -256,8 +256,8 @@ def test_the_coordinator_is_shown_the_briefs_figures_with_placeholders(
     )
     prompt = model.seen[0][-1].content
     assert (
-        "- {F1}: 1,120 attendances (SA-MA forecast, release horizon 1, w/e "
-        "27 Jun 2021)" in prompt
+        "- {F1}: 1,120 attendances (SA-MA forecast for w/e 27 Jun 2021)"
+        in prompt
     )
     assert "- {WEEK1}: w/e 27 Jun 2021" in prompt
     assert "- {PRIMARY}: SA-MA (the primary model)" in prompt

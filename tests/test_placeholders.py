@@ -79,38 +79,35 @@ def reasons(text, **kw):
     [
         (
             cite(1120, "point", model="SA-MA", horizon=1),
-            "1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 "
-            "Jun 2021)",
+            "1,120 attendances (SA-MA forecast for w/e 27 Jun 2021)",
         ),
         (
             cite(1086, "point", model="SA-MA", week=date(2021, 7, 18)),
-            "1,086 attendances (SA-MA forecast, release horizon 4, w/e 18 "
-            "Jul 2021)",
+            "1,086 attendances (SA-MA forecast for w/e 18 Jul 2021)",
         ),
         (
             cite(982, "low_80", model="SA-MA", horizon=1),
-            "982 attendances (low end of SA-MA's 80% range, release horizon "
-            "1, w/e 27 Jun 2021)",
+            "982 attendances (low end of SA-MA's 80% range for w/e 27 Jun "
+            "2021)",
         ),
         (
             cite(1291, "high_80", model="SA-MA", horizon=1),
-            "1,291 attendances (high end of SA-MA's 80% range, release "
-            "horizon 1, w/e 27 Jun 2021)",
+            "1,291 attendances (high end of SA-MA's 80% range for w/e 27 Jun "
+            "2021)",
         ),
         (
             cite(714, "low_95", model="4-week moving average", horizon=2),
             "714 attendances (low end of the 4-week moving average's 95% "
-            "range, release horizon 2, w/e 04 Jul 2021)",
+            "range for w/e 04 Jul 2021)",
         ),
         (
             cite(1454, "high_95", model="linear", horizon=3),
-            "1,454 attendances (high end of linear's 95% range, release "
-            "horizon 3, w/e 11 Jul 2021)",
+            "1,454 attendances (high end of linear's 95% range for w/e 11 Jul "
+            "2021)",
         ),
         (
             cite(25.5, "spread", horizon=1),
-            "25.5% (spread of the four models' forecasts, release horizon 1, "
-            "w/e 27 Jun 2021)",
+            "25.5% (spread of the four models' forecasts for w/e 27 Jun 2021)",
         ),
         (
             cite(788, "history", "T5", week=date(2020, 6, 14)),
@@ -147,7 +144,7 @@ def reasons(text, **kw):
         ),
         (
             cite(1, "holidays", "T4", horizon=2),
-            "1 bank holiday (release horizon 2, w/e 04 Jul 2021)",
+            "1 bank holiday (in w/e 04 Jul 2021)",
         ),
     ],
 )
@@ -184,6 +181,36 @@ def test_a_fact_in_a_latched_brief_is_not_marked_untrusted(figure):
     assert ph.render("{F1}", [figure], SURGE) == (
         ph.render("{F1}", [figure], CTX)
     )
+
+
+@pytest.mark.parametrize(
+    "figure, shown",
+    [
+        (
+            cite(1120, "point", model="SA-MA", horizon=1),
+            "1,120 attendances (SA-MA forecast at release horizon 1)",
+        ),
+        (
+            cite(982, "low_80", model="SA-MA", horizon=1),
+            "982 attendances (low end of SA-MA's 80% range at release "
+            "horizon 1)",
+        ),
+        (
+            cite(1, "holidays", "T4", horizon=2),
+            "1 bank holiday (at release horizon 2)",
+        ),
+        (
+            cite(1086, "point", model="SA-MA", week=date(2021, 7, 18)),
+            "1,086 attendances (SA-MA forecast for w/e 18 Jul 2021)",
+        ),
+    ],
+)
+def test_with_no_brief_to_name_its_week_a_label_names_the_horizon(
+    figure, shown
+):
+    # Within one brief the week names the release horizon, since every
+    # forecast is from one origin; with no brief, only the horizon is known.
+    assert ph.render("{F1}", [figure], None) == shown
 
 
 def test_a_label_leaves_out_what_the_figure_does_not_name():
@@ -232,8 +259,7 @@ def test_a_failed_figure_is_written_marked_with_its_label():
     shown = ph.render("{PRIMARY} forecasts {F1}.", FIGURES, CTX, failed={1})
     assert shown == (
         "SA-MA (the primary model) forecasts [[NOT VERIFIED: 1,120 "
-        "attendances (SA-MA forecast, release horizon 1, w/e 27 Jun "
-        "2021)]]."
+        "attendances (SA-MA forecast for w/e 27 Jun 2021)]]."
     )
 
 
@@ -453,7 +479,7 @@ def test_a_good_draft_passes_and_reads_with_its_labels():
     )
     assert ph.render(good.summary, good.cited_figures, CTX) == (
         "SA-MA (the primary model) forecasts 1,120 attendances (SA-MA "
-        "forecast, release horizon 1, w/e 27 Jun 2021) for w/e 27 Jun 2021."
+        "forecast for w/e 27 Jun 2021) for w/e 27 Jun 2021."
     )
 
 

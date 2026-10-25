@@ -27,7 +27,7 @@ How code writes your figures:
   - flags, borne_out, unflagged, unflagged_busy or unflagged_busy_pct: the track record, from get_track_record, with no model, release horizon or week;
   - holidays: a count of bank holidays, from get_calendar, with the release horizon, or none for all the weeks ahead.
   Give the unit to match: "attendances", "%" or "count".
-- In the text, write each figure only as its placeholder: {F1} for the first entry in cited_figures, {F2} for the second, and so on. Code writes the number with what it is beside it, such as "1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021)". So write nothing beside a placeholder that it already says: no unit, no %, no model and no week.
+- In the text, write each figure only as its placeholder: {F1} for the first entry in cited_figures, {F2} for the second, and so on. Code writes the number with what it is beside it, such as "1,120 attendances (SA-MA forecast for w/e 27 Jun 2021)". So write nothing beside a placeholder that it already says: no unit, no %, no model and no week.
 
 Code also writes everything else a figure's label could name, so the words may not:
 - No number in any form: no digit, no number word such as one, four or hundred, no ordinal such as first or second, and no quantity word such as half, double, twice, a third or a dozen.
@@ -82,7 +82,7 @@ Write the demand brief now. Reply with JSON only, with these fields:
 
 An example for another hospital and week, Ninewells Hospital at w/e 13 Jun 2021, to show the form only: {"summary": "Plan for demand above the usual for the time of year, starting at {F1}. The simple models disagree, so plan within the range below.", "expected_range": "The range to plan within runs from {F2} to {F3}.", "model_agreement": "The simple models disagree by {F4}. Trust least the model with the weakest record here, {F5}: it puts demand at {F6}, well below the rest.", "watch_points": ["Check whether extra shifts or bank staff are needed from {WEEK1} to {WEEK4}."], "cited_figures": [{"value": 1120, "tool_call_id": "T1", "measure": "point", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 982, "tool_call_id": "T1", "measure": "low_80", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 1291, "tool_call_id": "T1", "measure": "high_80", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 25.5, "tool_call_id": "T1", "measure": "spread", "model": null, "horizon": 1, "week": null, "unit": "%"}, {"value": 24.5, "tool_call_id": "T2", "measure": "error", "model": "seasonal naive", "horizon": 1, "week": null, "unit": "%"}, {"value": 835, "tool_call_id": "T1", "measure": "point", "model": "seasonal naive", "horizon": 1, "week": null, "unit": "attendances"}]}
 
-Its summary reads to the manager as: Plan for demand above the usual for the time of year, starting at 1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021). The simple models disagree, so plan within the range below.
+Its summary reads to the manager as: Plan for demand above the usual for the time of year, starting at 1,120 attendances (SA-MA forecast for w/e 27 Jun 2021). The simple models disagree, so plan within the range below.
 
 ## CAP REACHED
 

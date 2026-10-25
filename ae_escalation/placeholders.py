@@ -4,8 +4,8 @@ Code writes every figure, and what that figure is (option A, enforced by
 Pydantic). Where a figure goes, the text carries a placeholder that indexes
 its cited figures, {F1} for the first, and code writes in the value with its
 label from that cited figure once the code check has traced it to its tool
-result: "1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun
-2021)". Everything else the text names is a token code renders: {HOSPITAL},
+result: "1,120 attendances (SA-MA forecast for w/e 27 Jun 2021)".
+Everything else the text names is a token code renders: {HOSPITAL},
 {PRIMARY}, {LEVEL}, {ORIGIN}, {RELEASE}, {WEEK1} to {WEEK4}, {LATCHED} and,
 in a notification, {DEADLINE}.
 
@@ -214,16 +214,20 @@ def owner(model):
 
 def label(fig, ctx=None):
     """What a cited figure is, as code writes it in brackets after the
-    value: its measure, model, release horizon and week, leaving out any
-    the figure does not name. In a surge or latch brief a forecast, a range
-    end or the spread is marked untrusted, so no sentence can pass one off
-    as a figure to plan on."""
+    value: its measure, model and week, leaving out any the figure does not
+    name. Within one brief every forecast comes from one origin, so a
+    forecast's week names its release horizon, which is written only when
+    there is no brief to name the week. A back-test is for no one week, so
+    it keeps its release horizon. In a surge or latch brief a forecast, a
+    range end or the spread is marked untrusted, so no sentence can pass one
+    off as a figure to plan on."""
     measure, model = fig.measure, fig.model
     horizon, week = resolved(fig, ctx)
     at = f"release horizon {horizon}" if horizon else ""
     on = week_text(week) if week else ""
+    when = f"for {on}" if on else (f"at {at}" if at else "")
     untrusted = (
-        "untrusted"
+        ", untrusted"
         if measure in FORECAST_MEASURES
         and ctx is not None
         and not ctx.forecasts_trusted
@@ -231,15 +235,15 @@ def label(fig, ctx=None):
     )
     if measure == "point":
         what = f"{model} forecast" if model else "forecast"
-        return _joined(what, at, on, untrusted)
+        return " ".join(p for p in (what, when) if p) + untrusted
     if measure in RANGE_END:
         end, cover = RANGE_END[measure]
         whose = owner(model) if model else "the"
         what = f"{end} end of {whose} {cover}% range"
-        return _joined(what, at, on, untrusted)
+        return " ".join(p for p in (what, when) if p) + untrusted
     if measure == "spread":
         what = "spread of the four models' forecasts"
-        return _joined(what, at, on, untrusted)
+        return " ".join(p for p in (what, when) if p) + untrusted
     if measure == "history":
         return _joined("actual", on)
     if measure == "error":
@@ -248,7 +252,9 @@ def label(fig, ctx=None):
     if measure == "targets":
         return _joined(f"{model} back-test" if model else "back-test", at)
     if measure == "holidays":
-        return _joined(at, on) or "in the four weeks ahead"
+        if on:
+            return f"in {on}"
+        return f"at {at}" if at else "in the four weeks ahead"
     return "track record"
 
 
