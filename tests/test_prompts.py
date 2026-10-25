@@ -165,6 +165,26 @@ def test_a_surge_or_latch_brief_is_told_its_forecasts_are_untrusted():
     assert "code marks its label untrusted" in system
 
 
+def test_a_surge_or_latch_brief_names_no_forecast_to_trust_less():
+    # Every forecast is untrusted while the latch is set, so naming one to
+    # trust less would imply the rest can be trusted.
+    system = PROMPTS["investigator"]["SYSTEM"]
+    field = next(
+        line
+        for line in PROMPTS["investigator"]["DRAFT"].splitlines()
+        if line.startswith('- "model_agreement"')
+    )
+    assert (
+        "In a surge or latch brief, say instead that all forecasts are "
+        "untrusted while the drift latch is set, and name none to trust "
+        "less." in system
+    )
+    assert field.endswith(
+        "; in a surge or latch brief, that all forecasts are untrusted while "
+        "the drift latch is set, naming none to trust less"
+    )
+
+
 def test_the_investigator_writes_none_of_the_fact_lines():
     system = PROMPTS["investigator"]["SYSTEM"]
     draft = PROMPTS["investigator"]["DRAFT"]

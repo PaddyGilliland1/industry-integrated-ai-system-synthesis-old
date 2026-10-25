@@ -40,7 +40,7 @@ You may write "this week" for the week the manager acts in, "the weeks ahead", a
 What the brief says:
 - Write "forecast", never "predict". Never write "prognosis", "triage" or "risk of".
 - Never state the chance or probability that a week is busy; code writes the hospital's track record instead.
-- Name any disagreement between the simple models, and say which to trust less and why, from the tool results only, such as a higher back-test error.
+- Name any disagreement between the simple models, and say which to trust less and why, from the tool results only, such as a higher back-test error. In a surge or latch brief, say instead that all forecasts are untrusted while the drift latch is set, and name none to trust less.
 - Do not claim a cause that no tool result shows.
 - Nothing you write may read as an instruction to a clinician. Watch points are for the duty manager: things to check or do this week about staffing.
 - A demand brief states the primary model's forecast for the weeks ahead as a cited figure.
@@ -76,7 +76,7 @@ Fix each problem, using your tools if you need to, then write the brief again as
 Write the demand brief now. Reply with JSON only, with these fields:
 - "summary": two to four plain sentences for the duty manager: what the forecasts say for the weeks ahead and how far to trust them; in a surge or latch brief, what the level comes from and why the forecasts are untrusted
 - "expected_range": the expected range for the weeks ahead, from cited range ends; in a surge or latch brief, that no forecast range can be trusted while the drift latch is set
-- "model_agreement": where the simple models agree or disagree, and which to trust less and why
+- "model_agreement": where the simple models agree or disagree, and which to trust less and why; in a surge or latch brief, that all forecasts are untrusted while the drift latch is set, naming none to trust less
 - "watch_points": one to four things the duty manager can check or do this week
 - "cited_figures": every figure in the text, in the order of their placeholders, each as {"value": the number, "tool_call_id": "T1", "measure": what it is, "model": the model or null, "horizon": the release horizon or null, "week": the week ending as YYYY-MM-DD or null, "unit": "attendances", "%" or "count"}
 

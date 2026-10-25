@@ -140,8 +140,8 @@ NATURAL = {
             "drift latch is set. Judge cover from each released week "
             "instead.",
             "model_agreement": "The simple models disagree by {F3}, from {F4} "
-            "to {F5}. Trust the highest least: it sits furthest from the "
-            "latest released week.",
+            "to {F5}, and all of them are untrusted while the drift latch is "
+            "set.",
             "watch_points": [
                 "Check each released week before changing staffing.",
                 "Check cover around Good Friday in {WEEK2}.",
@@ -295,8 +295,8 @@ SHOWN = {
         "the four models' forecasts for w/e 05 Apr 2020, untrusted), from "
         "23,164 attendances (SA-MA forecast for w/e 05 Apr 2020, untrusted) "
         "to 26,968 attendances (linear forecast for w/e 05 Apr 2020, "
-        "untrusted). Trust the highest least: it sits furthest from the "
-        "latest released week.\n"
+        "untrusted), and all of them are untrusted while the drift latch is "
+        "set.\n"
         "Back-test error: linear's back-test error at release horizon 1 is "
         "3.5%.\n"
         "Track record: Scotland's past outlook flags were borne out 5 "
@@ -356,6 +356,14 @@ def test_a_natural_brief_of_each_kind_passes_and_reads_plainly(
     result = check_brief(brief, ledger, entry.level)
     assert result.passed, result.failures
     assert brief.text(written_by=False) == SHOWN[key]
+
+
+@pytest.mark.parametrize(
+    "key", [k for k in sorted(NATURAL) if NATURAL[k][2] != "demand"]
+)
+def test_no_surge_or_latch_brief_names_a_forecast_to_trust_less(key):
+    agreement = NATURAL[key][3]["model_agreement"].lower()
+    assert "least" not in agreement and "less" not in agreement
 
 
 def test_no_code_written_line_of_the_national_brief_calls_it_a_hospital(
