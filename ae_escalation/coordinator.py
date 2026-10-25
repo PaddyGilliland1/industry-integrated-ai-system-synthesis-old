@@ -13,9 +13,10 @@ the outbox (D-SAFE-19, as amended), and to one more: a figure must be one
 the approved brief's text states, and no past week's actual, for one of the
 action's weeks or for no one week. In a surge or latch brief no forecast,
 range end or spread is offered or allowed, since each is untrusted while
-the drift latch is set. A draft that fails gets one retry; if it
-fails again, nothing is written for that action and the manager sees the
-draft with its problems marked.
+the drift latch is set. Code then screens the message as it would be
+written for the MHRA's device words, as it screens a brief. A draft that
+fails gets one retry; if it fails again, nothing is written for that action
+and the manager sees the draft with its problems marked.
 
 Assumed and labelled: the actions are illustrative front-door staffing
 actions. OPEL's Appendix F gives only the structure, actions by level with
@@ -42,7 +43,7 @@ from pydantic import (
 )
 
 from . import placeholders as ph
-from .agents import fill, load_prompts
+from .agents import device_words, fill, load_prompts
 from .figures import CheckResult, Failure
 from .gateway import (
     BudgetExceeded,
@@ -448,7 +449,8 @@ class Coordinator:
 
     def _check(self, item, action, message, attempt, error=""):
         """One draft's check: the placeholder and word rules for its
-        action, through the Notification model, and what it would write."""
+        action, through the Notification model, then the MHRA device-word
+        screen on what it would write, as a brief's text is screened."""
         brief = item.current
         rendered = ""
         if not message:
@@ -472,7 +474,14 @@ class Coordinator:
                 )
             else:
                 rendered = ph.render(message, brief.cited_figures, ctx)
-                result = CheckResult(passed=True, failures=[])
+                found = device_words(rendered)
+                result = CheckResult(
+                    passed=not found,
+                    failures=[
+                        Failure(field="message", found="", reason=problem)
+                        for problem in found
+                    ],
+                )
         self.log.write(
             kind="notification check",
             action_id=action.action_id,

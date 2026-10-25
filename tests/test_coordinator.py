@@ -240,6 +240,27 @@ def test_a_draft_failing_twice_is_held_and_never_reaches_the_outbox(
     assert "nw-hold-leave" not in ids and "nw-check-cover" in ids
 
 
+def test_a_notification_with_a_device_word_is_held(
+    approved, settings, tmp_path
+):
+    worded = GOOD["hold-leave"].replace(
+        "Please hold", "Demand is predicted to stay high. Please hold"
+    )
+    script = [
+        notes(**{**GOOD, "hold-leave": worded}),
+        notes(**{"hold-leave": worded}),
+    ]
+    out = coordinator(settings, tmp_path, script).coordinate(approved)
+    held = next(a for a in out.actions if a.code == "hold-leave")
+    assert held.state == "held"
+    for draft in out.drafts:
+        if draft.action_code == "hold-leave":
+            reasons = [f.reason for f in draft.check.failures]
+            assert reasons == ["says predict, not forecast"]
+    ids = [r["action_id"] for r in outbox(tmp_path)]
+    assert "nw-hold-leave" not in ids and "nw-check-cover" in ids
+
+
 def test_a_notification_citing_no_figure_of_the_brief_is_held(
     approved, settings, tmp_path
 ):
