@@ -88,10 +88,10 @@ def true_draft(ledger, entry):
     """A draft that states only true tool values, each written as the
     placeholder of a figure cited to the call that returned it, with what
     it is: the primary model's release horizon 1 forecast and its 80%
-    range, the models' spread, its back-test error and the track record."""
-    forecast, errors, record = (c.result for c in ledger[:3])
+    range, and the models' spread. Code writes the back-test error, the
+    track record and the bank holidays as the brief's fact lines."""
+    forecast = ledger[0].result
     primary = forecast["primary"]
-    error = next(e for e in errors["errors"] if e["model"] == primary)
     f = next(
         x
         for x in forecast["forecasts"]
@@ -115,17 +115,7 @@ def true_draft(ledger, entry):
         cite(round(low), "T1", "low_80", **point),
         cite(round(high), "T1", "high_80", **point),
         cite(round(forecast["spread_pct"]["1"], 1), "T1", "spread", horizon=1),
-        cite(round(error["mape"], 1), "T2", "error", **point),
-        cite(record["unflagged_busy"], "T3", "unflagged_busy"),
-        cite(record["unflagged"], "T3", "unflagged"),
     ]
-    track = "No past flag to judge yet; {F6} of {F7}."
-    if record["flags"]:
-        figures += [
-            cite(record["borne_out"], "T3", "borne_out"),
-            cite(record["flags"], "T3", "flags"),
-        ]
-        track = "Of {F9}, {F8}; and {F6} of {F7}."
     return BriefDraft(
         summary="{PRIMARY} forecasts {F1} for {WEEK1}.",
         expected_range="The likely range runs from {F2} to {F3}.",
@@ -133,8 +123,6 @@ def true_draft(ledger, entry):
             "The forecasts spread {F4}, so the lowest is the one to trust "
             "less."
         ),
-        backtest_error="Its own back-test error is {F5}.",
-        track_record=track,
         watch_points=[
             "Check whether extra shifts or bank staff are needed this week."
         ],

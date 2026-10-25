@@ -442,7 +442,7 @@ def test_the_summary_says_why_there_is_no_draft(approved, settings, tmp_path):
 
 
 def test_a_past_week_the_brief_states_is_neither_offered_nor_written(
-    replay_run, settings, tmp_path
+    replay_run, holidays, settings, tmp_path
 ):
     from types import SimpleNamespace
 
@@ -455,20 +455,21 @@ def test_a_past_week_the_brief_states_is_neither_offered_nor_written(
         e for e in tl.screen_at(replay_run, ORIGIN) if e.hospital == "T101H"
     )
     draft = good_draft(replay_run)
-    draft["summary"] += " It compares with {F8}."
+    draft["summary"] += " It compares with {F5}."
     draft["cited_figures"].append(
         figure(788, "T5", "history", week="2020-06-14")
     )
     brief = br.DemandBrief.assemble(
         entry,
         br.BriefDraft.model_validate(draft),
+        br.brief_facts(replay_run, holidays, entry),
         brief_id="nw",
         backend="local",
         model="m",
         model_digest=None,
     )
     item = SimpleNamespace(current=brief, brief_id="nw", state="approved")
-    past = "Hold new leave for {F8}. Please reply by {DEADLINE}."
+    past = "Hold new leave for {F5}. Please reply by {DEADLINE}."
     model = gw.ScriptedModel(
         script=[
             notes(**{**GOOD, "hold-leave": past}),
@@ -485,7 +486,7 @@ def test_a_past_week_the_brief_states_is_neither_offered_nor_written(
         settings, gateway, outbox=tmp_path / "outbox.jsonl"
     ).coordinate(item)
     prompt = model.seen[0][-1].content
-    assert "- {F1}:" in prompt and "{F8}" not in prompt
+    assert "- {F1}:" in prompt and "{F5}" not in prompt
     held = next(a for a in out.actions if a.code == "hold-leave")
     assert held.state == "held"
     assert "past week's actual" in out.drafts[-1].check.failures[0].reason

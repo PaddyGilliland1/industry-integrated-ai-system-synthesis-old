@@ -37,38 +37,31 @@ NATURAL = {
         "2023-04-09",
         "C121H",
         {
-            "summary": "{PRIMARY} forecasts {F1} for {WEEK1}, rising to {F2} "
-            "by {WEEK4}. Bank holidays fall in the weeks ahead, {F3}: the "
-            "Early May bank holiday in {WEEK3} and the bank holiday for the "
-            "coronation of King Charles III in {WEEK4}.",
-            "expected_range": "For {WEEK1} the likely range runs from {F4} "
-            "to {F5}.",
-            "model_agreement": "The simple models broadly agree, with a "
-            "spread of {F6}. Trust the model with the highest back-test "
-            "error less: {F7}, against {F8}.",
-            "backtest_error": "Its own back-test error is {F8}.",
-            "track_record": "Of {F9}, {F10}; of {F11}, {F12}.",
+            "summary": "Plan for demand above the usual for the time of "
+            "year, climbing through the weeks ahead from {F1} to {F2}. There "
+            "is no drift alarm and the simple models broadly agree, so the "
+            "forecasts can be planned on.",
+            "expected_range": "The range to plan within runs from {F3} to "
+            "{F4}, and by the bank holiday weeks it reaches {F5}.",
+            "model_agreement": "The simple models broadly agree, within {F6} "
+            "of each other. Trust least the model with the weakest record "
+            "here, {F7}.",
             "watch_points": [
                 "Check whether extra shifts or bank staff are needed from "
                 "{WEEK1} to {WEEK4}.",
-                "Check cover around the bank holidays in {WEEK3} and "
-                "{WEEK4}.",
+                "Check cover around the Early May bank holiday in {WEEK3} and "
+                "the coronation bank holiday in {WEEK4}.",
                 "Hold new leave requests until the duty manager's check is "
                 "done.",
             ],
             "cited_figures": [
                 figure(185, "T1", "point", **h1("SA-MA")),
                 figure(202, "T1", "point", model="SA-MA", horizon=4),
-                figure(2, "T4", "holidays"),
                 figure(164, "T1", "low_80", **h1("SA-MA")),
                 figure(214, "T1", "high_80", **h1("SA-MA")),
+                figure(242, "T1", "high_80", model="SA-MA", horizon=4),
                 figure(10.7, "T1", "spread", horizon=1),
                 figure(18.7, "T2", "error", **h1("seasonal naive")),
-                figure(8.1, "T2", "error", **h1("SA-MA")),
-                figure(21, "T3", "flags"),
-                figure(13, "T3", "borne_out"),
-                figure(208, "T3", "unflagged"),
-                figure(49, "T3", "unflagged_busy"),
             ],
         },
     ),
@@ -85,8 +78,6 @@ NATURAL = {
             "instead.",
             "model_agreement": "The simple models disagree by {F2}, and none "
             "is trusted after the breach.",
-            "backtest_error": "Its own back-test error is {F3}.",
-            "track_record": "Of {F4}, {F5}; of {F6}, {F7}.",
             "watch_points": [
                 "Check whether extra shifts or bank staff are needed this "
                 "week.",
@@ -96,11 +87,6 @@ NATURAL = {
             "cited_figures": [
                 figure(2559, "T5", "history", week="2019-10-06"),
                 figure(16.0, "T1", "spread", horizon=1),
-                figure(3.5, "T2", "error", **h1("linear")),
-                figure(4, "T3", "flags"),
-                figure(4, "T3", "borne_out"),
-                figure(58, "T3", "unflagged"),
-                figure(20, "T3", "unflagged_busy"),
             ],
         },
     ),
@@ -118,8 +104,6 @@ NATURAL = {
             "model_agreement": "The simple models disagree by {F3}, from {F4} "
             "to {F5}. Trust the highest least: it sits furthest from the "
             "latest released week.",
-            "backtest_error": "Its own back-test error is {F6}.",
-            "track_record": "Of {F7}, {F8}; of {F9}, {F10}.",
             "watch_points": [
                 "Check each released week before changing staffing.",
                 "Check cover around Good Friday in {WEEK2}.",
@@ -130,11 +114,6 @@ NATURAL = {
                 figure(14.1, "T1", "spread", horizon=1),
                 figure(23164, "T1", "point", **h1("SA-MA")),
                 figure(26968, "T1", "point", **h1("linear")),
-                figure(3.5, "T2", "error", **h1("linear")),
-                figure(9, "T3", "flags"),
-                figure(5, "T3", "borne_out"),
-                figure(77, "T3", "unflagged"),
-                figure(12, "T3", "unflagged_busy"),
             ],
         },
     ),
@@ -154,33 +133,34 @@ SHOWN = {
         "The demand level shows demand unusually high for the time of year."
         " It is not pressure, need or priority.\n"
         "Drift alarm: none.\n"
-        "Summary: SA-MA (the primary model) forecasts 185 attendances "
-        "(SA-MA forecast, release horizon 1, w/e 23 Apr 2023) for w/e 23 "
-        "Apr 2023, rising to 202 attendances (SA-MA forecast, release "
-        "horizon 4, w/e 14 May 2023) by w/e 14 May 2023. Bank holidays fall"
-        " in the weeks ahead, 2 bank holidays (in the four weeks ahead): "
-        "the Early May bank holiday in w/e 07 May 2023 and the bank holiday"
-        " for the coronation of King Charles III in w/e 14 May 2023.\n"
-        "Expected range: For w/e 23 Apr 2023 the likely range runs from 164"
-        " attendances (low end of SA-MA's 80% range, release horizon 1, w/e"
-        " 23 Apr 2023) to 214 attendances (high end of SA-MA's 80% range, "
-        "release horizon 1, w/e 23 Apr 2023).\n"
-        "Model agreement: The simple models broadly agree, with a spread of"
-        " 10.7% (spread of the four models' forecasts, release horizon 1, "
-        "w/e 23 Apr 2023). Trust the model with the highest back-test error"
-        " less: 18.7% (seasonal naive back-test error, release horizon 1), "
-        "against 8.1% (SA-MA back-test error, release horizon 1).\n"
-        "Back-test error: Its own back-test error is 8.1% (SA-MA back-test "
-        "error, release horizon 1).\n"
-        "Track record: Of 21 flagged outlooks (track record), 13 flagged "
-        "outlooks borne out (track record); of 208 unflagged outlooks "
-        "(track record), 49 unflagged outlooks that turned busy (track "
-        "record).\n"
+        "Summary: Plan for demand above the usual for the time of year, "
+        "climbing through the weeks ahead from 185 attendances (SA-MA "
+        "forecast, release horizon 1, w/e 23 Apr 2023) to 202 attendances "
+        "(SA-MA forecast, release horizon 4, w/e 14 May 2023). There is no "
+        "drift alarm and the simple models broadly agree, so the forecasts "
+        "can be planned on.\n"
+        "Expected range: The range to plan within runs from 164 attendances "
+        "(low end of SA-MA's 80% range, release horizon 1, w/e 23 Apr 2023) "
+        "to 214 attendances (high end of SA-MA's 80% range, release horizon "
+        "1, w/e 23 Apr 2023), and by the bank holiday weeks it reaches 242 "
+        "attendances (high end of SA-MA's 80% range, release horizon 4, w/e "
+        "14 May 2023).\n"
+        "Model agreement: The simple models broadly agree, within 10.7% "
+        "(spread of the four models' forecasts, release horizon 1, w/e 23 "
+        "Apr 2023) of each other. Trust least the model with the weakest "
+        "record here, 18.7% (seasonal naive back-test error, release horizon"
+        " 1).\n"
+        "Back-test error: SA-MA's back-test error at release horizon 1 is "
+        "8.1%.\n"
+        "Track record: of 21 flagged outlooks, 13 were borne out; of 208 "
+        "unflagged outlooks, 49 turned busy.\n"
+        "Bank holidays ahead: Early May bank holiday (w/e 07 May 2023); "
+        "coronation of King Charles III (w/e 14 May 2023).\n"
         "Watch points:\n"
         "- Check whether extra shifts or bank staff are needed from w/e 23 "
         "Apr 2023 to w/e 14 May 2023.\n"
-        "- Check cover around the bank holidays in w/e 07 May 2023 and w/e "
-        "14 May 2023.\n"
+        "- Check cover around the Early May bank holiday in w/e 07 May 2023 "
+        "and the coronation bank holiday in w/e 14 May 2023.\n"
         "- Hold new leave requests until the duty manager's check is done."
     ),
     "surge": (
@@ -200,11 +180,11 @@ SHOWN = {
         "Model agreement: The simple models disagree by 16% (spread of the "
         "four models' forecasts, release horizon 1, w/e 20 Oct 2019, "
         "untrusted), and none is trusted after the breach.\n"
-        "Back-test error: Its own back-test error is 3.5% (linear back-test"
-        " error, release horizon 1).\n"
-        "Track record: Of 4 flagged outlooks (track record), 4 flagged "
-        "outlooks borne out (track record); of 58 unflagged outlooks (track"
-        " record), 20 unflagged outlooks that turned busy (track record).\n"
+        "Back-test error: linear's back-test error at release horizon 1 is "
+        "3.5%.\n"
+        "Track record: of 4 flagged outlooks, 4 were borne out; of 58 "
+        "unflagged outlooks, 20 turned busy.\n"
+        "Bank holidays ahead: none in the four weeks ahead.\n"
         "Watch points:\n"
         "- Check whether extra shifts or bank staff are needed this week.\n"
         "- Check each released week against cover before changing staffing "
@@ -233,11 +213,11 @@ SHOWN = {
         "(linear forecast, release horizon 1, w/e 05 Apr 2020, untrusted). "
         "Trust the highest least: it sits furthest from the latest released"
         " week.\n"
-        "Back-test error: Its own back-test error is 3.5% (linear back-test"
-        " error, release horizon 1).\n"
-        "Track record: Of 9 flagged outlooks (track record), 5 flagged "
-        "outlooks borne out (track record); of 77 unflagged outlooks (track"
-        " record), 12 unflagged outlooks that turned busy (track record).\n"
+        "Back-test error: linear's back-test error at release horizon 1 is "
+        "3.5%.\n"
+        "Track record: of 9 flagged outlooks, 5 were borne out; of 77 "
+        "unflagged outlooks, 12 turned busy.\n"
+        "Bank holidays ahead: Good Friday (w/e 12 Apr 2020).\n"
         "Watch points:\n"
         "- Check each released week before changing staffing.\n"
         "- Check cover around Good Friday in w/e 12 Apr 2020."
@@ -274,6 +254,7 @@ def test_a_natural_brief_of_each_kind_passes_and_reads_plainly(
     brief = br.DemandBrief.assemble(
         entry,
         draft,
+        br.brief_facts(replay_run, holidays, entry),
         brief_id=kind,
         backend="local",
         model="m",
@@ -295,15 +276,9 @@ EXTRA = [
     ("get_history", {"weeks": 53}),
     ("get_backtest_error", {"horizon": 1, "model": "seasonal naive"}),
 ]
-# What every brief states, in the other fields: the primary's forecast,
-# its back-test error and the track record, so a probe's own figures are
-# {A}, {B} and so on, from F5.
-OWN = [
-    figure(1120, "T1", "point", **h1("SA-MA")),
-    figure(11.5, "T2", "error", **h1("SA-MA")),
-    figure(29, "T3", "unflagged_busy"),
-    figure(136, "T3", "unflagged"),
-]
+# What a demand brief states, in another field: the primary's forecast, so
+# a probe's own figures are {A}, {B} and so on, from F2.
+OWN = [figure(1120, "T1", "point", **h1("SA-MA"))]
 POINT = figure(1120, "T1", "point", **h1("SA-MA"))
 POINT_H3 = figure(1057, "T1", "point", model="SA-MA", horizon=3)
 POINT_H4_BY_WEEK = figure(
@@ -317,6 +292,7 @@ SPREAD = figure(25.5, "T1", "spread", horizon=1)
 SPREAD_AS_SAMA = figure(25.5, "T1", "spread", **h1("SA-MA"))
 ACTUAL_2020 = figure(788, "T5", "history", week="2020-06-14")
 BUSY = figure(29, "T3", "unflagged_busy")
+UNFLAGGED = figure(136, "T3", "unflagged")
 BUSY_SHARE = figure(21.3, "T3", "unflagged_busy_pct")
 FLAGS = figure(0, "T3", "flags")
 LOW = figure(982, "T1", "low_80", **h1("SA-MA"))
@@ -869,8 +845,6 @@ def test_each_probe_is_refused_or_shown_with_its_true_label(
             "summary": lettered(text, len(OWN)),
             "expected_range": "Its forecast is {F1}.",
             "model_agreement": "The models broadly agree.",
-            "backtest_error": "Its own back-test error is {F2}.",
-            "track_record": "{F3} of {F4}.",
             "watch_points": ["Check cover this week."],
             "cited_figures": OWN + figures,
         }
@@ -890,7 +864,7 @@ def test_each_probe_is_refused_or_shown_with_its_true_label(
 # The notification probes: the approved brief states a forecast, its error,
 # the track record, last year's same week, the 80% range and the spread,
 # and the action is hold-leave, for the four weeks ahead.
-STATED = [POINT, OWN_ERROR, BUSY, OWN[3], ACTUAL_2020, LOW, HIGH, SPREAD]
+STATED = [POINT, OWN_ERROR, BUSY, UNFLAGGED, ACTUAL_2020, LOW, HIGH, SPREAD]
 NOTICES = [
     (
         "a past week and a time, in digits",
@@ -974,7 +948,7 @@ NOTICES = [
 
 
 @pytest.fixture(scope="module")
-def hold_leave(replay_run):
+def hold_leave(replay_run, holidays):
     from types import SimpleNamespace
 
     from ae_escalation import config as cf
@@ -987,16 +961,15 @@ def hold_leave(replay_run):
         entry,
         br.BriefDraft.model_validate(
             {
-                "summary": "{PRIMARY} forecasts {F1} for {WEEK1}, against "
-                "{F5}.",
+                "summary": "Expect {F1}, against {F5}.",
                 "expected_range": "From {F6} to {F7}.",
-                "model_agreement": "The forecasts spread {F8}.",
-                "backtest_error": "Its own back-test error is {F2}.",
-                "track_record": "{F3} of {F4}.",
+                "model_agreement": "The forecasts spread {F8}, with an "
+                "error of {F2}; {F3} of {F4}.",
                 "watch_points": ["Check cover this week."],
                 "cited_figures": STATED,
             }
         ),
+        br.brief_facts(replay_run, holidays, entry),
         brief_id="nw",
         backend="local",
         model="m",

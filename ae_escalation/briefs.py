@@ -1,31 +1,38 @@
 """The demand brief: what the Investigator drafts, and what the manager reads.
 
-The Investigator writes a BriefDraft: plain-English text fields and the
-figures it cites, each with the id of the tool call that produced it and
-what the figure is (its measure, model, release horizon and week). The text
-holds no figure, date, model, week, hospital or level of its own: a figure
-is a placeholder, {F1} for the first cited figure, and code writes in the
-value with its label; the rest are tokens code renders (placeholders.py).
-The validators here refuse a draft that breaks those rules, and every
-problem is named in the Investigator's retry. The draft has no field for the
-level, the hospital or the week, so the agent can never set them (G5,
-enforced by schema). Code assembles the DemandBrief from the screen's entry
-and the draft: the level, its source and its meaning are copied from the
-rule, with the primary model, and the backend and model that wrote the text
-are recorded. No schema here has a field for the flag's stated chance, which
-runs about twice what happens; the brief quotes the track record instead.
+The Investigator writes a BriefDraft: the explanation, in plain-English text
+fields, and the figures it cites, each with the id of the tool call that
+produced it and what the figure is (its measure, model, release horizon and
+week). The text holds no figure, date, model, week, hospital or level of its
+own: a figure is a placeholder, {F1} for the first cited figure, and code
+writes in the value with its label; the rest are tokens code renders
+(placeholders.py). The validators here refuse a draft that breaks those
+rules, and every problem is named in the Investigator's retry. The draft has
+no field for the level, the hospital or the week, so the agent can never set
+them (G5, enforced by schema). Code assembles the DemandBrief from the
+screen's entry, the draft and the brief's facts: the level, its source and
+its meaning are copied from the rule, with the primary model, and the
+backend and model that wrote the text are recorded. The facts are the
+hospital's own back-test error, its track record and the bank holidays
+ahead: code calls the tools for them as of the origin and writes each as a
+fixed sentence, so the agent writes none of them. No schema here has a field
+for the flag's stated chance, which runs about twice what happens; the brief
+quotes the track record instead.
 
 I follow Agentic AI Systems' case file (agentic_system.py, CaseFileDraft and
 CaseFile with its evidence items, each citing the tool that returned it):
 the agent explains tool results and never supplies a figure of its own.
 """
 
+import re
 from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import placeholders as ph
+from . import tools as tl
+from .timing import release_horizon_weeks
 from .tools import LEVEL_MEANING, Measure, ModelName
 
 TOOL_NAMES = (
@@ -41,15 +48,16 @@ LEVEL_FROM = {
     "surge": "the latest released actual (surge)",
     "held": "the flag held from the week before the alarm (held)",
 }
-# The text fields a manager reads, in the order the brief prints them.
+# The text fields the agent writes, in the order the brief prints them.
 TEXT_FIELDS = (
     "summary",
     "expected_range",
     "model_agreement",
-    "backtest_error",
-    "track_record",
     "watch_points",
 )
+# The release horizon whose back-test error the brief states: the first
+# week the manager staffs for.
+FACT_HORIZON = 1
 
 
 class ToolCall(BaseModel):
@@ -139,12 +147,6 @@ class DraftFields(BaseModel):
         description="Where the simple models agree or disagree, which to "
         "trust less and why.",
     )
-    backtest_error: str = Field(
-        min_length=1, description="The hospital's own back-test error."
-    )
-    track_record: str = Field(
-        min_length=1, description="The hospital's track record."
-    )
     watch_points: list[str] = Field(
         min_length=1,
         max_length=4,
@@ -176,6 +178,105 @@ class BriefDraft(DraftFields):
         return self
 
 
+class BriefFacts(BaseModel):
+    """The facts every brief states as fixed lines, each a tool's result as
+    of the origin: the primary model's own back-test error at release
+    horizon 1, the hospital's track record and the bank holidays in the four
+    weeks ahead. Code calls the tools for them, so the agent writes none."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    backtest_error: tl.BacktestErrorResult
+    track_record: tl.TrackRecordResult
+    bank_holidays: tl.CalendarResult
+
+
+def brief_facts(run, holidays, entry):
+    """Call the tools for one screened brief's facts, as of its origin.
+    These calls are code's own, so they take none of the Investigator's."""
+    base = {"hospital": entry.hospital, "as_of": entry.as_of}
+    error = tl.BacktestErrorRequest(
+        **base, horizon=FACT_HORIZON, model=entry.primary
+    )
+    return BriefFacts(
+        backtest_error=tl.get_backtest_error(run, error),
+        track_record=tl.get_track_record(run, tl.TrackRecordRequest(**base)),
+        bank_holidays=tl.get_calendar(
+            holidays, tl.CalendarRequest(as_of=entry.as_of)
+        ),
+    )
+
+
+def _counted(n, noun):
+    """A count with its noun: 1 flagged outlook, 21 flagged outlooks."""
+    return f"{ph.figure_text(n)} {noun}{'' if n == 1 else 's'}"
+
+
+def backtest_line(result):
+    """The back-test error line: the primary model's own error, as code
+    writes it from get_backtest_error."""
+    (error,) = result.errors
+    head = (
+        f"{ph.owner(error.model)} back-test error at release horizon "
+        f"{result.release_horizon} is"
+    )
+    if error.mape is None:
+        return f"{head} not known: no released week to score yet."
+    return f"{head} {ph.figure_text(round(error.mape, 1))}%."
+
+
+def track_line(record):
+    """The track record line, as code writes it from get_track_record."""
+    if record.flags:
+        verb = "was" if record.borne_out == 1 else "were"
+        flagged = (
+            f"of {_counted(record.flags, 'flagged outlook')}, "
+            f"{ph.figure_text(record.borne_out)} {verb} borne out"
+        )
+    else:
+        flagged = "no past flag to judge"
+    if record.unflagged:
+        unflagged = (
+            f"of {_counted(record.unflagged, 'unflagged outlook')}, "
+            f"{ph.figure_text(record.unflagged_busy)} turned busy"
+        )
+    else:
+        unflagged = "no unflagged outlook to judge"
+    return f"{flagged}; {unflagged}."
+
+
+def _holiday_title(title):
+    """A holiday's GOV.UK title without the words the line's own heading
+    says: "Bank holiday for the coronation of King Charles III" is the
+    coronation of King Charles III."""
+    return re.sub(r"^bank holiday for the\s+", "", title, flags=re.IGNORECASE)
+
+
+def holidays_line(calendar, origin):
+    """The bank holidays line, each holiday by its title and the week it
+    falls in, as code writes it from get_calendar."""
+    targets = [w.date() for w in release_horizon_weeks(origin)]
+    shown = [
+        f"{_holiday_title(h.title)} ("
+        + (
+            ph.week_text(targets[h.release_horizon - 1])
+            if h.release_horizon
+            else ph.day_text(h.date)
+        )
+        + ")"
+        for h in calendar.holidays
+    ]
+    if not calendar.covered:
+        found = f"; {'; '.join(shown)}" if shown else ""
+        return (
+            "not known for every week ahead, as the bank holiday file does "
+            f"not cover them all{found}."
+        )
+    if not shown:
+        return "none in the four weeks ahead."
+    return "; ".join(shown) + "."
+
+
 class DemandBrief(BaseModel):
     """The demand brief for one hospital and one week, as the manager reads
     it. Code sets every field above the draft's; the draft's fields are the
@@ -195,17 +296,40 @@ class DemandBrief(BaseModel):
     drift_alarm: bool
     latched_since: date | None
     breach_direction: Literal["upward", "downward"] | None
+    backtest_error: tl.BacktestErrorResult
+    track_record: tl.TrackRecordResult
+    bank_holidays: tl.CalendarResult
     summary: str
     expected_range: str
     model_agreement: str
-    backtest_error: str
-    track_record: str
     watch_points: list[str]
     cited_figures: list[CitedFigure]
     primary: ModelName
     backend: Literal["local", "frontier"]
     model: str
     model_digest: str | None
+
+    @model_validator(mode="after")
+    def facts_are_its_own(self):
+        """The fact lines state this hospital's own results as of this
+        origin, and the back-test error is its primary model's at release
+        horizon 1, so no other brief's facts can stand in them."""
+        for name in ("backtest_error", "track_record"):
+            result = getattr(self, name)
+            if (result.hospital, result.as_of) != (self.hospital, self.week):
+                raise ValueError(
+                    f"{name} is for {result.hospital} as of {result.as_of}, "
+                    f"not {self.hospital} as of {self.week}"
+                )
+        models = [e.model for e in self.backtest_error.errors]
+        horizon = self.backtest_error.release_horizon
+        if models != [self.primary] or horizon != FACT_HORIZON:
+            raise ValueError(
+                f"the back-test error line states {self.primary}'s own error "
+                f"at release horizon {FACT_HORIZON}, not {models} at release "
+                f"horizon {horizon}"
+            )
+        return self
 
     @model_validator(mode="after")
     def placeholders_hold(self):
@@ -255,12 +379,15 @@ class DemandBrief(BaseModel):
         }
 
     @classmethod
-    def assemble(cls, entry, draft, *, brief_id, backend, model, model_digest):
-        """Build the brief from the screen's entry and a draft: the level,
-        its source and its meaning are the rule's, copied, never the
-        agent's."""
+    def assemble(
+        cls, entry, draft, facts, *, brief_id, backend, model, model_digest
+    ):
+        """Build the brief from the screen's entry, a draft and the brief's
+        facts: the level, its source and its meaning are the rule's, copied,
+        and the facts are code's, never the agent's."""
         return cls(
             **_from_entry(entry),
+            **dict(facts),
             brief_id=brief_id,
             backend=backend,
             model=model,
@@ -324,6 +451,7 @@ def _from_entry(entry):
 def refused_text(
     entry,
     draft,
+    facts,
     *,
     backend,
     model,
@@ -334,10 +462,12 @@ def refused_text(
     """A draft the text rules refused, as the manager sees it: the heading
     code sets from the screen's entry, then the draft's words with every
     placeholder filled, its failed figures and each problem marked where it
-    stands. It is shown, never kept: the head is built without the rules,
-    which this draft breaks, so it can never become a brief."""
+    stands, and code's fact lines. It is shown, never kept: the head is
+    built without the rules, which this draft breaks, so it can never
+    become a brief."""
     head = DemandBrief.model_construct(
         **_from_entry(entry),
+        **dict(facts),
         brief_id="",
         level_meaning=LEVEL_MEANING,
         backend=backend,
@@ -361,8 +491,8 @@ def refused_text(
 
 def brief_text(head, shown, written_by=True):
     """A brief's lines as the manager reads them: the code-set heading of
-    head, a DemandBrief or a refused draft's stand-in, and the rendered
-    text fields in shown."""
+    head, a DemandBrief or a refused draft's stand-in, the rendered text
+    fields in shown, and the fact lines code writes from head's facts."""
     points = [v for k, v in shown.items() if k.startswith("watch_points")]
     lines = [
         f"Demand brief: {head.name}, week ending {ph.day_text(head.week)}, "
@@ -383,8 +513,10 @@ def brief_text(head, shown, written_by=True):
         f"Summary: {shown['summary']}",
         f"Expected range: {shown['expected_range']}",
         f"Model agreement: {shown['model_agreement']}",
-        f"Back-test error: {shown['backtest_error']}",
-        f"Track record: {shown['track_record']}",
+        f"Back-test error: {backtest_line(head.backtest_error)}",
+        f"Track record: {track_line(head.track_record)}",
+        "Bank holidays ahead: "
+        f"{holidays_line(head.bank_holidays, head.week)}",
         "Watch points:",
         *[f"- {w}" for w in points],
     ]

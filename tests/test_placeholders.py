@@ -425,9 +425,8 @@ def draft(summary, figures=FIGURES, **fields):
     return {
         "summary": summary,
         "expected_range": fields.get("expected_range", "From {F6} up."),
-        "model_agreement": "The lowest is {F2}; trust it less.",
-        "backtest_error": "{F4}, against {F5}.",
-        "track_record": "{F8} of {F9}.",
+        "model_agreement": "The lowest is {F2}; trust it less, at {F4} "
+        "against {F5}.",
         "watch_points": ["Check whether extra shifts are needed this week."],
         "cited_figures": [f.model_dump(mode="json") for f in figures],
     }

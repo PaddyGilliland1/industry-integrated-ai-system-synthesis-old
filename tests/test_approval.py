@@ -424,8 +424,6 @@ def test_code_marks_a_changed_cited_figure_set_as_factual(
         expected_range="The range is wide.",
         cited_figures=[figures[0], *figures[3:]],
         model_agreement="The forecasts spread {F2}, so trust the lowest less.",
-        backtest_error="Its own back-test error is {F3}.",
-        track_record="No past flag to judge yet; {F4} of {F5}.",
     )
     item = queue(tmp_path, verified).decide(decide("nw", "edit", edited=fewer))
     assert item.decisions[-1].factual_edit

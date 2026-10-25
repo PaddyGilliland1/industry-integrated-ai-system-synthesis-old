@@ -206,7 +206,7 @@ def _joined(*parts):
     return ", ".join(p for p in parts if p)
 
 
-def _owner(model):
+def owner(model):
     """A model's name as an owner: SA-MA's, the 4-week moving average's."""
     article = "the " if model == "4-week moving average" else ""
     return f"{article}{model}'s"
@@ -234,8 +234,8 @@ def label(fig, ctx=None):
         return _joined(what, at, on, untrusted)
     if measure in RANGE_END:
         end, cover = RANGE_END[measure]
-        owner = _owner(model) if model else "the"
-        what = f"{end} end of {owner} {cover}% range"
+        whose = owner(model) if model else "the"
+        what = f"{end} end of {whose} {cover}% range"
         return _joined(what, at, on, untrusted)
     if measure == "spread":
         what = "spread of the four models' forecasts"

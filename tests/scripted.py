@@ -56,15 +56,6 @@ def good_draft(run, **changes):
         run, tl.ForecastRequest(hospital="T101H", as_of=ORIGIN, horizon=1)
     )
     sama = next(x for x in f.forecasts if x.model == "SA-MA")
-    (e,) = tl.get_backtest_error(
-        run,
-        tl.BacktestErrorRequest(
-            hospital="T101H", as_of=ORIGIN, model="SA-MA", horizon=1
-        ),
-    ).errors
-    tr = tl.get_track_record(
-        run, tl.TrackRecordRequest(hospital="T101H", as_of=ORIGIN)
-    )
     h1 = {"model": "SA-MA", "horizon": 1}
     draft = {
         "summary": "{PRIMARY} forecasts {F1} for {WEEK1}.",
@@ -72,8 +63,6 @@ def good_draft(run, **changes):
         "model_agreement": (
             "The forecasts spread {F4}, so trust the lowest of them less."
         ),
-        "backtest_error": "Its own back-test error is {F5}.",
-        "track_record": "No past flag to judge yet; {F6} of {F7}.",
         "watch_points": [
             "Check whether extra shifts or bank staff are needed this week."
         ],
@@ -82,9 +71,6 @@ def good_draft(run, **changes):
             figure(round(sama.range_80.low), "T1", "low_80", **h1),
             figure(round(sama.range_80.high), "T1", "high_80", **h1),
             figure(round(f.spread_pct[1], 1), "T1", "spread", horizon=1),
-            figure(round(e.mape, 1), "T2", "error", **h1),
-            figure(tr.unflagged_busy, "T3", "unflagged_busy"),
-            figure(tr.unflagged, "T3", "unflagged"),
         ],
     }
     draft.update(changes)
@@ -124,44 +110,25 @@ def _tool_results(messages):
 
 
 def _own_figures(messages):
-    """The figures every brief states, cited from the tool results in the
-    conversation: the primary's release horizon 1 forecast, its back-test
-    error and the track record."""
+    """The figure a demand brief states, cited from the tool results in the
+    conversation: the primary's release horizon 1 forecast."""
     texts = " ".join(str(m.content) for m in messages)
     primary = re.search(r"Primary model: (.+?)\.\n", texts).group(1)
-    found = _tool_results(messages)
-    forecast = found["get_forecast"]
-    error, record = found["get_backtest_error"], found["get_track_record"]
+    forecast = _tool_results(messages)["get_forecast"]
     point = next(
         f["point"]
         for f in forecast["result"]["forecasts"]
         if f["model"] == primary and f["release_horizon"] == 1
     )
-    mape = next(
-        e["mape"] for e in error["result"]["errors"] if e["model"] == primary
-    )
     h1 = {"model": primary, "horizon": 1}
-    return [
-        figure(round(point), forecast["tool_call_id"], "point", **h1),
-        figure(round(mape, 1), error["tool_call_id"], "error", **h1),
-        figure(
-            record["result"]["unflagged_busy"],
-            record["tool_call_id"],
-            "unflagged_busy",
-        ),
-        figure(
-            record["result"]["unflagged"],
-            record["tool_call_id"],
-            "unflagged",
-        ),
-    ]
+    return [figure(round(point), forecast["tool_call_id"], "point", **h1)]
 
 
 def answer(messages):
-    """A stand-in that answers every kind of call in the replay set: the
-    three tools every brief needs, a draft that states only its primary's
-    forecast, its own back-test error and its track record, a pass on
-    wording, and notifications that state no figure."""
+    """A stand-in that answers every kind of call in the replay set: a
+    draft that states only its primary's forecast, from the tool results
+    the conversation holds, a pass on wording, and notifications that state
+    no figure."""
     ask = last_human(messages)
     if "Write the demand brief now" in ask:
         return AIMessage(
@@ -170,8 +137,6 @@ def answer(messages):
                     "summary": "{PRIMARY} forecasts {F1} for {WEEK1}.",
                     "expected_range": "See the summary.",
                     "model_agreement": "The models broadly agree.",
-                    "backtest_error": "Its own back-test error is {F2}.",
-                    "track_record": "{F3} of {F4}.",
                     "watch_points": [
                         "Check whether extra shifts are needed this week."
                     ],

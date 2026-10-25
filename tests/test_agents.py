@@ -74,6 +74,56 @@ def test_a_good_brief_is_verified_first_time(
     assert out.can_approve
 
 
+def test_code_writes_the_fact_lines_from_its_own_tool_calls(
+    run, holidays, settings, tmp_path
+):
+    # The facts are code's, so the Investigator's calls and its cap are
+    # left whole: in this latch brief it makes none at all.
+    words = {
+        "summary": "The forecasts are untrusted while the drift latch is "
+        "set since {LATCHED}.",
+        "expected_range": "No forecast range can be trusted this week.",
+        "model_agreement": "The simple models are all untrusted.",
+        "watch_points": ["Check each released week before changing staffing."],
+        "cited_figures": [],
+    }
+    script = [DONE, reply(words), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        "2020-03-22", "T101H", "latch"
+    )
+    assert out.status == "verified" and out.ledger == []
+    error = out.facts.backtest_error
+    assert (error.errors[0].model, error.release_horizon) == ("linear", 1)
+    assert (
+        "Back-test error: linear's back-test error at release horizon 1 is "
+        "4.8%.\n"
+        "Track record: no past flag to judge; of 86 unflagged outlooks, 26 "
+        "turned busy.\n"
+        "Bank holidays ahead: Good Friday (w/e 12 Apr 2020)." in out.display()
+    )
+
+
+def test_the_screen_shows_the_investigator_the_fact_lines(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, reply(good_draft(run)), WORDING_OK]
+    model = gw.ScriptedModel(script=script)
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "rec.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    ag.BriefGraph(run, holidays, settings, gateway).run(ORIGIN, "T101H", "nw")
+    first = " ".join(str(m.content) for m in model.seen[0])
+    assert (
+        "Code writes these lines into the brief after your fields, from "
+        "its own tool calls; do not repeat them:\n"
+        "Back-test error: SA-MA's back-test error at release horizon 1 is "
+        "11.5%." in first
+    )
+
+
 def test_a_planted_wrong_figure_is_caught_then_fixed_on_the_retry(
     run, holidays, settings, tmp_path
 ):
@@ -227,30 +277,14 @@ def test_a_latch_brief_copies_the_held_level(
         run, tl.ForecastRequest(hospital="T101H", as_of=held, horizon=1)
     )
     point = next(f.point for f in forecast.forecasts if f.model == "linear")
-    (error,) = tl.get_backtest_error(
-        run,
-        tl.BacktestErrorRequest(
-            hospital="T101H", as_of=held, horizon=1, model="linear"
-        ),
-    ).errors
-    record = tl.get_track_record(
-        run, tl.TrackRecordRequest(hospital="T101H", as_of=held)
-    )
     h1 = {"model": "linear", "horizon": 1}
     draft = {
         "summary": "The forecasts are untrusted while the drift latch is set "
         "since {LATCHED}; {PRIMARY} gives {F1}, for the record only.",
         "expected_range": "No range is trusted this week.",
         "model_agreement": "The simple models are all untrusted.",
-        "backtest_error": "Its back-test error before the alarm was {F2}.",
-        "track_record": "{F3} of {F4}.",
         "watch_points": ["Check each released week before changing staffing."],
-        "cited_figures": [
-            figure(round(point), "T1", "point", **h1),
-            figure(round(error.mape, 1), "T2", "error", **h1),
-            figure(record.unflagged_busy, "T3", "unflagged_busy"),
-            figure(record.unflagged, "T3", "unflagged"),
-        ],
+        "cited_figures": [figure(round(point), "T1", "point", **h1)],
     }
     script = [ask, DONE, reply(draft), WORDING_OK]
     out = graph(run, holidays, settings, script, tmp_path).run(
@@ -285,8 +319,6 @@ def test_the_tools_refuse_another_hospital_or_origin(
                     summary="No figures.",
                     expected_range="None.",
                     model_agreement="None.",
-                    backtest_error="None.",
-                    track_record="None.",
                 )
             ),
             WORDING_OK,

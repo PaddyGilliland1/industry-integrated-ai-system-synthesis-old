@@ -15,7 +15,7 @@ Your tools only read, and each returns only weeks released by the origin. Each t
 - get_history: the latest released weeks of attendances.
 - get_calendar: the Scottish bank holidays in the weeks ahead, each with its release horizon, in one call.
 
-Always pass hospital "{hospital}" and as_of "{origin}". Any other hospital or date is refused. You may make at most {tool_call_cap} tool calls, so plan them: one call each to get_forecast, get_backtest_error, get_track_record and get_calendar is usually enough.
+Always pass hospital "{hospital}" and as_of "{origin}". Any other hospital or date is refused. You may make at most {tool_call_cap} tool calls, so plan them: one call each to get_forecast and get_backtest_error is usually enough. Code writes the track record and the bank holidays ahead, so call get_track_record or get_calendar only if your explanation needs them.
 
 How code writes your figures:
 - Get every figure from a tool. Never calculate, estimate or invent one.
@@ -39,12 +39,12 @@ You may write "this week" for the week the manager acts in, "the weeks ahead", a
 
 What the brief says:
 - Write "forecast", never "predict". Never write "prognosis", "triage" or "risk of".
-- Never state the chance or probability that a week is busy. Quote the hospital's track record instead.
+- Never state the chance or probability that a week is busy; code writes the hospital's track record instead.
 - Name any disagreement between the simple models, and say which to trust less and why, from the tool results only, such as a higher back-test error.
 - Do not claim a cause that no tool result shows.
 - Nothing you write may read as an instruction to a clinician. Watch points are for the duty manager: things to check or do this week about staffing.
-- Check the calendar for the weeks ahead, and say if a bank holiday falls in one.
-- A demand brief states the primary model's forecast for the weeks ahead as a cited figure. Every brief states this hospital's own back-test error in the back-test error field, and its track record in the track record field, each as a cited figure.
+- A demand brief states the primary model's forecast for the weeks ahead as a cited figure.
+- Code writes three lines of facts after your fields: the primary model's own back-test error, this hospital's track record and the bank holidays in the weeks ahead. They are shown with the screen's facts. Do not repeat them. A watch point may name a bank holiday by its title where it bears on cover.
 - In a surge or latch brief the forecasts are untrusted until a person approves a latch reset. Never give a forecast as what to plan on. Say what the level comes from and why the forecasts are untrusted, and point the manager to the released weeks. You need not cite a forecast; if you cite a forecast, a range end or the spread, code marks its label untrusted, and your sentence must not offer it as guidance.
 
 ## INVESTIGATE
@@ -77,14 +77,12 @@ Write the demand brief now. Reply with JSON only, with these fields:
 - "summary": two to four plain sentences for the duty manager: what the forecasts say for the weeks ahead and how far to trust them; in a surge or latch brief, what the level comes from and why the forecasts are untrusted
 - "expected_range": the expected range for the weeks ahead, from cited range ends; in a surge or latch brief, that no forecast range can be trusted while the drift latch is set
 - "model_agreement": where the simple models agree or disagree, and which to trust less and why
-- "backtest_error": this hospital's own back-test error, as a cited figure with measure error
-- "track_record": this hospital's track record, as a cited figure from get_track_record
 - "watch_points": one to four things the duty manager can check or do this week
 - "cited_figures": every figure in the text, in the order of their placeholders, each as {"value": the number, "tool_call_id": "T1", "measure": what it is, "model": the model or null, "horizon": the release horizon or null, "week": the week ending as YYYY-MM-DD or null, "unit": "attendances", "%" or "count"}
 
-An example for another hospital and week, Ninewells Hospital at w/e 13 Jun 2021, to show the form only: {"summary": "{PRIMARY} forecasts {F1} for {WEEK1}. No bank holiday falls between {WEEK1} and {WEEK4}.", "expected_range": "The likely range runs from {F2} to {F3}.", "model_agreement": "The simple models disagree, with a spread of {F4}; trust the one with the higher back-test error less, here {F5} against {F6}.", "backtest_error": "Its own back-test error is {F6}.", "track_record": "No past flag to judge yet; {F7} of {F8}.", "watch_points": ["Check whether extra shifts or bank staff are needed for {WEEK1}."], "cited_figures": [{"value": 1120, "tool_call_id": "T1", "measure": "point", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 982, "tool_call_id": "T1", "measure": "low_80", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 1291, "tool_call_id": "T1", "measure": "high_80", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 25.5, "tool_call_id": "T1", "measure": "spread", "model": null, "horizon": 1, "week": null, "unit": "%"}, {"value": 24.5, "tool_call_id": "T2", "measure": "error", "model": "seasonal naive", "horizon": 1, "week": null, "unit": "%"}, {"value": 11.5, "tool_call_id": "T2", "measure": "error", "model": "SA-MA", "horizon": 1, "week": null, "unit": "%"}, {"value": 29, "tool_call_id": "T3", "measure": "unflagged_busy", "model": null, "horizon": null, "week": null, "unit": "count"}, {"value": 136, "tool_call_id": "T3", "measure": "unflagged", "model": null, "horizon": null, "week": null, "unit": "count"}]}
+An example for another hospital and week, Ninewells Hospital at w/e 13 Jun 2021, to show the form only: {"summary": "Plan for demand above the usual for the time of year, starting at {F1}. The simple models disagree, so plan within the range below.", "expected_range": "The range to plan within runs from {F2} to {F3}.", "model_agreement": "The simple models disagree by {F4}. Trust least the model with the weakest record here, {F5}: it puts demand at {F6}, well below the rest.", "watch_points": ["Check whether extra shifts or bank staff are needed from {WEEK1} to {WEEK4}."], "cited_figures": [{"value": 1120, "tool_call_id": "T1", "measure": "point", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 982, "tool_call_id": "T1", "measure": "low_80", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 1291, "tool_call_id": "T1", "measure": "high_80", "model": "SA-MA", "horizon": 1, "week": null, "unit": "attendances"}, {"value": 25.5, "tool_call_id": "T1", "measure": "spread", "model": null, "horizon": 1, "week": null, "unit": "%"}, {"value": 24.5, "tool_call_id": "T2", "measure": "error", "model": "seasonal naive", "horizon": 1, "week": null, "unit": "%"}, {"value": 835, "tool_call_id": "T1", "measure": "point", "model": "seasonal naive", "horizon": 1, "week": null, "unit": "attendances"}]}
 
-Its summary reads to the manager as: SA-MA (the primary model) forecasts 1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021) for w/e 27 Jun 2021. No bank holiday falls between w/e 27 Jun 2021 and w/e 18 Jul 2021.
+Its summary reads to the manager as: Plan for demand above the usual for the time of year, starting at 1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021). The simple models disagree, so plan within the range below.
 
 ## CAP REACHED
 

@@ -36,10 +36,15 @@ from . import tools as tl
 from .briefs import (
     NOT_VERIFIED,
     BriefDraft,
+    BriefFacts,
     DemandBrief,
     DraftFields,
     ToolCall,
+    backtest_line,
+    brief_facts,
+    holidays_line,
     refused_text,
+    track_line,
 )
 from .figures import CheckResult, check_brief, check_draft
 from .gateway import (
@@ -251,9 +256,10 @@ class InvestigatorPass(BaseModel):
     raw_reply: str = ""
 
 
-def entry_text(entry):
-    """What the screen tells the Investigator: code-set facts only, and
-    what code writes for each token in this brief."""
+def entry_text(entry, facts=None):
+    """What the screen tells the Investigator: code-set facts only, what
+    code writes for each token in this brief and, given the brief's facts,
+    the fact lines code writes after the Investigator's fields."""
     weeks = [w.date() for w in release_horizon_weeks(entry.as_of)]
     ctx = entry_context(entry)
     tokens = ["HOSPITAL", "PRIMARY", "LEVEL", "ORIGIN", "RELEASE"]
@@ -293,6 +299,15 @@ def entry_text(entry):
     else:
         lines.append("Drift: none. The forecasts fit recent weeks.")
     lines.append(f"Tokens, as code writes them for this brief: {written}.")
+    if facts is not None:
+        lines += [
+            "Code writes these lines into the brief after your fields, from "
+            "its own tool calls; do not repeat them:",
+            f"Back-test error: {backtest_line(facts.backtest_error)}",
+            f"Track record: {track_line(facts.track_record)}",
+            "Bank holidays ahead: "
+            f"{holidays_line(facts.bank_holidays, entry.as_of)}",
+        ]
     return "\n".join(lines)
 
 
@@ -360,6 +375,7 @@ def _tool_loop(messages, *, gateway, toolbox, cap, run_id, first_call, calls):
 def investigator_pass(
     entry,
     *,
+    facts,
     gateway,
     toolbox,
     prompts,
@@ -391,7 +407,7 @@ def investigator_pass(
         tool_call_cap=cap,
     )
     messages = [SystemMessage(content=system)]
-    messages.append(HumanMessage(content=entry_text(entry)))
+    messages.append(HumanMessage(content=entry_text(entry, facts)))
     if previous is not None:
         messages.append(
             HumanMessage(
@@ -633,6 +649,7 @@ class BriefOutcome(BaseModel):
     origin: date
     status: Literal["verified", "not verified", "not screened"]
     entry: tl.ScreenEntry | None = None
+    facts: BriefFacts | None = None
     rule_level: int | None = None
     brief: DemandBrief | None = None
     attempts: list[Attempt] = Field(default_factory=list)
@@ -719,6 +736,7 @@ class BriefOutcome(BaseModel):
             text = refused_text(
                 self.entry,
                 DraftFields.model_validate(shown.draft),
+                self.facts,
                 backend=self.backend,
                 model=self.model,
                 failed=failed,
@@ -760,6 +778,7 @@ class BriefState(TypedDict, total=False):
     origin: str
     hospital: str
     entry: dict | None
+    facts: dict | None
     attempt: int
     draft: dict | None
     raw: str | None
@@ -811,16 +830,23 @@ class BriefGraph:
             self.log,
             state["run_id"],
         )
-        return {"route": ["screen"], "entry": entry.model_dump(mode="json")}
+        facts = brief_facts(self.run_design, self.holidays, entry)
+        return {
+            "route": ["screen"],
+            "entry": entry.model_dump(mode="json"),
+            "facts": facts.model_dump(mode="json"),
+        }
 
     def _investigate(self, state):
         """The Investigator node: a pass, any plant, the brief."""
         entry = tl.ScreenEntry.model_validate(state["entry"])
+        facts = BriefFacts.model_validate(state["facts"])
         attempt = state.get("attempt", 0) + 1
         previous = state.get("draft") if attempt > 1 else None
         raw = state.get("raw") if attempt > 1 else None
         out = investigator_pass(
             entry,
+            facts=facts,
             gateway=self.gateway,
             toolbox=self._toolbox,
             prompts=self.prompts["investigator"],
@@ -884,6 +910,7 @@ class BriefGraph:
             brief = DemandBrief.assemble(
                 entry,
                 checked,
+                facts,
                 brief_id=state["run_id"],
                 backend=self.gateway.backend,
                 model=self.gateway.model_name,
@@ -1076,6 +1103,7 @@ class BriefGraph:
             origin=date.fromisoformat(origin),
             status=final["status"],
             entry=entry,
+            facts=final.get("facts"),
             rule_level=entry["level"] if entry else None,
             brief=final.get("brief"),
             attempts=final["attempts"],

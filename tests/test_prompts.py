@@ -22,7 +22,8 @@ PROMPTS = ag.load_prompts()
 @pytest.fixture
 def ninewells(replay_run, holidays):
     """Ninewells Hospital at w/e 13 Jun 2021, the example's brief, with the
-    four calls the example cites, as the Investigator would make them."""
+    calls the example cites, as the Investigator would make them, and the
+    brief's facts."""
     entry = next(
         e for e in tl.screen_at(replay_run, ORIGIN) if e.hospital == "T101H"
     )
@@ -30,9 +31,8 @@ def ninewells(replay_run, holidays):
     base = {"hospital": "T101H", "as_of": ORIGIN}
     box.execute("get_forecast", base)
     box.execute("get_backtest_error", {**base, "horizon": 1})
-    box.execute("get_track_record", base)
-    box.execute("get_calendar", {"as_of": ORIGIN})
-    return entry, box.ledger
+    facts = br.brief_facts(replay_run, holidays, entry)
+    return entry, box.ledger, facts
 
 
 def example_brief():
@@ -51,33 +51,36 @@ Demand level 2, from the flag.
 The demand level shows demand unusually high for the time of year. It is not \
 pressure, need or priority.
 Drift alarm: none.
-Summary: SA-MA (the primary model) forecasts 1,120 attendances (SA-MA \
-forecast, release horizon 1, w/e 27 Jun 2021) for w/e 27 Jun 2021. No bank \
-holiday falls between w/e 27 Jun 2021 and w/e 18 Jul 2021.
-Expected range: The likely range runs from 982 attendances (low end of \
-SA-MA's 80% range, release horizon 1, w/e 27 Jun 2021) to 1,291 attendances \
-(high end of SA-MA's 80% range, release horizon 1, w/e 27 Jun 2021).
-Model agreement: The simple models disagree, with a spread of 25.5% (spread \
-of the four models' forecasts, release horizon 1, w/e 27 Jun 2021); trust \
-the one with the higher back-test error less, here 24.5% (seasonal naive \
-back-test error, release horizon 1) against 11.5% (SA-MA back-test error, \
-release horizon 1).
-Back-test error: Its own back-test error is 11.5% (SA-MA back-test error, \
-release horizon 1).
-Track record: No past flag to judge yet; 29 unflagged outlooks that turned \
-busy (track record) of 136 unflagged outlooks (track record).
+Summary: Plan for demand above the usual for the time of year, starting at \
+1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021). The \
+simple models disagree, so plan within the range below.
+Expected range: The range to plan within runs from 982 attendances (low end \
+of SA-MA's 80% range, release horizon 1, w/e 27 Jun 2021) to 1,291 \
+attendances (high end of SA-MA's 80% range, release horizon 1, w/e 27 Jun \
+2021).
+Model agreement: The simple models disagree by 25.5% (spread of the four \
+models' forecasts, release horizon 1, w/e 27 Jun 2021). Trust least the model \
+with the weakest record here, 24.5% (seasonal naive back-test error, release \
+horizon 1): it puts demand at 835 attendances (seasonal naive forecast, \
+release horizon 1, w/e 27 Jun 2021), well below the rest.
+Back-test error: SA-MA's back-test error at release horizon 1 is 11.5%.
+Track record: no past flag to judge; of 136 unflagged outlooks, 29 turned \
+busy.
+Bank holidays ahead: none in the four weeks ahead.
 Watch points:
-- Check whether extra shifts or bank staff are needed for w/e 27 Jun 2021."""
+- Check whether extra shifts or bank staff are needed from w/e 27 Jun 2021 to \
+w/e 18 Jul 2021."""
 
 
 def test_the_investigators_example_passes_and_reads_as_shown(ninewells):
-    entry, ledger = ninewells
+    entry, ledger, facts = ninewells
     draft = br.BriefDraft.model_validate(
         example_brief(), context={"text": ag.entry_context(entry)}
     )
     brief = br.DemandBrief.assemble(
         entry,
         draft,
+        facts,
         brief_id="example",
         backend="local",
         model="m",
@@ -129,13 +132,26 @@ def test_a_surge_or_latch_brief_is_told_its_forecasts_are_untrusted():
     assert "code marks its label untrusted" in system
 
 
+def test_the_investigator_writes_none_of_the_fact_lines():
+    system = PROMPTS["investigator"]["SYSTEM"]
+    draft = PROMPTS["investigator"]["DRAFT"]
+    assert '"backtest_error"' not in draft and '"track_record"' not in draft
+    assert "back-test error field" not in system
+    assert "track record field" not in system
+    assert (
+        "Code writes three lines of facts after your fields: the primary "
+        "model's own back-test error, this hospital's track record and the "
+        "bank holidays in the weeks ahead." in system
+    )
+
+
 def test_the_reviewer_refuses_an_untrusted_forecast_given_as_guidance():
     system = PROMPTS["reviewer"]["SYSTEM"]
     assert "an untrusted forecast something to plan on" in system
 
 
 @pytest.fixture
-def notified(replay_run):
+def notified(replay_run, holidays):
     """The example notification's action: Ninewells' hold-leave action
     for a level 2 brief at w/e 13 Jun 2021, deadline 10:00 UK time on Thu
     24 Jun 2021."""
@@ -150,6 +166,7 @@ def notified(replay_run):
     brief = br.DemandBrief.assemble(
         entry,
         br.BriefDraft.model_validate(good_draft(replay_run)),
+        br.brief_facts(replay_run, holidays, entry),
         brief_id="nw",
         backend="local",
         model="m",
@@ -192,7 +209,7 @@ def test_no_prompt_holds_a_long_dash(agent):
 
 
 def test_the_screen_tells_the_investigator_what_each_token_writes(ninewells):
-    entry, _ = ninewells
+    entry, _, _ = ninewells
     text = ag.entry_text(entry)
     assert (
         "Tokens, as code writes them for this brief: {HOSPITAL} Ninewells "

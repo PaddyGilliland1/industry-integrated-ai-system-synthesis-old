@@ -196,25 +196,48 @@ def fig(value, cid, measure, model=None, horizon=None, week=None, unit=None):
     )
 
 
-# The figures every brief must state, cited after a test's own so its {F1}
-# stays its first: the primary's forecast, its back-test error and the
-# track record.
-OWN = [
-    ("summary", fig(1120.3, "T1", "point", "SA-MA", 1)),
-    ("backtest_error", fig(6.12, "T2", "error", "SA-MA", 1)),
-    ("track_record", fig(29, "T3", "unflagged_busy")),
-]
+# The figure a demand brief must state, cited after a test's own so its
+# {F1} stays its first: the primary's forecast.
+OWN = [("summary", fig(1120.3, "T1", "point", "SA-MA", 1))]
+
+# What code writes as the brief's fact lines, from the tools as of the
+# origin.
+FACTS = br.BriefFacts(
+    backtest_error=tl.BacktestErrorResult(
+        hospital="T101H",
+        as_of=ORIGIN,
+        release_horizon=1,
+        errors=[tl.ModelError(model="SA-MA", mape=6.1234, targets=104)],
+    ),
+    track_record=tl.TrackRecordResult(
+        hospital="T101H",
+        as_of=ORIGIN,
+        flags=0,
+        borne_out=0,
+        unflagged=136,
+        unflagged_busy=29,
+        unflagged_busy_pct=21.3235,
+    ),
+    bank_holidays=tl.CalendarResult(
+        holidays=[
+            tl.Holiday(
+                date=date(2021, 7, 2),
+                title="Summer holiday",
+                release_horizon=2,
+            )
+        ],
+        covered=True,
+    ),
+)
 
 
 def draft(**fields):
-    """A draft with the given fields; each of the figures every brief must
-    state is added to its field unless the test writes that field."""
+    """A draft with the given fields; the figure a demand brief must state
+    is added to its field unless the test writes that field."""
     base = {
         "summary": "Demand is forecast unusually high for the time of year.",
         "expected_range": "The range is wide.",
         "model_agreement": "The models disagree; trust the lowest less.",
-        "backtest_error": "The back-test error is in the table.",
-        "track_record": "This hospital has no past flag to judge.",
         "watch_points": ["Check whether extra shifts are needed this week."],
         "cited_figures": [],
     }
@@ -228,10 +251,11 @@ def draft(**fields):
     return br.BriefDraft(**{**fields, "cited_figures": figures})
 
 
-def brief(entry=ENTRY, **fields):
+def brief(entry=ENTRY, facts=FACTS, **fields):
     return br.DemandBrief.assemble(
         entry,
         draft(**fields),
+        facts,
         brief_id="b1",
         backend="local",
         model="nemotron-3.5-lightning:30b-a3b",
@@ -477,92 +501,199 @@ def test_a_planted_figure_no_tool_returned_is_named_and_shown_marked():
     )
 
 
-# --- what every brief must state ---------------------------------------------
+# --- what a brief must state, and what code states for it ------------------
 
 
-def test_a_brief_stating_its_forecast_error_and_track_record_passes():
+def test_a_demand_brief_stating_its_forecast_passes():
     result = check(brief())
     assert result.passed, reasons(result)
-    assert result.figures_checked == 3
+    assert result.figures_checked == 1
 
 
 @pytest.mark.parametrize(
-    "fields, named",
+    "fields",
     [
-        (
-            {"summary": "Demand is forecast unusually high."},
-            "SA-MA's forecast",
-        ),
-        (
-            {
-                "summary": "{PRIMARY} gives {F1}.",
-                "cited_figures": [fig(898.4, "T1", "point", "linear", 1)],
-            },
-            "SA-MA's forecast",
-        ),
-        ({"backtest_error": "None was given."}, "back-test error field"),
-        (
-            # The count of back-test weeks is no error.
-            {
-                "backtest_error": "It covers {F1}.",
-                "cited_figures": [fig(104, "T2", "targets", "SA-MA", 1)],
-            },
-            "back-test error field",
-        ),
-        ({"track_record": "None was given."}, "track record field"),
+        {"summary": "Demand is forecast unusually high."},
+        {
+            "summary": "{PRIMARY} gives {F1}.",
+            "cited_figures": [fig(898.4, "T1", "point", "linear", 1)],
+        },
+        # A failed figure does not count as stated.
+        {
+            "summary": "Expect {F1}.",
+            "cited_figures": [fig(1450, "T1", "point", "SA-MA", 1)],
+        },
     ],
 )
-def test_a_brief_missing_a_figure_every_brief_states_fails(fields, named):
+def test_a_demand_brief_missing_its_primary_forecast_fails(fields):
     result = check(brief(**fields))
     assert not result.passed
-    assert named in reasons(result)
+    assert "SA-MA's forecast" in reasons(result)
 
 
-SURGE = ENTRY.model_copy(
-    update={
-        "kind": "surge",
-        "level_source": "surge",
-        "latched": True,
-        "latched_since": date(2021, 6, 6),
-        "breach_direction": "upward",
-    }
-)
-HELD = SURGE.model_copy(
-    update={
-        "kind": "latch",
-        "level_source": "held",
-        "breach_direction": "downward",
-    }
-)
+def test_the_agent_writes_no_back_test_error_track_record_or_holidays():
+    for model in (br.DraftFields, br.BriefDraft):
+        assert set(model.model_fields) == {
+            "summary",
+            "expected_range",
+            "model_agreement",
+            "watch_points",
+            "cited_figures",
+        }
+    with pytest.raises(ValidationError):
+        br.BriefDraft.model_validate(
+            {**draft().model_dump(), "backtest_error": "It is low."}
+        )
 
 
-@pytest.mark.parametrize("entry", [SURGE, HELD], ids=["surge", "latch"])
-def test_a_surge_or_latch_brief_need_not_state_an_untrusted_forecast(entry):
-    # I never ask for a forecast the spec marks untrusted, so the check
-    # cannot push the model to quote one as guidance.
-    b = brief(
-        entry=entry,
-        summary="Demand broke from the forecasts in {LATCHED}, so they are "
-        "untrusted until a person approves a latch reset.",
+def test_code_writes_the_fact_lines_from_the_tools():
+    text = brief().text()
+    assert (
+        "Model agreement: The models disagree; trust the lowest less.\n"
+        "Back-test error: SA-MA's back-test error at release horizon 1 is "
+        "6.1%.\n"
+        "Track record: no past flag to judge; of 136 unflagged outlooks, 29 "
+        "turned busy.\n"
+        "Bank holidays ahead: Summer holiday (w/e 04 Jul 2021).\n"
+        "Watch points:" in text
     )
-    result = check(b, rule_level=entry.level)
-    assert result.passed, reasons(result)
-    assert not b.figures_in("summary")
 
 
-def test_only_a_demand_brief_must_state_the_primary_forecast():
-    words = {"summary": "Demand is forecast unusually high."}
-    assert "SA-MA's forecast" in reasons(check(brief(**words)))
-    surge = brief(entry=SURGE, **words)
-    assert "SA-MA's forecast" not in reasons(check(surge))
+def test_a_brief_cites_no_back_test_error_or_track_record_to_pass():
+    # Code writes both from the tools, so the check asks for neither.
+    b = brief()
+    assert not any(f.measure in ("error",) + fg.TRACK for f in b.cited_figures)
+    assert check(b).passed
 
 
-def test_a_failed_figure_does_not_count_as_stated():
-    b = brief(
-        backtest_error="It is {F1}.",
-        cited_figures=[fig(7.7, "T2", "error", "SA-MA", 1)],
+@pytest.mark.parametrize(
+    "record, line",
+    [
+        (
+            {"flags": 21, "borne_out": 13, "unflagged": 208},
+            "of 21 flagged outlooks, 13 were borne out; of 208 unflagged "
+            "outlooks, 49 turned busy.",
+        ),
+        (
+            {"flags": 1, "borne_out": 1, "unflagged": 1, "unflagged_busy": 1},
+            "of 1 flagged outlook, 1 was borne out; of 1 unflagged outlook, 1 "
+            "turned busy.",
+        ),
+        (
+            {"flags": 0, "borne_out": 0, "unflagged": 1208},
+            "no past flag to judge; of 1,208 unflagged outlooks, 49 turned "
+            "busy.",
+        ),
+        (
+            {"flags": 3, "borne_out": 0, "unflagged": 0, "unflagged_busy": 0},
+            "of 3 flagged outlooks, 0 were borne out; no unflagged outlook "
+            "to judge.",
+        ),
+    ],
+)
+def test_the_track_record_line_takes_every_form(record, line):
+    result = FACTS.track_record.model_copy(
+        update={"unflagged_busy": 49, **record}
     )
-    assert "back-test error field" in reasons(check(b))
+    assert br.track_line(result) == line
+
+
+def test_the_back_test_line_names_its_model_and_says_when_none_is_known():
+    error = FACTS.backtest_error
+    moving = error.model_copy(
+        update={
+            "errors": [
+                tl.ModelError(
+                    model="4-week moving average", mape=3.46, targets=104
+                )
+            ]
+        }
+    )
+    assert br.backtest_line(moving) == (
+        "the 4-week moving average's back-test error at release horizon 1 "
+        "is 3.5%."
+    )
+    none = error.model_copy(
+        update={"errors": [tl.ModelError(model="SA-MA", mape=None, targets=0)]}
+    )
+    assert br.backtest_line(none) == (
+        "SA-MA's back-test error at release horizon 1 is not known: no "
+        "released week to score yet."
+    )
+
+
+@pytest.mark.parametrize(
+    "holidays, covered, line",
+    [
+        ([], True, "none in the four weeks ahead."),
+        (
+            [
+                ("2023-05-01", "Early May bank holiday", 3),
+                (
+                    "2023-05-08",
+                    "Bank holiday for the coronation of King Charles III",
+                    4,
+                ),
+            ],
+            True,
+            "Early May bank holiday (w/e 07 May 2023); coronation of King "
+            "Charles III (w/e 14 May 2023).",
+        ),
+        (
+            [],
+            False,
+            "not known for every week ahead, as the bank holiday file does "
+            "not cover them all.",
+        ),
+    ],
+)
+def test_the_bank_holidays_line_takes_every_form(holidays, covered, line):
+    calendar = tl.CalendarResult(
+        holidays=[
+            tl.Holiday(date=d, title=t, release_horizon=k)
+            for d, t, k in holidays
+        ],
+        covered=covered,
+    )
+    assert br.holidays_line(calendar, date(2023, 4, 9)) == line
+
+
+@pytest.mark.parametrize(
+    "facts",
+    [
+        FACTS.model_copy(
+            update={
+                "track_record": FACTS.track_record.model_copy(
+                    update={"hospital": "G405H"}
+                )
+            }
+        ),
+        FACTS.model_copy(
+            update={
+                "backtest_error": FACTS.backtest_error.model_copy(
+                    update={"as_of": date(2021, 6, 6)}
+                )
+            }
+        ),
+        FACTS.model_copy(
+            update={
+                "backtest_error": FACTS.backtest_error.model_copy(
+                    update={
+                        "errors": [
+                            tl.ModelError(
+                                model="linear", mape=9.9, targets=104
+                            )
+                        ]
+                    }
+                )
+            }
+        ),
+    ],
+    ids=["another hospital", "another origin", "another model"],
+)
+def test_the_fact_lines_must_be_this_briefs_own(facts):
+    with pytest.raises(ValidationError):
+        brief(facts=facts)
 
 
 def test_the_level_must_equal_the_rules_level():
@@ -576,24 +707,14 @@ def test_a_draft_refused_by_the_text_rules_is_checked_in_full():
         summary="SA-MA forecasts {F1} next week.",
         expected_range="See above.",
         model_agreement="They agree.",
-        backtest_error="None.",
-        track_record="None.",
         watch_points=["Check cover."],
         cited_figures=figures,
     )
-    ctx = br.DemandBrief.assemble(
-        ENTRY,
-        draft(),
-        brief_id="b1",
-        backend="local",
-        model="m",
-        model_digest=None,
-    ).text_context()
+    ctx = brief().text_context()
     result = fg.check_draft(fields.texts(), fields.cited_figures, LEDGER, ctx)
     found = {f.found for f in result.failures}
     assert {"SA-MA", "next week", "1450"} <= found
-    named = reasons(result)
-    assert "back-test error field" in named and "track record field" in named
+    assert "SA-MA's forecast" in reasons(result)
 
 
 # --- the literal reader, for code-written text such as the template ----------

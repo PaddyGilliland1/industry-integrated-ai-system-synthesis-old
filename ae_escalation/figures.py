@@ -10,15 +10,17 @@ every problem at once:
 - each cited figure must be what its tool call returned: the same value
   within rounding, the same measure, model, release horizon and week, in
   the measure's unit, for the same hospital and origin;
-- a demand brief must state its primary model's forecast, and every brief
-  its hospital's own back-test error and its track record, each a cited
-  figure that passed, found by its measure and its tool. A surge or latch
-  brief need state no forecast: its forecasts are untrusted;
+- a demand brief must state its primary model's forecast, a cited figure
+  that passed, found by its measure and its tool. A surge or latch brief
+  need state no forecast: its forecasts are untrusted;
 - the level must equal the rule's.
 
 So each number the reader sees is a tool's value, written with its true
 label. The check does not prove what a sentence says about it: the Reviewer
-and the duty manager judge that.
+and the duty manager judge that. The brief's fact lines, the back-test
+error, the track record and the bank holidays, are no agent's: code writes
+each from its own tool call (briefs.py), as it fills the template brief's
+blanks, so this check has nothing of the agent's to trace in them.
 
 "Within rounding" means the tool's value, rounded to the places the brief
 writes, gives the brief's number: 1,203 matches 1,202.66 and 4.3 matches
@@ -613,49 +615,27 @@ def _stated(texts, fields, figures, failed):
 
 def requirement_problems(texts, figures, failed, ctx):
     """What a brief must state and does not: a demand brief, its primary
-    model's forecast, in any field; every brief, its hospital's own
-    back-test error, in the back-test error field, and its track record, in
-    the track record field. Each is a cited figure that passed, found by
+    model's forecast, in any field, as a cited figure that passed, found by
     its measure, which the figure check has tied to its tool (build spec,
     section 4). A surge or latch brief's forecasts are untrusted, so it is
-    never asked for one."""
-    out = []
+    never asked for one. Code writes the back-test error, the track record
+    and the bank holidays as fixed lines, so no brief is asked to cite
+    them."""
+    if ctx.kind != "demand":
+        return []
     primary = ctx.primary
-    every = _stated(texts, texts, figures, failed)
-    if ctx.kind == "demand" and not any(
-        f.measure == "point" and f.model == primary for f in every
-    ):
-        out.append(
-            Failure(
-                field="summary",
-                found="",
-                reason=f"the brief must state {primary}'s forecast, the "
-                "primary model's: a cited figure with measure point and "
-                f"model {primary}, from get_forecast",
-            )
+    stated = _stated(texts, texts, figures, failed)
+    if any(f.measure == "point" and f.model == primary for f in stated):
+        return []
+    return [
+        Failure(
+            field="summary",
+            found="",
+            reason=f"the brief must state {primary}'s forecast, the "
+            "primary model's: a cited figure with measure point and "
+            f"model {primary}, from get_forecast",
         )
-    errors = _stated(texts, ["backtest_error"], figures, failed)
-    if not any(f.measure == "error" for f in errors):
-        out.append(
-            Failure(
-                field="backtest_error",
-                found="",
-                reason="the back-test error field must state this "
-                "hospital's own back-test error: a cited figure with "
-                "measure error, from get_backtest_error",
-            )
-        )
-    track = _stated(texts, ["track_record"], figures, failed)
-    if not any(f.measure in TRACK for f in track):
-        out.append(
-            Failure(
-                field="track_record",
-                found="",
-                reason="the track record field must state this hospital's "
-                "track record: a cited figure from get_track_record",
-            )
-        )
-    return out
+    ]
 
 
 def check_draft(texts, figures, ledger, ctx):

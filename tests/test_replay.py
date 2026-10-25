@@ -120,7 +120,9 @@ def test_a_planted_figure_is_one_no_tool_returned(replay_run):
     assert added.unit == "attendances" and added.tool_call_id == "T1"
     bare = rp.plant_figure(draft, [])
     assert bare.cited_figures[-1].tool_call_id == "T0"
-    assert bare.summary.endswith("\n{PRIMARY} forecasts {F8}.")
+    assert bare.summary.endswith(
+        f"\n{{PRIMARY}} forecasts {{F{len(draft.cited_figures) + 1}}}."
+    )
 
 
 # --- live with the stand-in, then replay -------------------------------------
@@ -482,11 +484,11 @@ def test_a_resumed_notify_skips_each_recorded_decision_and_asks_no_reviewer(
     )
     rp.write_queue(result, paths)
     first, second = [o for o in result.outcomes if o.status == "verified"][:2]
-    # An edit code finds factual, though the sheet says no: it states one
-    # more figure. And an edit that fails the code check.
+    # An edit code finds factual, though the sheet says no: it names one
+    # more week. And an edit that fails the code check.
     draft = first.brief.draft()
     factual = draft.model_copy(
-        update={"summary": f"{draft.summary} Its error is {{F2}}."}
+        update={"summary": f"{draft.summary} Check {{WEEK2}} too."}
     )
     other = second.brief.draft()
     wrong = other.cited_figures[0].model_copy(

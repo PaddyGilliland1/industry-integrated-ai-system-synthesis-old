@@ -361,6 +361,7 @@ class ApprovalQueue:
                 edited = DemandBrief.assemble(
                     item.outcome.entry,
                     draft,
+                    item.outcome.facts,
                     brief_id=item.brief_id,
                     backend=item.outcome.backend,
                     model=item.outcome.model,
