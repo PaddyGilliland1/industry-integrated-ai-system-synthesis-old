@@ -614,32 +614,48 @@ def test_failing_figures_and_dates_are_marked():
 
 # --- drafted staff notifications ---------------------------------------------
 
+TARGETS = [
+    date(2021, 6, 27),
+    date(2021, 7, 4),
+    date(2021, 7, 11),
+    date(2021, 7, 18),
+]
+
 
 def code_set():
     return fg.CodeSet.for_action(
-        level=2, deadline=datetime(2021, 6, 24, 14, 0), weeks=[]
+        level=2, deadline=datetime(2021, 6, 24, 14, 0), weeks=TARGETS
     )
 
 
-def test_a_notification_with_tool_and_code_values_passes():
+def approved():
+    """The approved brief a notification is drafted from: it states SA-MA's
+    release horizon 1 forecast, its back-test error and track record."""
+    return brief(
+        summary="SA-MA forecasts {F1} attendances for w/e {WEEK1}.",
+        cited_figures=[fig(1120.3, "T1", "SA-MA", 1)],
+    )
+
+
+def notify(message):
+    return fg.check_notification(message, approved(), code_set())
+
+
+def test_a_notification_with_the_briefs_and_codes_values_passes():
     message = (
         "Ninewells Hospital, demand level 2: please check whether extra "
         "shifts or bank staff are needed for the week ending 27 Jun 2021, "
         "when SA-MA forecasts 1,120 attendances. Reply by 14:00 on Thu 24 "
-        "Jun 2021."
+        "Jun 2021, for the next 4 weeks, from 27 to 18 Jul 2021."
     )
-    result = fg.check_notification(
-        message, LEDGER, "T101H", ORIGIN, code_set()
-    )
+    result = notify(message)
     assert result.passed, reasons(result)
 
 
 def test_a_planted_wrong_date_in_a_notification_is_caught():
-    message = "Please check extra shifts for the week ending 11 Jul 2021."
-    result = fg.check_notification(
-        message, LEDGER, "T101H", ORIGIN, code_set()
-    )
-    assert not result.passed and "11 Jul 2021" in reasons(result)
+    message = "Please check extra shifts for the week ending 25 Jul 2021."
+    result = notify(message)
+    assert not result.passed and "25 Jul 2021" in reasons(result)
 
 
 def test_a_planted_wrong_number_or_time_in_a_notification_is_caught():
@@ -647,18 +663,47 @@ def test_a_planted_wrong_number_or_time_in_a_notification_is_caught():
         "SA-MA forecasts 1,450 attendances.",
         "Reply by 15:00 on Thu 24 Jun 2021.",
         "This is demand level 3.",
+        "Check whether level 3 actions apply.",
     ):
-        result = fg.check_notification(
-            message, LEDGER, "T101H", ORIGIN, code_set()
-        )
-        assert not result.passed, message
+        assert not notify(message).passed, message
 
 
 def test_a_notification_cannot_borrow_another_hospitals_figures():
-    message = "Last week saw 1,500 attendances."
-    result = fg.check_notification(
-        message, LEDGER, "T101H", ORIGIN, code_set()
+    assert not notify("Last week saw 1,500 attendances.").passed
+    assert not notify("Unlike S314H, cover is fine.").passed
+
+
+# The review's probe (P1-2): each passed when the allowed set was every value
+# in the ledger, a history call included. Only the approved brief's stated
+# figures, the level and the action's own dates now pass.
+@pytest.mark.parametrize(
+    "message, found",
+    [
+        (
+            "Hold leave for w/e 22 Nov 2020. Reply by 14:00 on Thu 24 Jun "
+            "2021.",
+            "22 Nov 2020",
+        ),
+        ("Expect 872 attendances at Ninewells next week.", "872"),
+        ("Demand is 12% above normal.", "12"),
+        ("Check cover for the next 3 weeks.", "3 weeks"),
+        ("Last week saw 1,203 attendances, w/e 06 Jun 2021.", "1,203"),
+        ("Last week saw 1,203 attendances, w/e 06 Jun 2021.", "06 Jun 2021"),
+        ("SA-MA's 80% range starts at 982.", "982"),
+    ],
+)
+def test_a_notification_states_only_the_briefs_stated_figures(message, found):
+    result = notify(message)
+    assert not result.passed
+    assert found in {f.found for f in result.failures}, reasons(result)
+
+
+def test_a_figure_the_brief_cites_but_does_not_state_is_refused():
+    quiet = brief(
+        summary="Demand is forecast unusually high.",
+        cited_figures=[fig(1120.3, "T1", "SA-MA", 1)],
     )
+    result = fg.check_notification("Expect 1,120.", quiet, code_set())
     assert not result.passed
 
 

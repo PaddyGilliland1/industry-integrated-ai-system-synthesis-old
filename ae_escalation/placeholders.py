@@ -155,8 +155,12 @@ def _date_text(day):
     return f"{day:%d %b %Y}"
 
 
-def _deadline_text(deadline):
-    return f"{deadline:%H:%M} UK time on {deadline:%a %d %b %Y}"
+def deadline_text(deadline):
+    """A reply deadline as a notification states it, with its clock's
+    zone."""
+    key = getattr(deadline.tzinfo, "key", None)
+    zone = "UK time" if key == "Europe/London" else deadline.tzname()
+    return f"{deadline:%H:%M} {zone} on {deadline:%a %d %b %Y}"
 
 
 def render(text, figures, ctx, failed=frozenset()):
@@ -178,7 +182,7 @@ def render(text, figures, ctx, failed=frozenset()):
             "ORIGIN": lambda: _date_text(ctx.origin),
             "RELEASE": lambda: f"{ctx.release:%a %d %b %Y}",
             "LATCHED": lambda: _date_text(ctx.latched_since),
-            "DEADLINE": lambda: _deadline_text(ctx.deadline),
+            "DEADLINE": lambda: deadline_text(ctx.deadline),
         }[name]()
 
     return PLACEHOLDER.sub(value, text)

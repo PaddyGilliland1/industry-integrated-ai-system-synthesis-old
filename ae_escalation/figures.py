@@ -757,26 +757,51 @@ def check_brief(brief, ledger, rule_level):
     )
 
 
-def check_notification(message, ledger, hospital, origin, code):
-    """Check one drafted staff notification before it may reach the
-    outbox: any number or date must match a tool result for the same
-    hospital and week, or a value code set for the action.
+def _stated_dates(texts):
+    """The full dates a set of texts states."""
+    out = set()
+    for text in texts:
+        for t in tokens(text):
+            if t.kind == "date" and None not in t.value:
+                out.add(date(*t.value))
+    return out
+
+
+def check_notification(message, brief, code):
+    """Check one drafted staff notification, as it will be written, before
+    it may reach the outbox (D-SAFE-19, as amended; review P1-2).
+
+    A number must be the value of a cited figure the approved brief's text
+    states, or the action's level. A date must be one of the action's weeks,
+    its reply deadline, the brief's origin or release, or a date the brief's
+    text states. Nothing else in the brief's tool calls counts, so a history
+    week or a past week's count cannot pass as this week's.
 
     Parameters
     ----------
     message : str
-    ledger : list of briefs.ToolCall
-        The approved brief's tool calls.
-    hospital : str
-    origin : datetime.date
+        The notification with its placeholders filled in.
+    brief : briefs.DemandBrief
+        The approved brief, as the approver left it.
     code : CodeSet
 
     Returns
     -------
     CheckResult
     """
-    values = ledger_numbers(ledger, hospital, origin) | set(code.numbers)
-    known = frozenset(ledger_dates(ledger, hospital, origin) | code.dates)
+    stated = set()
+    for field in brief.rendered():
+        stated |= brief.figures_in(field)
+    values = {
+        float(brief.cited_figures[n - 1].value)
+        for n in stated
+        if n <= len(brief.cited_figures)
+    } | set(code.numbers)
+    known = frozenset(
+        code.dates
+        | {brief.week, brief.release_date}
+        | _stated_dates(brief.rendered().values())
+    )
     allowed = Allowed(
         level=code.level,
         dates=known,
@@ -789,18 +814,19 @@ def check_notification(message, ledger, hospital, origin, code):
     for t in tokens(message):
         if t.kind == "number":
             numbers += 1
-            if not any(within_rounding(t.text, v) for v in values):
-                failures.append(
-                    Failure(
-                        field="message",
-                        found=t.text,
-                        reason=f"{t.text}: no tool result or action value "
-                        "gives it",
-                    )
-                )
-            continue
-        dates += t.kind in ("date", "year")
-        reason = token_failure(t, allowed)
+            if any(within_rounding(t.text, v) for v in values):
+                continue
+            reason = (
+                f"{t.text}: neither the approved brief's text nor the "
+                "action gives it"
+            )
+        elif t.kind == "hospital" and t.value != brief.hospital:
+            reason = f"{t.text} is another hospital, not {brief.name}"
+        elif t.kind in ("glued", "number word"):
+            reason = f"{t.text}: a number no check can trace"
+        else:
+            dates += t.kind in ("date", "year")
+            reason = token_failure(t, allowed)
         if reason:
             failures.append(
                 Failure(field="message", found=t.text, reason=reason)

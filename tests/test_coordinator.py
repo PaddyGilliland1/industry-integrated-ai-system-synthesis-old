@@ -21,17 +21,17 @@ from .scripted import DONE, ORIGIN, TOOLS, WORDING_OK, good_draft, reply
 WHEN = datetime(2026, 10, 27, 9, 30, tzinfo=timezone.utc)
 # The replay's clock starts at 10:00 on the release day, Tue 22 Jun 2021,
 # so the level 2 reply deadline, 48 hours on, is 10:00 on Thu 24 Jun 2021.
+# The drafts write every figure, date and time as its placeholder.
 GOOD = {
     "check-cover": (
         "Ninewells Hospital, demand level 2: please check whether extra "
-        "shifts or bank staff are needed for the four weeks from w/e 27 Jun "
-        "2021, when SA-MA forecasts 1,120 attendances. Please reply by "
-        "10:00 on Thu 24 Jun 2021."
+        "shifts or bank staff are needed for the four weeks from w/e "
+        "{WEEK1}, when SA-MA forecasts {F1} attendances. Please reply by "
+        "{DEADLINE}."
     ),
     "hold-leave": (
-        "Please hold new leave requests for the four weeks from w/e 27 Jun "
-        "2021 until the duty manager's check is done. Please reply by "
-        "10:00 on Thu 24 Jun 2021."
+        "Please hold new leave requests for the four weeks from w/e {WEEK1} "
+        "until the duty manager's check is done. Please reply by {DEADLINE}."
     ),
 }
 
@@ -170,7 +170,12 @@ def test_drafts_that_pass_are_written_to_the_outbox_never_sent(
     assert [r["to"] for r in written] == ["duty manager", "rota coordinator"]
     assert all(r["label"] == co.OUTBOX_LABEL for r in written)
     assert "never sent" in co.OUTBOX_LABEL
-    assert written[0]["message"] == GOOD["check-cover"]
+    first = written[0]["message"]
+    assert "{" not in first and "when SA-MA forecasts 1,120 attendances" in (
+        first
+    )
+    assert "from w/e 27 Jun 2021" in first
+    assert "reply by 10:00" in first and "on Thu 24 Jun 2021" in first
 
 
 def test_a_planted_wrong_date_is_caught_and_nothing_written_until_it_passes(
@@ -178,7 +183,7 @@ def test_a_planted_wrong_date_is_caught_and_nothing_written_until_it_passes(
 ):
     planted = dict(GOOD)
     planted["check-cover"] = GOOD["check-cover"].replace(
-        "Thu 24 Jun 2021", "Fri 25 Jun 2021"
+        "{DEADLINE}", "10:00 on Fri 25 Jun 2021"
     )
     seen = []
 
@@ -211,6 +216,39 @@ def test_a_draft_failing_twice_is_held_and_never_reaches_the_outbox(
     assert "[[NOT VERIFIED: 1,450]]" in held.shown
     ids = [r["action_id"] for r in outbox(tmp_path)]
     assert "nw-hold-leave" not in ids and "nw-check-cover" in ids
+
+
+def test_a_notification_citing_no_figure_of_the_brief_is_held(
+    approved, settings, tmp_path
+):
+    other = GOOD["check-cover"].replace("{F1}", "{F9}")
+    script = [
+        notes(**{**GOOD, "check-cover": other}),
+        notes(**{"check-cover": other}),
+    ]
+    out = coordinator(settings, tmp_path, script).coordinate(approved)
+    held = next(a for a in out.actions if a.code == "check-cover")
+    assert held.state == "held"
+    assert "{F9}" in {f.found for f in out.drafts[-1].check.failures}
+
+
+def test_the_coordinator_is_shown_the_briefs_figures_with_placeholders(
+    approved, settings, tmp_path
+):
+    model = gw.ScriptedModel(script=[notes(**GOOD)])
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "n.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    co.Coordinator(settings, gateway, outbox=tmp_path / "o.jsonl").coordinate(
+        approved
+    )
+    prompt = model.seen[0][-1].content
+    assert "- {F1}: 1,120 attendances (SA-MA, release horizon 1)" in prompt
+    assert "{WEEK1} to {WEEK4}: 27 Jun 2021" in prompt
+    assert "Reply deadline: {DEADLINE}" in prompt
 
 
 def test_a_missing_draft_counts_as_a_failure(approved, settings, tmp_path):

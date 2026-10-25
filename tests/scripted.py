@@ -220,9 +220,10 @@ def answer(messages):
     if '"passes"' in ask:
         return AIMessage(content='{"passes": true, "problems": []}')
     if "The actions, set by code" in ask:
+        actions = ask.split("The actions, set by code:")[1]
         codes = [
             line.split(":")[0][2:]
-            for line in ask.splitlines()
+            for line in actions.splitlines()
             if line.startswith("- ")
         ]
         return AIMessage(

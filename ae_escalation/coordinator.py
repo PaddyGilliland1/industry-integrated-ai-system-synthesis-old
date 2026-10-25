@@ -4,13 +4,17 @@ escalation for an approved demand brief.
 Code does the deciding (D-ARCH-21). It sets the staffing actions for the
 level, assigns each to a role, sets its reply deadline, tracks it and
 escalates it when the deadline passes without an acknowledgement. The
-language model drafts only each notification's wording, and the same code
-figure check as the brief's clears each draft before anything is written to
-the outbox (D-SAFE-19, as amended): any number or date in it must match a
-tool result for the same hospital and week, or a value code set for that
-action. A draft that fails gets one retry; if it fails again, nothing is
-written for that action and the manager sees the draft with its failing
-figures marked.
+language model drafts only each notification's wording, and writes no
+figure, date or time of its own: each is a placeholder, {DEADLINE},
+{WEEK1} to {WEEK4} or one of the approved brief's own figures such as {F1},
+and code writes in the value (placeholders.py; review P1-1, option A). A
+Pydantic model holds each draft to those rules, then the code figure check
+reads it as it will be written, before anything reaches the outbox
+(D-SAFE-19, as amended; review P1-2): a number must be a figure the
+approved brief's text states or the action's level, and a date one of the
+action's weeks, its deadline or a date the brief states. A draft that fails
+gets one retry; if it fails again, nothing is written for that action and
+the manager sees the draft with its failing figures marked.
 
 Assumed and labelled: the actions are illustrative front-door staffing
 actions. OPEL's Appendix F gives only the structure, actions by level with
@@ -27,8 +31,15 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_validator,
+)
 
+from . import placeholders as ph
 from .agents import fill, load_prompts
 from .figures import (
     CheckResult,
@@ -220,6 +231,52 @@ class NotificationDraft(BaseModel):
     message: str
 
 
+class Notification(BaseModel):
+    """One notification's text, held to the placeholder rules for its
+    action: the context gives the approved brief's figures as "figures" and
+    the action's TextContext as "text"."""
+
+    model_config = ConfigDict(frozen=True)
+
+    message: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def placeholders_only(self, info):
+        context = info.context or {}
+        found = ph.problems(
+            {"message": self.message},
+            context.get("figures", []),
+            context.get("text"),
+        )
+        if found:
+            raise ph.TextProblems(found)
+        return self
+
+
+def stated_figures(brief):
+    """The numbers of the cited figures the brief's text states, the only
+    ones a notification may state."""
+    out = set()
+    for field in brief.rendered():
+        out |= brief.figures_in(field)
+    return frozenset(out)
+
+
+def notification_context(brief, action):
+    """What code knows for one action's notification."""
+    return ph.TextContext(
+        hospital=brief.hospital,
+        name=brief.name,
+        level=brief.level,
+        origin=brief.week,
+        release=brief.release_date,
+        latched_since=brief.latched_since,
+        deadline=action.deadline,
+        week_count=len(action.weeks),
+        stated=stated_figures(brief),
+    )
+
+
 class NotificationDrafts(BaseModel):
     """What the model returns: one notification per action."""
 
@@ -237,6 +294,9 @@ class DraftCheck(BaseModel):
     attempt: int
     message: str
     check: CheckResult
+    # The message as it would be written, placeholders filled; empty when
+    # the draft broke a placeholder rule.
+    rendered: str = ""
 
 
 class ActionOutcome(BaseModel):
@@ -276,11 +336,43 @@ class CoordinationResult(BaseModel):
 
 def _action_lines(actions):
     return "\n".join(
-        f"- {a.code}: {a.task} Owner: {a.owner}. Weeks: w/e "
-        f"{a.weeks[0]:%d %b %Y} to w/e {a.weeks[-1]:%d %b %Y}. Reply "
-        f"deadline: {a.deadline:%H:%M} on {a.deadline:%a %d %b %Y}."
+        f"- {a.code}: {a.task} Owner: {a.owner}. Weeks: {{WEEK1}} to "
+        f"{{WEEK4}}. Reply deadline: {{DEADLINE}}, which code writes as "
+        f"{ph.deadline_text(a.deadline)}."
         for a in actions
     )
+
+
+def _figure_lines(brief):
+    lines = []
+    for n in sorted(stated_figures(brief)):
+        fig = brief.cited_figures[n - 1]
+        about = [
+            fig.model,
+            f"release horizon {fig.horizon}" if fig.horizon else None,
+            f"w/e {fig.week:%d %b %Y}" if fig.week else None,
+        ]
+        about = ", ".join(x for x in about if x)
+        unit = "%" if fig.unit == "%" else f" {fig.unit}"
+        shown = f"{ph.figure_text(fig.value)}{unit}"
+        lines.append(f"- {{F{n}}}: {shown}" + (f" ({about})" if about else ""))
+    return "\n".join(lines) or "- none: the brief's text states no figure"
+
+
+def _date_lines(brief):
+    weeks = [f"{w:%d %b %Y}" for w in release_horizon_weeks(brief.week)]
+    lines = [
+        f"- {{ORIGIN}}: {brief.week:%d %b %Y}, the origin",
+        f"- {{RELEASE}}: {brief.release_date:%a %d %b %Y}, the release",
+        "- {WEEK1} to {WEEK4}: " + ", ".join(weeks[:3]) + f" and {weeks[3]}",
+    ]
+    if brief.latched_since:
+        lines.append(
+            f"- {{LATCHED}}: {brief.latched_since:%d %b %Y}, when the drift "
+            "latch was set"
+        )
+    lines.append("- {DEADLINE}: each action's reply deadline, given with it")
+    return "\n".join(lines)
 
 
 class Coordinator:
@@ -316,6 +408,8 @@ class Coordinator:
         return reply, found
 
     def _check(self, item, action, message, attempt):
+        brief = item.current
+        rendered = ""
         if not message:
             missing = Failure(
                 field="message",
@@ -324,13 +418,19 @@ class Coordinator:
             )
             result = CheckResult(passed=False, failures=[missing])
         else:
-            result = check_notification(
-                message,
-                item.outcome.ledger,
-                item.current.hospital,
-                item.current.week,
-                action.code_set(),
-            )
+            ctx = notification_context(brief, action)
+            try:
+                Notification.model_validate(
+                    {"message": message},
+                    context={"text": ctx, "figures": brief.cited_figures},
+                )
+            except ValidationError as exc:
+                result = CheckResult(
+                    passed=False, failures=ph.failures_of(exc)
+                )
+            else:
+                rendered = ph.render(message, brief.cited_figures, ctx)
+                result = check_notification(rendered, brief, action.code_set())
         self.log.write(
             kind="notification check",
             action_id=action.action_id,
@@ -343,6 +443,7 @@ class Coordinator:
             attempt=attempt,
             message=message or "",
             check=result,
+            rendered=rendered,
         )
 
     def coordinate(self, item):
@@ -380,6 +481,8 @@ class Coordinator:
                 content=fill(
                     self.prompts["DRAFT"],
                     brief=item.current.text(),
+                    figures=_figure_lines(item.current),
+                    dates=_date_lines(item.current),
                     actions=_action_lines(actions),
                 )
             ),
@@ -412,6 +515,7 @@ class Coordinator:
         outcomes = []
         for a in actions:
             d = final[a.code]
+            shown = d.rendered or d.message
             if not d.check.passed:
                 held = Step(state="held", at=start)
                 self.log.write(
@@ -425,9 +529,9 @@ class Coordinator:
                 outcomes.append(
                     ActionOutcome(
                         action=a,
-                        message=d.message,
+                        message=shown,
                         history=[held],
-                        shown=marked(d.message, d.check.failures),
+                        shown=marked(shown, d.check.failures),
                     )
                 )
                 continue
@@ -438,7 +542,7 @@ class Coordinator:
                     "action_id": a.action_id,
                     "brief_id": item.brief_id,
                     "to": a.owner,
-                    "message": d.message,
+                    "message": d.rendered,
                     "deadline": a.deadline.isoformat(),
                     "written_at": start.isoformat(),
                     "label": OUTBOX_LABEL,
@@ -481,7 +585,10 @@ class Coordinator:
                     )
             outcomes.append(
                 ActionOutcome(
-                    action=a, message=d.message, notified=True, history=history
+                    action=a,
+                    message=d.rendered,
+                    notified=True,
+                    history=history,
                 )
             )
         return CoordinationResult(

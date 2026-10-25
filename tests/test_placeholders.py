@@ -272,3 +272,31 @@ def test_a_good_draft_passes_and_the_brief_renders_it():
 def test_a_failed_figure_is_rendered_marked():
     shown = ph.render("SA-MA forecasts {F1}.", FIGURES, CTX, failed={1})
     assert shown == "SA-MA forecasts [[NOT VERIFIED: 1,120]]."
+
+
+# --- notifications -----------------------------------------------------------
+
+
+def test_a_notification_may_state_only_figures_the_brief_states():
+    from datetime import datetime, timezone
+
+    ctx = CTX.model_copy(
+        update={
+            "deadline": datetime(2021, 6, 24, 10, tzinfo=timezone.utc),
+            "week_count": 4,
+            "stated": frozenset({1}),
+        }
+    )
+    assert not problems("SA-MA forecasts {F1}. Reply by {DEADLINE}.", ctx=ctx)
+    assert "does not state F3" in reasons("SA-MA forecasts {F3}.", ctx=ctx)
+    assert "3 weeks" in reasons("Check the next 3 weeks.", ctx=ctx)
+    assert "level 3" in reasons(
+        "Check whether level 3 actions apply.", ctx=ctx
+    )
+    assert ph.render("Reply by {DEADLINE}.", FIGURES, ctx) == (
+        "Reply by 10:00 UTC on Thu 24 Jun 2021."
+    )
+
+
+def test_a_brief_has_no_deadline_placeholder():
+    assert "{DEADLINE}" in reasons("Reply by {DEADLINE}.")

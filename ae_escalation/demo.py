@@ -254,10 +254,15 @@ def safeguards(run, holidays, settings):
     item = queue.decide(_decision("demo-notify", "approve"))
     actions = plan(item, settings)
 
-    def message(a, deadline):
+    def message(a, deadline=None):
+        when = (
+            "{DEADLINE}"
+            if deadline is None
+            else f"{deadline:%H:%M} on {deadline:%a %d %b %Y}"
+        )
         return (
             f"{a.name}, demand level {a.level}: {a.task} Please reply by "
-            f"{deadline:%H:%M} on {deadline:%a %d %b %Y}."
+            f"{when}."
         )
 
     def notes(pairs):
@@ -275,10 +280,9 @@ def safeguards(run, holidays, settings):
     late = first.deadline + timedelta(days=1)
     script = [
         notes(
-            [(first, message(first, late))]
-            + [(a, message(a, a.deadline)) for a in rest]
+            [(first, message(first, late))] + [(a, message(a)) for a in rest]
         ),
-        notes([(first, message(first, first.deadline))]),
+        notes([(first, message(first))]),
     ]
     coordinator = Coordinator(
         settings,
