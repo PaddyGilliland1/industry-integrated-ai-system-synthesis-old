@@ -250,6 +250,24 @@ def test_no_prompt_holds_a_long_dash(agent):
         assert not re.search("[\u2013\u2014]", text)
 
 
+def test_the_screen_shows_the_band_line_as_code_writes_it(raigmore):
+    entry, _, _ = raigmore
+    band = tl.level_band(entry.level, entry.level_source)
+    assert (
+        f"The level's meaning: {tl.LEVEL_MEANING}\n"
+        f"Code writes this line under the meaning; do not repeat it: {band}\n"
+    ) in ag.entry_text(entry)
+
+
+def test_the_reviewer_is_told_code_wrote_the_meaning_and_band_lines():
+    system = PROMPTS["reviewer"]["SYSTEM"]
+    assert (
+        "Code also wrote the level's meaning and band lines, from the rule, "
+        "and the back-test error, track record and bank holidays lines "
+        "whole, from the tool results." in system
+    )
+
+
 def test_the_screen_tells_the_investigator_what_each_token_writes(raigmore):
     entry, _, _ = raigmore
     text = ag.entry_text(entry)

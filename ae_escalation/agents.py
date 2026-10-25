@@ -257,9 +257,10 @@ class InvestigatorPass(BaseModel):
 
 
 def entry_text(entry, facts=None):
-    """What the screen tells the Investigator: code-set facts only, what
-    code writes for each token in this brief and, given the brief's facts,
-    the fact lines code writes after the Investigator's fields."""
+    """What the screen tells the Investigator: code-set facts only, with
+    the band line code writes under the level's meaning, what code writes
+    for each token in this brief and, given the brief's facts, the fact
+    lines code writes after the Investigator's fields."""
     weeks = [w.date() for w in release_horizon_weeks(entry.as_of)]
     ctx = entry_context(entry)
     tokens = ["HOSPITAL", "PRIMARY", "LEVEL", "ORIGIN", "RELEASE"]
@@ -281,6 +282,8 @@ def entry_text(entry, facts=None):
         ),
         f"Demand level: {entry.level}, from the {entry.level_source}.",
         f"The level's meaning: {entry.level_meaning}",
+        "Code writes this line under the meaning; do not repeat it: "
+        + tl.level_band(entry.level, entry.level_source),
         f"Primary model: {entry.primary}.",
     ]
     if entry.latched:
