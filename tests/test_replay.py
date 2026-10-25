@@ -246,7 +246,8 @@ def test_a_label_keeps_its_prompts_and_replays_from_them(
         assert (paths.prompts / name).read_text() == (
             ag.PROMPTS_PATH / name
         ).read_text()
-    # The tuning round changes the package's prompts; round 1 still replays.
+    # A tuning round changes the package's prompts; the first label still
+    # replays.
     tuned = tmp_path / "tuned"
     tuned.mkdir()
     for name in kept:
