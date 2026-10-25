@@ -447,6 +447,7 @@ TIME_WORDS = [
         r"|\b(?:next|last|previous|prior|following|coming|final|penultimate)"
         r"\s+weeks?\b"
         r"|\bweeks?\s+after\s+next\b|\bweeks?\s+before\s+last\b"
+        r"|\b(?:last|final)\s+of\s+the\s+weeks\b"
         r"|\ba\s+week\s+(?:ahead|away|out|later|earlier|on|before|after|ago)"
         r"\b"
         r"|\bsame\s+weeks?\b"
@@ -489,6 +490,8 @@ NUMBER_WORD = (
 )
 NUMBER_WORDS = [
     re.compile(rf"\b{NUMBER_WORD}(?:[\s-]+{NUMBER_WORD})*\b", re.IGNORECASE),
+    # Slang for a count: a score is twenty, a grand a thousand.
+    re.compile(r"\ba\s+(?:score|grand)\b|\bscores\s+of\b", re.IGNORECASE),
     # "once" as a count, not the conjunction of "once the check is done".
     re.compile(
         r"\b(?:only|just|least|most|than|exactly)\s+once\b"

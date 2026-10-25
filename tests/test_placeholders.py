@@ -234,6 +234,8 @@ def test_month_and_day_names_do_not_follow_the_locale():
         ("Demand rose by a quarter.", "quarter"),
         ("A tenfold rise is unlikely.", "tenfold"),
         ("Expect zero holidays.", "zero"),
+        ("Demand is up by a score.", "a score"),
+        ("Expect a grand more.", "a grand"),
     ],
 )
 def test_a_number_in_any_form_outside_a_placeholder_fails(text, named):
@@ -263,6 +265,7 @@ def test_a_number_in_any_form_outside_a_placeholder_fails(text, named):
         ("Last week was quiet.", "Last week", "{WEEK1}"),
         ("Demand peaks the week after next.", "week after next", "{WEEK1}"),
         ("The final week is the busiest.", "final week", "{WEEK1}"),
+        ("The last of the weeks is the busiest.", "last of the weeks", ""),
         ("It is above the same week of last year.", "same week", "{WEEK1}"),
         ("It is above last year.", "last year", "{WEEK1}"),
         ("A week later it falls.", "A week later", "{WEEK1}"),

@@ -71,3 +71,4 @@ tests/test_docs.py
 ae_escalation/demo.py
 tests/test_demo.py
 tests/test_prompts.py
+tests/test_natural_briefs.py
