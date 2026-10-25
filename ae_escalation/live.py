@@ -31,9 +31,9 @@ A label already recorded is never run again, so no recording is replaced;
 the set after the one prompt-tuning round takes a new label. The frontier
 backend runs the set only with the stated case: the local set's adequacy
 record for the same label saying "Frontier case: yes", and only once, on
-the prompts that local label kept. "choose" then records the approver's choice between the two
-sets and releases the chosen set's queue. The notebook then replays every
-run from the recordings, without the model.
+the prompts that local label kept. "choose" then records the approver's
+choice between the two sets and releases the chosen set's queue. The
+notebook then replays every run from the recordings, without the model.
 """
 
 import argparse
