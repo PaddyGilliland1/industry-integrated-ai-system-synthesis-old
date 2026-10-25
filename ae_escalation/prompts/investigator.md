@@ -30,9 +30,9 @@ How code writes your figures:
 - In the text, write each figure only as its placeholder: {F1} for the first entry in cited_figures, {F2} for the second, and so on. Code writes the number with its label beside it, such as "834 attendances (SA-MA forecast for w/e 16 Jul 2023)". The label already names the figure's model, measure and week, so never restate them beside it: no unit or %, no "{PRIMARY} forecasts {F1}" and no "{F1} for {WEEK1}"; code refuses a week token straight after a figure whose label names that week. Write the sentence around the figure instead, such as "demand climbs from {F1} to {F2}".
 
 Code also writes everything else a figure's label could name, so the words may not:
-- No number in any form: no digit, no number word such as one, four or hundred, no ordinal such as first or second, and no quantity word such as half, double, twice, a third or a dozen.
-- No model name and no "release horizon": write {PRIMARY} for the primary model. To speak of another model's figure, write its placeholder, whose label names the model.
-- No week, date, month or weekday: write {WEEK1} to {WEEK4} for the weeks ahead, {ORIGIN} for the origin's week, {LATCHED} for the week the drift latch was set and {RELEASE} for the release day. Never write "next week", "last year", "the same week" or "w/e".
+- No number in any form: no digit, no number word such as one, four or hundred (so not "once again" or "no single model"), no ordinal such as first or second, no quantity word such as half, double, twice, a third or a dozen, and no sign beside a figure, as in "~{F1}".
+- No model name, not even "primary" as a plain word, and no "release horizon": write {PRIMARY} for the primary model. To speak of another model's figure, write its placeholder, whose label names the model.
+- No week, date, month or weekday: write {WEEK1} to {WEEK4} for the weeks ahead, {ORIGIN} for the origin's week, {LATCHED} for the week the drift latch was set and {RELEASE} for the release day. Never write "next week", "the coming weeks", "the following weeks", "the final week", "last year", "this year", "the same week" or "w/e", and never start a sentence with "May", which code reads as the month.
 - No hospital or place: write {HOSPITAL}.
 - No level: write {LEVEL}.
 You may write "this week" for the week the manager acts in, "the weeks ahead", and a bank holiday by its title, such as Good Friday.

@@ -23,6 +23,8 @@ from ae_escalation import timing as tm
 from ae_escalation import tools as tl
 from ae_escalation.figures import check_brief
 
+from .scripted import figure
+
 # Raigmore Hospital at w/e 02 Jul 2023: flagged, unlatched, and outside the
 # replay set's series and origins, so no replay brief is shown its own
 # week's answer.
@@ -174,6 +176,41 @@ def test_the_investigator_writes_none_of_the_fact_lines():
         "model's own back-test error, this hospital's track record and the "
         "bank holidays in the weeks ahead." in system
     )
+
+
+# Phrases a careful model writes that code refuses, each as the prompt names
+# it, in a sentence that uses it, with what code finds there. Each refusal
+# spends the brief's one retry, so the prompt names them all.
+REFUSED_PHRASES = [
+    (
+        '"the coming weeks"',
+        "Demand stays high over the coming weeks.",
+        "coming weeks",
+    ),
+    (
+        '"the following weeks"',
+        "Demand stays high over the following weeks.",
+        "following weeks",
+    ),
+    ('"the final week"', "Demand eases in the final week.", "final week"),
+    ('"this year"', "Demand runs higher than this year so far.", "this year"),
+    ('"May"', "May need extra bank staff.", "May"),
+    ('"once again"', "Demand rises once again.", "once"),
+    ('"no single model"', "No single model should be relied on.", "single"),
+    ('"~{F1}"', "Demand reaches ~{F1}.", "~{F1}"),
+    ('"primary"', "The primary forecast is {F1}.", "primary"),
+]
+
+
+@pytest.mark.parametrize("named, sentence, found", REFUSED_PHRASES)
+def test_the_investigator_is_told_each_phrase_code_refuses(
+    named, sentence, found
+):
+    cited = figure(834, "T1", "point", model="SA-MA", horizon=1)
+    figures = [br.CitedFigure.model_validate(cited)]
+    problems = ph.problems({"summary": sentence}, figures)
+    assert found in {p.found for p in problems}
+    assert named in PROMPTS["investigator"]["SYSTEM"]
 
 
 @pytest.mark.parametrize("agent", ["investigator", "coordinator"])
