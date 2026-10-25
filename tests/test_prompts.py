@@ -79,6 +79,7 @@ Jul 2023
 Demand level 2, from the flag.
 The demand level shows demand unusually high for the time of year. It is not \
 pressure, need or priority.
+Level 2 means demand 1.05 to under 1.10 times the seasonal baseline.
 Drift alarm: none.
 Summary: Plan for demand above the usual for the time of year, starting at \
 834 attendances (SA-MA forecast for w/e 16 Jul 2023). The simple models \

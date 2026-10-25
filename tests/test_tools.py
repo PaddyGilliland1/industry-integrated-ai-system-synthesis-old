@@ -251,6 +251,31 @@ def test_the_screen_at_the_latch_week_names_four_latch_briefs(run):
         assert e.level_meaning == tl.LEVEL_MEANING
 
 
+@pytest.mark.parametrize(
+    "level, line",
+    [
+        (
+            1,
+            "Level 1 means usual demand for the time of year, below 1.05 "
+            "times the seasonal baseline; levels 2 to 4 mean unusually high.",
+        ),
+        (
+            2,
+            "Level 2 means demand 1.05 to under 1.10 times the seasonal "
+            "baseline.",
+        ),
+        (
+            3,
+            "Level 3 means demand 1.10 to under 1.15 times the seasonal "
+            "baseline.",
+        ),
+        (4, "Level 4 means demand 1.15 times the seasonal baseline or more."),
+    ],
+)
+def test_each_level_states_its_band_from_the_rules_cuts(level, line):
+    assert tl.level_band(level) == line
+
+
 def test_the_screen_at_the_demand_week_names_ninewells_from_the_flag(run):
     entries = tl.screen_at(run, "2021-06-13")
     assert [

@@ -7,7 +7,8 @@ the build spec, section 1b, before any brief existed, so whoever writes this
 code does not decide the comparison's result:
 
 1. the heading: the hospital or Scotland, the origin and the release date;
-2. the level and where it came from, then the level's fixed meaning line;
+2. the level and where it came from, then the level's fixed meaning line
+   and the line stating this level's band;
 3. the four simple models' forecasts, each with its 80% and 95% range, one
    row per model and one column per release horizon (never the GRU);
 4. the hospital's own back-test error for each model at each release
@@ -17,9 +18,11 @@ code does not decide the comparison's result:
 7. the watch point, one fixed sentence chosen by rule.
 
 It prints no calendar flag, and it never ranks the models or says which to
-trust less. The one change from the spec's wording is the article in the
+trust less. Two things differ from the spec's wording. The article in the
 drift sentence: "a downward breach", where the spec's "an {upward |
-downward}" would print "an downward".
+downward}" would print "an downward". And the band line after the meaning
+line, which the agent's brief prints too, so the two stay comparable: the
+meaning line alone reads as if level 1 were unusually high.
 
 Option A, the comparison's pass rule: in a week, the agent adds value only
 if it meets every criterion the template brief meets, and at least one it
@@ -173,6 +176,7 @@ class TemplateBrief(BaseModel):
             f"Demand level {self.level}, from "
             f"{LEVEL_FROM[self.level_source]}.",
             tl.LEVEL_MEANING,
+            tl.level_band(self.level),
             "",
             "Forecasts, with their 80% and 95% ranges:",
             *table(heads, self.forecast_rows()),

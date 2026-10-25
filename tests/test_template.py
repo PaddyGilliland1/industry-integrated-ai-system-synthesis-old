@@ -49,6 +49,7 @@ def test_the_fields_come_in_the_specs_order(demand):
         "2021",
         "Demand level 2, from the flag.",
         tl.LEVEL_MEANING,
+        tl.level_band(2),
         "Forecasts",
         "Back-test error",
         "This hospital has no past flag to judge.",
@@ -130,6 +131,14 @@ def test_the_watch_point_is_chosen_by_rule(
     assert tp.watch_point(latched, direction, flagged).startswith(starts)
 
 
+def test_the_band_line_follows_the_meaning_as_in_the_agents_brief(
+    demand, latch
+):
+    for t in (demand, latch):
+        assert f"{tl.LEVEL_MEANING}\n{tl.level_band(t.level)}\n" in t.text()
+    assert latch.level == 1 and demand.level == 2
+
+
 def test_the_level_line_names_its_source(latch, surge):
     assert (
         "Demand level 1, from the flag held from the week before the alarm "
@@ -160,7 +169,11 @@ def test_every_number_and_date_in_it_comes_from_a_tool_result(demand, latch):
     for t in (demand, latch):
         numbers = fg.ledger_numbers(t.ledger, t.hospital, t.week)
         dates = fg.ledger_dates(t.ledger, t.hospital, t.week)
-        for token in fg.tokens(t.text()):
+        # The band line's numbers are the rule's cuts, not a tool's, and
+        # the agent's brief prints the same line.
+        band = tl.level_band(t.level)
+        assert band in t.text()
+        for token in fg.tokens(t.text().replace(band, "")):
             if token.kind == "number":
                 assert any(fg.within_rounding(token.text, v) for v in numbers)
             elif token.kind == "date":

@@ -74,6 +74,32 @@ Measure = Literal[
 ]
 
 
+def level_band(level):
+    """The line that follows the level's meaning in every brief: this
+    level's band of demand over the seasonal baseline, from the rule's cuts.
+
+    The meaning line alone reads as if every level were unusually high, so
+    a level 1 brief also says that level 1 is usual demand.
+    """
+    cuts = [f"{c:.2f}" for c in ru.CUTS]
+    top = len(cuts) + 1
+    if level == 1:
+        return (
+            f"Level 1 means usual demand for the time of year, below "
+            f"{cuts[0]} times the seasonal baseline; levels 2 to {top} mean "
+            "unusually high."
+        )
+    if level == top:
+        return (
+            f"Level {top} means demand {cuts[-1]} times the seasonal "
+            "baseline or more."
+        )
+    return (
+        f"Level {level} means demand {cuts[level - 2]} to under "
+        f"{cuts[level - 1]} times the seasonal baseline."
+    )
+
+
 class Request(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
