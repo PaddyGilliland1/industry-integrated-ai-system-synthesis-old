@@ -25,10 +25,11 @@ Systems (agentic_system.py, the scenario set run through Workflow with its
 RecordingStore, replayed by the notebook without the model).
 """
 
+import json
 import shutil
 import tempfile
-import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -44,7 +45,14 @@ from .briefs import CitedFigure
 from .coordinator import Coordinator
 from .design import NATIONAL, REPLAY
 from .figures import ledger_numbers, plain, within_rounding
-from .gateway import AuditLog, ModelGateway, RecordingStore, ReplayMiss
+from .gateway import (
+    AuditLog,
+    Budget,
+    BudgetExceeded,
+    ModelGateway,
+    RecordingStore,
+    ReplayMiss,
+)
 
 # The probe's count for the approved design (build spec, section 2, item 7).
 EXPECTED = {"total": 7, "by_source": {"latch": 4, "demand": 2, "surge": 1}}
@@ -54,10 +62,6 @@ ALARM_WEEK = "2020-03-22"
 class PreRunMismatch(RuntimeError):
     """The built rules give a different set from the probe's; the
     difference goes to Paddy before any agent runs."""
-
-
-class BudgetExceeded(RuntimeError):
-    """A live run reached its time budget, held under 15 minutes."""
 
 
 def replay_entries(run):
@@ -219,6 +223,11 @@ class Paths:
         return self._recordings / "notify.jsonl"
 
     @property
+    def progress(self):
+        """The live runs' start, stop and completion, append-only."""
+        return self._recordings / "progress.jsonl"
+
+    @property
     def audit(self):
         return self._recordings / "audit.jsonl"
 
@@ -270,6 +279,33 @@ def label_prompts(paths, live):
     return load_prompts(folder)
 
 
+def note_progress(paths, event, **detail):
+    """Append one event to the label's progress file."""
+    paths.progress.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "event": event,
+        "at": datetime.now(timezone.utc).isoformat(),
+        **detail,
+    }
+    with open(paths.progress, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record) + "\n")
+
+
+def progress(paths):
+    """Every event in the label's progress file, oldest first."""
+    if not paths.progress.exists():
+        return []
+    text = paths.progress.read_text(encoding="utf-8")
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def can_resume(paths, step):
+    """Whether a step of this label started live and never completed, so
+    --resume may take it up."""
+    mine = [e for e in progress(paths) if e.get("step") == step]
+    return bool(mine) and mine[-1]["event"] != "completed"
+
+
 class ReplaySetResult(BaseModel):
     """The replay set's seven outcomes and the designed failure."""
 
@@ -289,30 +325,35 @@ def run_set(
     chat_model=None,
     log=None,
     digest=None,
+    budget=None,
+    resume=False,
 ):
     """Run the replay set: the seven briefs, then the designed failure.
 
     Live, every model call is recorded to paths.briefs and every step to
-    paths.audit, and the run stops if it passes its time budget. In replay
-    the recordings stand in for the model, and the steps are logged in
-    memory unless a log is given.
+    paths.audit, and the time budget is checked before every model call. A
+    stop writes what was completed to paths.progress; resume=True replays
+    the calls already recorded, then carries on live. In replay the
+    recordings stand in for the model, and the steps are logged in memory
+    unless a log is given.
 
     Raises
     ------
     PreRunMismatch
         If the built rules do not give the probe's set.
     BudgetExceeded
-        If a live run passes settings.agents.run_budget_s.
+        If a live run spends settings.agents.run_budget_s.
     ReplayMiss
         In replay, if a recording is missing, its request has changed or it
         was recorded on another model digest.
     """
-    started = time.monotonic()
     check = pre_run_check(run)
     if not check["matches_probe"]:
         raise PreRunMismatch(f"the built rules give {check}, not {EXPECTED}")
     if log is None:
         log = AuditLog(paths.audit) if live else AuditLog()
+    if live and budget is None:
+        budget = Budget(settings.agents.run_budget_s)
     gateway = ModelGateway.for_settings(
         settings,
         RecordingStore(paths.briefs),
@@ -320,6 +361,8 @@ def run_set(
         chat_model=chat_model,
         log=log,
         digest=digest,
+        budget=budget,
+        resume=resume,
     )
     graph = BriefGraph(
         run,
@@ -329,32 +372,32 @@ def run_set(
         prompts=label_prompts(paths, live),
         log=log,
     )
-    budget = settings.agents.run_budget_s
-
-    def within_budget():
-        if live and time.monotonic() - started > budget:
-            raise BudgetExceeded(
-                f"the live run passed its budget of {budget:g} s"
-            )
-
     entries = replay_entries(run)
-    outcomes = []
-    for e in entries:
-        within_budget()
-        outcomes.append(graph.run(e.as_of, e.hospital, run_id(e)))
-    within_budget()
     target = planted_entry(entries)
-    planted = graph.run(
-        target.as_of,
-        target.hospital,
-        f"{run_id(target)}-planted",
-        plant=plant_figure,
-    )
-    within_budget()
+    todo = [(e, run_id(e), None) for e in entries]
+    todo.append((target, f"{run_id(target)}-planted", plant_figure))
+    if live:
+        note_progress(paths, "started", step="briefs", resume=resume)
+    outcomes = []
+    for e, rid, plant in todo:
+        try:
+            outcomes.append(graph.run(e.as_of, e.hospital, rid, plant=plant))
+        except BudgetExceeded as exc:
+            note_progress(
+                paths,
+                "stopped",
+                step="briefs",
+                reason=str(exc),
+                completed=[o.run_id for o in outcomes],
+                in_progress=rid,
+            )
+            raise
+    if live:
+        note_progress(paths, "completed", step="briefs")
     return ReplaySetResult(
         check=check,
-        outcomes=outcomes,
-        planted=planted,
+        outcomes=outcomes[:-1],
+        planted=outcomes[-1],
         backend=gateway.backend,
         model=gateway.model_name,
     )
@@ -396,23 +439,30 @@ def coordinate_approved(
     log=None,
     outbox=None,
     digest=None,
+    budget=None,
+    resume=False,
 ):
     """Run the coordinator on every approved brief in the queue.
 
-    Live, the model's drafts are recorded to paths.notify and the
-    notifications written to paths.outbox, which must not exist yet. In
-    replay they go to a fresh file in a temporary folder unless an outbox
-    is given, so the shipped outbox is never rewritten.
+    Live, the model's drafts are recorded to paths.notify, under the same
+    time budget as the briefs, and the notifications reach paths.outbox,
+    which must not exist yet, only once every approved brief is done, so a
+    stop leaves no partial outbox; resume=True replays the recorded calls,
+    then carries on live. In replay they go to a fresh file in a temporary
+    folder unless an outbox is given, so the shipped outbox is never
+    rewritten.
     """
+    final = None
     if outbox is None:
         if live:
-            outbox = paths.outbox
-            if outbox.exists():
-                raise FileExistsError(f"{outbox} exists; it is never replaced")
-        else:
-            outbox = Path(tempfile.mkdtemp()) / paths.outbox.name
+            final = paths.outbox
+            if final.exists():
+                raise FileExistsError(f"{final} exists; it is never replaced")
+        outbox = Path(tempfile.mkdtemp()) / paths.outbox.name
     if log is None:
         log = AuditLog(paths.audit) if live else AuditLog()
+    if live and budget is None:
+        budget = Budget(settings.agents.run_budget_s)
     gateway = ModelGateway.for_settings(
         settings,
         RecordingStore(paths.notify),
@@ -420,6 +470,8 @@ def coordinate_approved(
         chat_model=chat_model,
         log=log,
         digest=digest,
+        budget=budget,
+        resume=resume,
     )
     coordinator = Coordinator(
         settings,
@@ -428,8 +480,30 @@ def coordinate_approved(
         prompts=label_prompts(paths, live),
         log=log,
     )
-    return [
-        coordinator.coordinate(item)
-        for item in queue.items()
-        if item.state in ("approved", "approved with edit")
-    ]
+    if live:
+        note_progress(paths, "started", step="notify", resume=resume)
+    done = []
+    for item in queue.items():
+        if item.state not in ("approved", "approved with edit"):
+            continue
+        try:
+            done.append(coordinator.coordinate(item))
+        except BudgetExceeded as exc:
+            note_progress(
+                paths,
+                "stopped",
+                step="notify",
+                reason=str(exc),
+                completed=[d.brief_id for d in done],
+                in_progress=item.brief_id,
+            )
+            raise
+    if final is not None:
+        final.parent.mkdir(parents=True, exist_ok=True)
+        if outbox.exists():
+            shutil.copyfile(outbox, final)
+        else:
+            final.write_text("", encoding="utf-8")
+    if live:
+        note_progress(paths, "completed", step="notify")
+    return done

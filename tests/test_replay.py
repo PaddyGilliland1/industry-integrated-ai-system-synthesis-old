@@ -254,3 +254,129 @@ def test_a_label_keeps_its_prompts_and_replays_from_them(
     assert [o.status for o in again.outcomes] == [
         o.status for o in live.outcomes
     ]
+
+
+# --- the budget, a stop and a resume (review P2-4) ---------------------------
+
+
+def ticking():
+    """A clock that moves on one second each time it is read."""
+    state = {"t": 0}
+
+    def clock():
+        state["t"] += 1
+        return state["t"]
+
+    return clock
+
+
+def test_the_budget_is_checked_before_every_model_call(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    budget = gw.Budget(5, clock=ticking())
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=budget,
+        )
+    assert len(gw.RecordingStore(paths.briefs)) == 5
+    events = rp.progress(paths)
+    assert [e["event"] for e in events] == ["started", "stopped"]
+    stopped = events[-1]
+    assert stopped["step"] == "briefs" and stopped["completed"] == [
+        "20191006-S314H"
+    ]
+    assert stopped["in_progress"] == "20200322-Scotland"
+
+
+def test_a_stopped_run_resumes_from_its_recordings_then_runs_live(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    whole = rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        rp.Paths.under(tmp_path / "whole", settings.llm_backend, "round1"),
+        live=True,
+        chat_model=stand_in(),
+    )
+    paths = rp.Paths.under(tmp_path / "cut", settings.llm_backend, "round1")
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(5, clock=ticking()),
+        )
+    resumed = rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+        resume=True,
+    )
+    assert [o.brief for o in resumed.outcomes] == [
+        o.brief for o in whole.outcomes
+    ]
+    first = resumed.outcomes[0].calls
+    assert all(c.replayed for c in first)
+    assert not any(c.replayed for c in resumed.outcomes[-1].calls)
+    assert [e["event"] for e in rp.progress(paths)] == [
+        "started",
+        "stopped",
+        "started",
+        "completed",
+    ]
+
+
+def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    q = rp.write_queue(result, paths)
+    crit = ap.Criteria(**{k: True for k in ap.Criteria.model_fields})
+    for item in q.items()[-2:]:
+        q.decide(
+            ap.Decision(
+                brief_id=item.brief_id,
+                action="approve",
+                initials="AB",
+                decided_at="2026-10-27T09:30:00+00:00",
+                criteria=crit,
+            )
+        )
+    with pytest.raises(rp.BudgetExceeded):
+        rp.coordinate_approved(
+            q,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(1, clock=ticking()),
+        )
+    assert not paths.outbox.exists()
+    assert rp.progress(paths)[-1]["step"] == "notify"
+    done = rp.coordinate_approved(
+        q, settings, paths, live=True, chat_model=stand_in(), resume=True
+    )
+    assert len(done) == 2 and paths.outbox.exists()

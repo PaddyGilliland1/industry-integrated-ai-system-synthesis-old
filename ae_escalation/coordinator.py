@@ -48,7 +48,7 @@ from .figures import (
     check_notification,
     marked,
 )
-from .gateway import ReplayMiss, parse_structured
+from .gateway import BudgetExceeded, ReplayMiss, parse_structured
 from .timing import release_horizon_weeks
 
 ROLES = (
@@ -404,7 +404,7 @@ class Coordinator:
                 messages=messages,
                 schema=NotificationDrafts,
             )
-        except ReplayMiss:
+        except (ReplayMiss, BudgetExceeded):
             raise
         except Exception as exc:
             return None, {}, f"model error: {type(exc).__name__}: {exc}"

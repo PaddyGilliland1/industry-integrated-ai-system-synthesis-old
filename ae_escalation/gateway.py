@@ -67,6 +67,33 @@ class ReplayMiss(RuntimeError):
     request has changed since it was."""
 
 
+class BudgetExceeded(RuntimeError):
+    """A live run reached its time budget, held under 15 minutes."""
+
+
+class Budget:
+    """A live run's time budget, checked before every live model call, so
+    no call starts once it is spent (review P2-4)."""
+
+    def __init__(self, limit_s, clock=time.monotonic):
+        self.limit_s = limit_s
+        self.clock = clock
+        self.started = clock()
+
+    @property
+    def spent_s(self):
+        return self.clock() - self.started
+
+    def check(self):
+        """Raise BudgetExceeded once the budget is spent."""
+        spent = self.spent_s
+        if spent > self.limit_s:
+            raise BudgetExceeded(
+                f"the live run passed its budget of {self.limit_s:g} s "
+                f"({spent:.0f} s spent)"
+            )
+
+
 class RecordingStore:
     """An append-only JSONL file of recordings, each with a unique key, so
     a recording is never silently replaced."""
@@ -291,6 +318,8 @@ class ModelGateway:
         time_limit_s=240,
         log=None,
         options=None,
+        budget=None,
+        resume=False,
     ):
         if live and chat_model is None:
             raise ValueError("a live gateway needs a chat model")
@@ -298,6 +327,10 @@ class ModelGateway:
         self.model_name = model_name
         self.digest = digest
         self.options = options or {}
+        self.budget = budget
+        # Resuming a stopped live run: a call already recorded is replayed,
+        # and only the rest go to the model.
+        self.resume = resume
         self.store = store
         self.live = live
         self.chat_model = chat_model
@@ -306,7 +339,15 @@ class ModelGateway:
 
     @classmethod
     def for_settings(
-        cls, settings, store, live, chat_model=None, log=None, digest=None
+        cls,
+        settings,
+        store,
+        live,
+        chat_model=None,
+        log=None,
+        digest=None,
+        budget=None,
+        resume=False,
     ):
         """A gateway for the configured backend and model. digest is the one
         the live run's preflight observed; it defaults to the pinned one."""
@@ -320,6 +361,8 @@ class ModelGateway:
             time_limit_s=settings.agents.time_limit_s,
             log=log,
             options=backend_options(settings),
+            budget=budget,
+            resume=resume,
         )
 
     def key(self, run_id, call_number):
@@ -359,7 +402,10 @@ class ModelGateway:
             key=key,
             request_hash=digest,
         )
-        if self.live:
+        held = self.store.get(key) if self.resume else None
+        if self.live and held is None:
+            if self.budget is not None:
+                self.budget.check()
             runnable = self.chat_model
             if tools:
                 runnable = runnable.bind_tools(tools)

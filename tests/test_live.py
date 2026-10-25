@@ -152,3 +152,30 @@ def test_the_digest_preflight_observed_is_in_every_request(
     records = [json.loads(x) for x in rec.read_text().splitlines()]
     assert records and {r["request"]["digest"] for r in records} == {observed}
     assert {r["digest"] for r in records} == {observed}
+
+
+def config_with(tmp_path, **agents):
+    raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
+    raw["agents"].update(agents)
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    return str(path)
+
+
+def test_a_stopped_run_says_so_and_resumes_with_the_flag(
+    tmp_path, pinned, capsys
+):
+    tight = config_with(tmp_path, run_budget_s=1e-9)
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    code = lv.main(
+        [*args, "--config", tight], chat_model=stand_in(), fetch=pinned
+    )
+    assert code == 3
+    assert "--resume" in capsys.readouterr().out
+    assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 2
+    assert (
+        lv.main([*args, "--resume"], chat_model=stand_in(), fetch=pinned) == 0
+    )
+    assert (
+        lv.main([*args, "--resume"], chat_model=stand_in(), fetch=pinned) == 2
+    )

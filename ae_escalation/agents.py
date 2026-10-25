@@ -36,6 +36,7 @@ from . import tools as tl
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief, ToolCall
 from .figures import CheckResult, check_brief, marked
 from .gateway import (
+    BudgetExceeded,
     CallRecord,
     ReplayMiss,
     read_structured,
@@ -413,7 +414,7 @@ def investigator_pass(
         )
         if draft is None:
             raise _Stop("could not read the brief: " + "; ".join(unread))
-    except ReplayMiss:
+    except (ReplayMiss, BudgetExceeded):
         raise
     except _Stop as exc:
         return InvestigatorPass(
@@ -512,7 +513,7 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
                 messages=messages,
                 schema=WordingVerdict,
             )
-        except ReplayMiss:
+        except (ReplayMiss, BudgetExceeded):
             raise
         except Exception as exc:
             # Fail closed: a wording check that could not run never passes.

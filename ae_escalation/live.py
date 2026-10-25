@@ -9,7 +9,10 @@ approval queue for Paddy and the adequacy form for the main session's
 reviewer. "notify" runs after Paddy's decisions are in
 approvals/decisions_<backend>_<label>.csv: the coordinator drafts the
 notifications for the approved briefs, live, and writes them to the outbox,
-which is never sent.
+which is never sent. Each run is held to its time budget, checked before
+every model call; a run that stops writes what it completed, and the same
+command with --resume replays the calls already recorded, then carries on
+live.
 
 Before any model call it checks the backend: for local, that Ollama on this
 machine holds the model at its pinned digest, and it prints nvidia-smi; for
@@ -32,9 +35,12 @@ from .adequacy import write_form
 from .approval import CRITERIA
 from .config import CONFIG_PATH, ENV_PATH, REPO, frontier_key, load_config
 from .gateway import _fetch_json, check_local_model, make_chat_model
+from .gateway import BudgetExceeded
 from .replay import (
     Paths,
+    can_resume,
     coordinate_approved,
+    progress,
     queue_with_decisions,
     run_set,
     write_queue,
@@ -90,17 +96,34 @@ def preflight(settings, fetch, env_file, environ):
     ], None
 
 
-def _briefs(settings, paths, model, digest):
-    run, holidays = load_run(settings)
-    result = run_set(
-        run,
-        holidays,
-        settings,
-        paths,
-        live=True,
-        chat_model=model,
-        digest=digest,
+def _stopped(exc, paths, step):
+    """What a budget stop completed, and how to take it up again."""
+    last = progress(paths)[-1]
+    print(f"stopped: {exc}")
+    print(f"completed: {', '.join(last['completed']) or 'none'}")
+    print(f"in progress: {last['in_progress']}")
+    print(
+        f"resume with: python -m ae_escalation.live {step} --label "
+        f"{paths.label} --resume"
     )
+    return 3
+
+
+def _briefs(settings, paths, model, digest, resume):
+    run, holidays = load_run(settings)
+    try:
+        result = run_set(
+            run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=model,
+            digest=digest,
+            resume=resume,
+        )
+    except BudgetExceeded as exc:
+        return _stopped(exc, paths, "briefs")
     write_queue(result, paths)
     write_form(result, paths)
     caught = not result.planted.attempts[0].check.passed
@@ -119,19 +142,25 @@ def _briefs(settings, paths, model, digest):
     return 0 if caught else 1
 
 
-def _notify(settings, paths, model, digest):
+def _notify(settings, paths, model, digest, resume):
     if not paths.decisions.exists():
         print(f"no decisions yet: Paddy's go in {paths.decisions}")
-        return 2
-    if paths.notify.exists():
-        print(f"{paths.notify} is already recorded; it is never replaced")
         return 2
     run, holidays = load_run(settings)
     result = run_set(run, holidays, settings, paths, live=False)
     queue = queue_with_decisions(result, paths)
-    done = coordinate_approved(
-        queue, settings, paths, live=True, chat_model=model, digest=digest
-    )
+    try:
+        done = coordinate_approved(
+            queue,
+            settings,
+            paths,
+            live=True,
+            chat_model=model,
+            digest=digest,
+            resume=resume,
+        )
+    except BudgetExceeded as exc:
+        return _stopped(exc, paths, "notify")
     for d in done:
         print(f"{d.brief_id}:")
         print(d.summary())
@@ -156,11 +185,25 @@ def main(
     parser.add_argument("--label", default="round1")
     parser.add_argument("--out", default=str(REPO))
     parser.add_argument("--config", default=str(CONFIG_PATH))
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="take up a run that stopped at its time budget",
+    )
     args = parser.parse_args(argv)
     settings = load_config(args.config)
     paths = Paths.under(args.out, settings.llm_backend, args.label)
-    if args.command == "briefs" and paths.briefs.exists():
-        print(f"{paths.briefs} is already recorded; use a new --label")
+    step = args.command
+    recorded = paths.briefs if step == "briefs" else paths.notify
+    started = any(e.get("step") == step for e in progress(paths))
+    if args.resume and not can_resume(paths, step):
+        print(f"{step} for {args.label} has nothing to resume")
+        return 2
+    if not args.resume and (recorded.exists() or started):
+        print(
+            f"{recorded} is already recorded; use a new --label, or "
+            "--resume if it stopped"
+        )
         return 2
     try:
         lines, digest = preflight(settings, fetch, env_file, environ)
@@ -170,9 +213,9 @@ def main(
     for line in lines:
         print(line)
     model = chat_model or make_chat_model(settings, env_file, environ)
-    if args.command == "briefs":
-        return _briefs(settings, paths, model, digest)
-    return _notify(settings, paths, model, digest)
+    if step == "briefs":
+        return _briefs(settings, paths, model, digest, args.resume)
+    return _notify(settings, paths, model, digest, args.resume)
 
 
 if __name__ == "__main__":
