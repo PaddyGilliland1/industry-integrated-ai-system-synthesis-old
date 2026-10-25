@@ -34,6 +34,42 @@ COVID_PERIOD = (pd.Timestamp("2020-03-01"), pd.Timestamp("2022-03-31"))
 # so the newest three are provisional.
 PROVISIONAL_WEEKS = 3
 
+# The 30 emergency departments' names, from PHS's Hospital Codes lookup
+# (Current NHS Hospitals in Scotland, OGL), as the probes read them. They are
+# labels only; no figure depends on them.
+HOSPITAL_NAMES = {
+    "A111H": "University Hospital Crosshouse",
+    "A210H": "University Hospital Ayr",
+    "B120H": "Borders General Hospital",
+    "C121H": "Lorn & Islands Hospital",
+    "C313H": "Inverclyde Royal Hospital",
+    "C418H": "Royal Alexandra Hospital",
+    "F704H": "Victoria Hospital",
+    "G107H": "Glasgow Royal Infirmary",
+    "G405H": "Queen Elizabeth University Hospital",
+    "G513H": "Royal Hospital for Children",
+    "H103H": "Caithness General Hospital",
+    "H202H": "Raigmore Hospital",
+    "H212H": "Belford Hospital",
+    "L106H": "University Hospital Monklands",
+    "L302H": "University Hospital Hairmyres",
+    "L308H": "University Hospital Wishaw",
+    "N101H": "Aberdeen Royal Infirmary",
+    "N121H": "Royal Aberdeen Children's Hospital",
+    "N411H": "Dr Gray's Hospital",
+    "R103H": "The Balfour",
+    "S308H": "St John's Hospital",
+    "S314H": "Royal Infirmary of Edinburgh at Little France",
+    "S319H": "Royal Hospital for Children and Young People",
+    "T101H": "Ninewells Hospital",
+    "T202H": "Perth Royal Infirmary",
+    "V217H": "Forth Valley Royal Hospital",
+    "W107H": "Western Isles Hospital",
+    "Y144H": "Galloway Community Hospital",
+    "Y146H": "Dumfries & Galloway Royal Infirmary",
+    "Z102H": "Gilbert Bain Hospital",
+}
+
 
 class SourceRecord(BaseModel):
     """One manifest row: a file's source, licence and expected hash."""

@@ -13,7 +13,10 @@ def synthetic_wide():
     weeks = tm.complete_weeks("2015-06-07", "2021-12-26")
     n = len(weeks)
     rng = np.random.default_rng(8)
-    season = 1 + 0.1 * np.sin(2 * np.pi * np.arange(n) / 52)
+    # Growth of 6% a year, so some weeks clear the earlier years' capacity.
+    season = (1 + 0.1 * np.sin(2 * np.pi * np.arange(n) / 52)) * (
+        1 + 0.06 * np.arange(n) / 52
+    )
     a = 1000 * season + rng.normal(0, 25, n)
     b = 300 * season + rng.normal(0, 12, n)
     # A shock in spring 2020, so the latch and the re-selection run.

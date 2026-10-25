@@ -26,3 +26,7 @@ ae_escalation/rules.py
 ae_escalation/design.py
 tests/test_rules.py
 tests/test_design.py
+ae_escalation/evaluation.py
+ae_escalation/units.py
+tests/test_evaluation.py
+tests/test_units.py
