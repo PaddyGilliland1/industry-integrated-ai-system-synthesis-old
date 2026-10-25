@@ -566,7 +566,6 @@ def written_out(draft):
     [
         (extra_key, "level: Extra inputs are not permitted"),
         (horizon_5, "less than or equal to 4"),
-        (written_out, "1,120: write each figure as its placeholder"),
     ],
 )
 def test_the_retry_carries_the_problems_and_the_raw_reply(
@@ -580,6 +579,24 @@ def test_the_retry_carries_the_problems_and_the_raw_reply(
     assert named in retry_ask
     assert json.dumps(bad) in retry_ask
     assert retry_ask != first_ask
+
+
+def test_a_figure_written_out_is_named_and_its_draft_sent_back(
+    run, holidays, settings, tmp_path
+):
+    bad = written_out(good_draft(run))
+    out, _, retry_ask = retry_text(
+        run, holidays, settings, tmp_path, reply(bad)
+    )
+    assert out.status == "verified" and len(out.attempts) == 2
+    assert "1,120: write each figure as its placeholder" in retry_ask
+    assert "The Reviewer's check failed your brief" in retry_ask
+    assert json.dumps(as_written(bad)) in retry_ask
+
+
+def as_written(draft):
+    """A draft as the graph keeps it: read for its shape, then dumped."""
+    return br.DraftFields.model_validate(draft).model_dump(mode="json")
 
 
 def test_a_reply_with_no_json_is_named_in_the_retry(
@@ -715,3 +732,102 @@ def test_a_brief_never_readable_was_never_planted(
         ORIGIN, "T101H", "planted", plant=plant_value(9876)
     )
     assert out.planted_caught is None and out.planted_attempt is None
+
+
+# --- every problem at once, and a refused draft kept -------------------------
+
+
+def refused_draft(run):
+    """A draft that breaks the word rules and cites a wrong value: SA-MA's
+    forecast cited 50 too high."""
+    d = good_draft(run)
+    d["summary"] = "SA-MA forecasts {F1} next week, up 5."
+    first = d["cited_figures"][0]
+    d["cited_figures"][0] = {**first, "value": first["value"] + 50}
+    return d
+
+
+def test_a_refused_draft_is_named_whole_and_retried_as_a_draft(
+    run, holidays, settings, tmp_path
+):
+    bad = refused_draft(run)
+    out, first_ask, retry_ask = retry_text(
+        run, holidays, settings, tmp_path, reply(bad)
+    )
+    assert out.status == "verified" and len(out.attempts) == 2
+    first = out.attempts[0]
+    assert first.draft == as_written(bad) and not first.check.passed
+    found = {f.found for f in first.check.failures}
+    wrong = str(round(bad["cited_figures"][0]["value"]))
+    assert {"SA-MA", "next week", "5", wrong} <= found
+    assert "The Reviewer's check failed your brief" in retry_ask
+    assert "could not be read" not in retry_ask
+    for named in ("SA-MA: each figure's label", "next week: write", wrong):
+        assert named in retry_ask
+    assert json.dumps(as_written(bad)) in retry_ask
+
+
+def test_a_draft_refused_twice_is_shown_to_the_manager_marked(
+    run, holidays, settings, tmp_path
+):
+    bad = reply(refused_draft(run))
+    script = [TOOLS, DONE, bad, DONE, bad]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "not verified" and out.brief is None
+    shown = out.display()
+    assert shown.startswith("NOT VERIFIED, DO NOT ACT")
+    assert "No readable brief" not in shown
+    assert "Demand brief: Ninewells Hospital, week ending 13 Jun 2021" in shown
+    assert "[[NOT VERIFIED: SA-MA]] forecasts [[NOT VERIFIED: 1,1" in shown
+    assert "[[NOT VERIFIED: next week]]" in shown
+    assert "Problems found by code:" in shown
+
+
+# --- a draft is never read again without its context -------------------------
+
+
+def test_a_sentence_naming_the_primary_beside_another_model_never_crashes(
+    run, holidays, settings, tmp_path
+):
+    d = good_draft(run)
+    d["summary"] = (
+        "Unlike seasonal naive, the primary model forecasts {F1} for {WEEK1}."
+    )
+    script = [TOOLS, DONE, reply(d), DONE, reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    first = {f.found for f in out.attempts[0].check.failures}
+    assert {"seasonal naive", "primary"} <= first
+    assert out.status == "verified" and len(out.attempts) == 2
+
+
+def test_the_plant_after_a_summary_with_no_full_stop_is_caught(
+    run, holidays, settings, tmp_path
+):
+    from ae_escalation import replay as rp
+
+    d = good_draft(run)
+    d["summary"] = "{PRIMARY} forecasts {F1}, against {F8}"
+    d["cited_figures"].append(
+        figure(835, "T1", "point", model="seasonal naive", horizon=1)
+    )
+    script = [TOOLS, DONE, reply(d), DONE, reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw-planted", plant=rp.plant_figure
+    )
+    assert out.planted_attempt == 1 and out.planted_caught is True
+    assert out.status == "verified"
+
+
+def test_a_plant_in_a_refused_draft_is_still_caught_at_its_value(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, reply(refused_draft(run)), DONE]
+    script += [reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "planted", plant=plant_value(9876)
+    )
+    assert out.attempts[0].planted and out.planted_caught is True

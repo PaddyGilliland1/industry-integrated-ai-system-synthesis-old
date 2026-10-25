@@ -256,18 +256,8 @@ class DemandBrief(BaseModel):
         its source and its meaning are the rule's, copied, never the
         agent's."""
         return cls(
+            **_from_entry(entry),
             brief_id=brief_id,
-            hospital=entry.hospital,
-            name=entry.name,
-            week=entry.as_of,
-            release_date=entry.release_date,
-            kind=entry.kind,
-            level=entry.level,
-            level_source=entry.level_source,
-            drift_alarm=entry.latched,
-            latched_since=entry.latched_since,
-            breach_direction=entry.breach_direction,
-            primary=entry.primary,
             backend=backend,
             model=model,
             model_digest=model_digest,
@@ -308,6 +298,61 @@ class DemandBrief(BaseModel):
         in marks are marked. The raters' view leaves out the line naming
         the backend and model that wrote it, which the record keeps."""
         return brief_text(self, self.rendered(failed, marks), written_by)
+
+
+def _from_entry(entry):
+    """The fields code sets on a brief from the screen's entry."""
+    return {
+        "hospital": entry.hospital,
+        "name": entry.name,
+        "week": entry.as_of,
+        "release_date": entry.release_date,
+        "kind": entry.kind,
+        "level": entry.level,
+        "level_source": entry.level_source,
+        "drift_alarm": entry.latched,
+        "latched_since": entry.latched_since,
+        "breach_direction": entry.breach_direction,
+        "primary": entry.primary,
+    }
+
+
+def refused_text(
+    entry,
+    draft,
+    *,
+    backend,
+    model,
+    failed=frozenset(),
+    marks=(),
+    written_by=True,
+):
+    """A draft the text rules refused, as the manager sees it: the heading
+    code sets from the screen's entry, then the draft's words with every
+    placeholder filled, its failed figures and each problem marked where it
+    stands. It is shown, never kept: the head is built without the rules,
+    which this draft breaks, so it can never become a brief."""
+    head = DemandBrief.model_construct(
+        **_from_entry(entry),
+        brief_id="",
+        level_meaning=LEVEL_MEANING,
+        backend=backend,
+        model=model,
+        model_digest=None,
+        **{f: getattr(draft, f) for f in DraftFields.model_fields},
+    )
+    ctx = head.text_context()
+    shown = {
+        field: ph.render(
+            text,
+            draft.cited_figures,
+            ctx,
+            failed,
+            [m for m in marks if m.field == field],
+        )
+        for field, text in draft.texts().items()
+    }
+    return brief_text(head, shown, written_by)
 
 
 def brief_text(head, shown, written_by=True):

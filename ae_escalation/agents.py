@@ -33,8 +33,15 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import placeholders as ph
 from . import tools as tl
-from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief, ToolCall
-from .figures import CheckResult, check_brief
+from .briefs import (
+    NOT_VERIFIED,
+    BriefDraft,
+    DemandBrief,
+    DraftFields,
+    ToolCall,
+    refused_text,
+)
+from .figures import CheckResult, check_brief, check_draft
 from .gateway import (
     BudgetExceeded,
     CallRecord,
@@ -225,13 +232,15 @@ class _Stop(Exception):
 
 
 class InvestigatorPass(BaseModel):
-    """One pass of the Investigator: its draft, or why it stopped. An
-    unreadable draft keeps its problems and the raw reply for the retry."""
+    """One pass of the Investigator: its draft, or why it stopped. The
+    draft is kept as the JSON written, read for its shape only, so it is
+    never validated again without the screen's context; an unreadable reply
+    keeps its problems and the raw reply for the retry."""
 
     status: Literal["ok", "stopped"]
     stop_reason: str = ""
     cap_reached: bool = False
-    draft: BriefDraft | None = None
+    draft: dict | None = None
     calls: list[CallRecord] = Field(default_factory=list)
     problems: list[str] = Field(default_factory=list)
     raw_reply: str = ""
@@ -348,8 +357,11 @@ def investigator_pass(
     typed JSON. A retry first shows the problems and the previous draft,
     or, when the previous reply could not be read, why and the raw reply.
 
-    An error, the time limit or an unreadable draft ends the pass as
-    "stopped". A replay miss is raised, never hidden.
+    The draft is read here for its shape alone: the word and placeholder
+    rules and the figure check run in the code check, which names every
+    problem at once. An error, the time limit or a reply whose shape cannot
+    be read ends the pass as "stopped". A replay miss is raised, never
+    hidden.
     """
     from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -369,7 +381,7 @@ def investigator_pass(
                 content=fill(
                     prompts["RETRY"],
                     problems=numbered(problems) or "1. (none given)",
-                    draft=json.dumps(previous.model_dump(mode="json")),
+                    draft=json.dumps(previous),
                 )
             )
         )
@@ -409,9 +421,7 @@ def investigator_pass(
             schema=BriefDraft,
         )
         calls.append(record)
-        draft, unread, raw_reply = read_structured(
-            reply, BriefDraft, context={"text": entry_context(entry)}
-        )
+        draft, unread, raw_reply = read_structured(reply, DraftFields)
         if draft is None:
             raise _Stop("could not read the brief: " + "; ".join(unread))
     except (ReplayMiss, BudgetExceeded):
@@ -437,7 +447,10 @@ def investigator_pass(
             calls=calls,
         )
     return InvestigatorPass(
-        status="ok", cap_reached=cap_reached, draft=draft, calls=calls
+        status="ok",
+        cap_reached=cap_reached,
+        draft=draft.model_dump(mode="json"),
+        calls=calls,
     )
 
 
@@ -582,6 +595,9 @@ class Attempt(BaseModel):
 
     number: int
     stop_reason: str = ""
+    # The draft as written, the plant included, so a draft the rules refuse
+    # is still shown to the manager and the adequacy reviewer.
+    draft: dict | None = None
     planted: bool = False
     # The figure code planted, so "caught" can mean a failure at it.
     planted_value: float | None = None
@@ -640,30 +656,52 @@ class BriefOutcome(BaseModel):
 
     def display(self, written_by=True):
         """The brief as the manager sees it; a brief that is not verified
-        carries the banner, its failing figures marked with their labels
-        and every problem code found. written_by=False is the raters' view,
-        without the author's line."""
+        carries the banner, its failing figures and words marked and every
+        problem code found. A draft the rules refused is shown the same
+        way, from its attempt. written_by=False is the raters' view, without
+        the author's line."""
         if self.status != "not verified":
             return self.brief.text(written_by=written_by) if self.brief else ""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
-        if self.brief is None:
-            reason = self.attempts[-1].stop_reason if self.attempts else ""
+        last = self.attempts[-1] if self.attempts else None
+        shown = (
+            last
+            if self.brief is not None
+            else next((a for a in reversed(self.attempts) if a.draft), None)
+        )
+        if shown is None:
+            reason = last.stop_reason if last else ""
             return f"{banner}\nNo readable brief: {reason}"
-        last = self.attempts[-1]
-        check = last.check
+        check = shown.check
         failed = set(check.failed_figures) if check else set()
+        marks = check.failures if check else []
+        if self.brief is not None:
+            text = self.brief.text(failed, written_by=written_by)
+        else:
+            text = refused_text(
+                self.entry,
+                DraftFields.model_validate(shown.draft),
+                backend=self.backend,
+                model=self.model,
+                failed=failed,
+                marks=marks,
+                written_by=written_by,
+            )
         notes = []
         if check and not check.passed:
             notes += [
                 "Problems found by code:",
                 *[f"- {f.field}: {f.reason}" for f in check.failures],
             ]
-        if last.wording and not last.wording.passed:
+        if shown.wording and not shown.wording.passed:
             notes += [
                 "Wording problems:",
-                *[f"- {p}" for p in last.wording.problems],
+                *[f"- {p}" for p in shown.wording.problems],
             ]
-        text = self.brief.text(failed, written_by=written_by)
+        if last is not shown and last.stop_reason:
+            notes.append(
+                f"The retry gave no readable brief: {last.stop_reason}"
+            )
         return "\n".join([banner, text, *notes])
 
 
@@ -737,11 +775,7 @@ class BriefGraph:
     def _investigate(self, state):
         entry = tl.ScreenEntry.model_validate(state["entry"])
         attempt = state.get("attempt", 0) + 1
-        previous = (
-            BriefDraft.model_validate(state["draft"])
-            if attempt > 1 and state.get("draft")
-            else None
-        )
+        previous = state.get("draft") if attempt > 1 else None
         raw = state.get("raw") if attempt > 1 else None
         out = investigator_pass(
             entry,
@@ -756,7 +790,11 @@ class BriefGraph:
             raw=raw,
         )
         record = Attempt(number=attempt, stop_reason=out.stop_reason)
-        draft = out.draft
+        draft = (
+            None
+            if out.draft is None
+            else DraftFields.model_validate(out.draft)
+        )
         if draft is not None and self._plant is not None:
             # The plant goes into the first readable draft, whichever
             # attempt gives it, and only once.
@@ -775,37 +813,42 @@ class BriefGraph:
                 note="designed failure: a figure no tool returned, planted "
                 "by code in the Investigator's first readable draft",
             )
-        self._attempt = record
         update = {
             "route": ["investigate"],
             "attempt": attempt,
             "model_calls": state.get("model_calls", 0) + len(out.calls),
             "calls": [c.model_dump(mode="json") for c in out.calls],
+            "brief": None,
         }
         if draft is None:
-            update["brief"] = None
+            self._attempt = record
             update["draft"] = None
             update["raw"] = out.raw_reply if out.problems else None
             update["problems"] = out.problems or [
                 f"the Investigator gave no readable brief: {out.stop_reason}"
             ]
             return update
+        written = draft.model_dump(mode="json")
+        self._attempt = record.model_copy(update={"draft": written})
+        update["draft"] = written
+        update["raw"] = None
         try:
+            # The rules run with the screen's context, the same the brief's
+            # own validator gives itself; a draft they refuse goes to the
+            # code check as written, which names every problem at once.
+            checked = BriefDraft.model_validate(
+                written, context={"text": entry_context(entry)}
+            )
             brief = DemandBrief.assemble(
                 entry,
-                draft,
+                checked,
                 brief_id=state["run_id"],
                 backend=self.gateway.backend,
                 model=self.gateway.model_name,
                 model_digest=self.gateway.digest,
             )
-        except ValidationError as exc:
-            update["brief"] = None
-            update["draft"] = draft.model_dump(mode="json")
-            update["problems"] = ph.problems_of(exc)
+        except ValidationError:
             return update
-        update["draft"] = draft.model_dump(mode="json")
-        update["raw"] = None
         update["brief"] = brief.model_dump(mode="json")
         return update
 
@@ -813,7 +856,20 @@ class BriefGraph:
         # Each attempt is recorded once, where it ends: here when the code
         # check fails, or at the wording check.
         record = self._attempt
-        if state.get("brief") is None:
+        entry = tl.ScreenEntry.model_validate(state["entry"])
+        ledger = self._toolbox.ledger
+        if state.get("brief") is not None:
+            brief = DemandBrief.model_validate(state["brief"])
+            result = check_brief(brief, ledger, entry.level)
+        elif state.get("draft") is not None:
+            draft = DraftFields.model_validate(state["draft"])
+            result = check_draft(
+                draft.texts(),
+                draft.cited_figures,
+                ledger,
+                entry_context(entry),
+            )
+        else:
             self.log.write(
                 kind="check",
                 run_id=state["run_id"],
@@ -826,9 +882,6 @@ class BriefGraph:
                 "passed": False,
                 "attempts": [record.model_dump(mode="json")],
             }
-        brief = DemandBrief.model_validate(state["brief"])
-        entry = tl.ScreenEntry.model_validate(state["entry"])
-        result = check_brief(brief, self._toolbox.ledger, entry.level)
         self._attempt = record.model_copy(update={"check": result})
         self.log.write(
             kind="check",
