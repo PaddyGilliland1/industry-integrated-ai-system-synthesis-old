@@ -35,6 +35,11 @@ live run records.
     `release_text` and `deadline_text`;
   - the fact lines, `backtest_line`, `track_line` and `holidays_line`, which `entry_text` shows the
     Investigator and the Reviewer reads in the brief;
+  - the level's lines, `tools.level_band`, `LEVEL_MEANING` and `LEVEL_FROM`, and the heading and drift
+    lines of `brief_text`, which the Reviewer reads in every brief; `entry_text` also shows the
+    Investigator the meaning and band lines;
+  - the device-word problems in `DEVICE_WORDS`, since each can reach a brief's or a notification's
+    retry;
   - `brief.text()` and `brief_text`, and the coordinator's `_figure_lines`, `_date_lines`,
     `_action_lines` and action task texts;
   - `backend_options`, the generation settings and the model digest.
@@ -103,3 +108,38 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
    - Scope: the rule covers `{ORIGIN}` and `{LATCHED}` as well as `{WEEK1}` to `{WEEK4}`, since each
      is a week a label can name. A model named again beside its own figure is left to the prompts.
    - No amendment: option A is unchanged; this only refuses words that repeat a label.
+
+## Build deviations, final Phase B batch (25 Oct 2026)
+
+Build choices recorded for review, not rulings by Paddy. Where one touches a ruled decision, it says so.
+
+5. **The level's band line** (spec section 2, item 4; the template brief's field 2). Under the level's
+   fixed meaning line, code writes one line saying what the level means from its source, built from
+   the rule's constants. The agent's brief, the template brief and the Investigator's screen all print
+   it:
+   - flag, level 2: "Level 2 from the flag: going by past forecast errors, the rule flagged a week
+     ahead as reaching 1.05 times its simulated capacity, a seasonal baseline of past demand."
+   - held, level 1: "Level 1, held: the level the flag gave in the week before the alarm, when the rule
+     found no week ahead unusually high for the time of year. It says nothing about demand below the
+     usual, and is kept until a person approves a latch reset." Level 1 from the flag says the same
+     without the held clauses, and held level 2 pairs the flag's clause with the latch reset.
+   - surge: "Level 2 from the surge: the latest released week was 1.05 to under 1.10 times simulated
+     capacity, a seasonal baseline of past demand, taken at its lowest over the four weeks ahead."
+     Levels 1, 3 and 4 name their own band.
+   - Reason: the meaning line alone reads as if every level were unusually high. Four of the seven
+     replay briefs are level 1, held, on the week demand collapsed, so level 1 says only that nothing
+     was found unusually high, never that demand was usual.
+   - Touches D-DATA-11: the line states no chance or probability. The brief quotes the track record,
+     never the flag's stated chance, which runs about twice what happens. The line's first version
+     quoted "at least an even chance" and called level 1 "usual demand"; both went before any recording.
+     Capacity is named by its defined term, with the first-use gloss TERMS.md fixes.
+6. **No untrusted figure in a staff notification** (spec section 2, item 6; D-SAFE-19, as amended). In a
+   surge or latch brief the coordinator is offered no forecast, range end or spread. The notification
+   check refuses one and names why in the retry: "{F2} is untrusted while the drift latch is set; a
+   notification never states an untrusted figure". The coordinator's prompt says: "In a surge or latch
+   brief the forecasts are untrusted: state none, and never give one as a reason to act." The MHRA
+   device-word screen also runs on each notification as code writes it, as it runs on a brief.
+   - Reason: no Reviewer reads a notification, so a sentence giving an untrusted forecast as the reason
+     to act would otherwise reach the outbox.
+   - No amendment: this carries D-DATA-11 ("surge: forecasts untrusted") and D-ARCH-28 into the
+     notifications.
