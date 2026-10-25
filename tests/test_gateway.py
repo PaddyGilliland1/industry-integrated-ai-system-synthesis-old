@@ -565,6 +565,21 @@ def call_once(g):
     )
 
 
+def test_an_error_that_cannot_be_built_from_a_message_replays_by_name():
+    # pydantic_core's ValidationError cannot be made without its line
+    # errors, even unconstructed, so the replay raises a stand-in of the
+    # same module, name and message, which the pass names in the same words.
+    try:
+        Answer.model_validate({})
+    except Exception as exc:
+        recorded = {"class": gw._class_path(exc), "message": str(exc)}
+    rebuilt = gw.rebuild_error(recorded)
+    assert type(rebuilt).__name__ == "ValidationError"
+    assert type(rebuilt).__module__ == "pydantic_core._pydantic_core"
+    assert str(rebuilt) == recorded["message"]
+    assert isinstance(rebuilt, Exception)
+
+
 def test_a_failed_call_is_recorded_logged_and_raised_with_its_record(
     settings, tmp_path
 ):

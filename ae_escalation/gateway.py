@@ -308,21 +308,32 @@ def _class_path(exc):
 def rebuild_error(error):
     """The recorded error as an exception of the same class with the same
     message. A class whose constructor wants more than a message is built
-    without calling it, since only its type and message are replayed."""
+    without calling it, since only its type and message are replayed; one
+    that cannot be made at all is replayed as a stand-in with its module,
+    name and message."""
     module, _, name = error["class"].rpartition(".")
+
+    def stand_in():
+        """A RuntimeError named as the recorded class."""
+        return type(name, (RuntimeError,), {"__module__": module})
+
     try:
         kind = getattr(importlib.import_module(module), name)
     except (ImportError, AttributeError):
-        kind = type(name, (RuntimeError,), {"__module__": module})
+        kind = stand_in()
     if not (isinstance(kind, type) and issubclass(kind, Exception)):
-        kind = type(name, (RuntimeError,), {"__module__": module})
+        kind = stand_in()
     try:
         exc = kind(error["message"])
         if str(exc) == error["message"]:
             return exc
     except Exception:
         pass
-    exc = kind.__new__(kind)
+    try:
+        exc = kind.__new__(kind)
+    except TypeError:
+        kind = stand_in()
+        exc = kind.__new__(kind)
     Exception.__init__(exc, error["message"])
     return exc
 
