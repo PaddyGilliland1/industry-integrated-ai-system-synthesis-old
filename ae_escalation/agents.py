@@ -38,7 +38,6 @@ from .figures import CheckResult, check_brief, marked
 from .gateway import (
     CallRecord,
     ReplayMiss,
-    parse_structured,
     read_structured,
 )
 from .timing import release_horizon_weeks
@@ -466,6 +465,8 @@ class WordingResult(BaseModel):
     # not the Investigator's, so the brief ends "not verified" without a
     # retry that would send it the Reviewer's problem as its own.
     reviewer_error: bool = False
+    # Each verdict the Reviewer gave in a form that could not be read.
+    reviewer_slips: list[str] = Field(default_factory=list)
 
 
 def device_words(text):
@@ -483,55 +484,92 @@ def _agent_text(brief):
 
 def wording_check(brief, *, gateway, prompts, run_id, call_number):
     """The Reviewer's wording check: code first, then the model. Returns
-    the result and the model call's record, or None when code decided."""
+    the result and the records of the model calls it made, none when code
+    decided.
+
+    A verdict the Reviewer gives in the wrong form is the Reviewer's error,
+    not the brief's (review P3-15): it is logged and the Reviewer is asked
+    once more, with why it could not be read. A second slip, or a failed
+    model call, fails the check closed.
+    """
     from langchain_core.messages import HumanMessage, SystemMessage
 
     found = device_words(_agent_text(brief))
     if found:
-        return WordingResult(passed=False, problems=found, by="code"), None
+        return WordingResult(passed=False, problems=found, by="code"), []
     messages = [
         SystemMessage(content=prompts["SYSTEM"]),
         HumanMessage(content=fill(prompts["VERDICT"], brief=brief.text())),
     ]
-    try:
-        reply, record = gateway.call(
-            run_id=run_id,
-            call_number=call_number,
-            agent="reviewer",
-            purpose="wording",
-            messages=messages,
-            schema=WordingVerdict,
-        )
-    except ReplayMiss:
-        raise
-    except Exception as exc:
-        # Fail closed: a wording check that could not run never passes.
-        problem = (
-            "the Reviewer's wording check could not run: model error: "
-            f"{type(exc).__name__}: {exc}"
-        )
-        result = WordingResult(
-            passed=False, problems=[problem], by="model", reviewer_error=True
-        )
-        return result, getattr(exc, "call_record", None)
-    verdict = parse_structured(reply, WordingVerdict)
-    if verdict is None:
-        # An unreadable verdict is a failure, never a pass.
-        return (
-            WordingResult(
+    records, slips = [], []
+    for number in (call_number, call_number + 1):
+        try:
+            reply, record = gateway.call(
+                run_id=run_id,
+                call_number=number,
+                agent="reviewer",
+                purpose="wording",
+                messages=messages,
+                schema=WordingVerdict,
+            )
+        except ReplayMiss:
+            raise
+        except Exception as exc:
+            # Fail closed: a wording check that could not run never passes.
+            if getattr(exc, "call_record", None) is not None:
+                records.append(exc.call_record)
+            problem = (
+                "the Reviewer's wording check could not run: model error: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            result = WordingResult(
                 passed=False,
-                problems=["could not read the Reviewer's verdict"],
+                problems=[problem],
                 by="model",
-            ),
-            record,
+                reviewer_error=True,
+                reviewer_slips=slips,
+            )
+            return result, records
+        records.append(record)
+        verdict, unread, raw = read_structured(reply, WordingVerdict)
+        if verdict is not None:
+            break
+        slips.append("; ".join(unread))
+        gateway.log.write(
+            kind="reviewer error",
+            run_id=run_id,
+            call_number=number,
+            problems=unread,
         )
+        messages = messages + [
+            reply,
+            HumanMessage(
+                content=fill(
+                    prompts["RETRY"], problems=numbered(unread), raw=raw
+                )
+            ),
+        ]
+    else:
+        # An unreadable verdict is a failure, never a pass.
+        problem = "the Reviewer gave no readable verdict twice: " + slips[-1]
+        result = WordingResult(
+            passed=False,
+            problems=[problem],
+            by="model",
+            reviewer_error=True,
+            reviewer_slips=slips,
+        )
+        return result, records
     problems = list(verdict.problems) if not verdict.passes else []
     if not verdict.passes and not problems:
         problems = ["the Reviewer failed the wording without a reason"]
-    return (
-        WordingResult(passed=verdict.passes, problems=problems, by="model"),
-        record,
+    result = WordingResult(
+        passed=verdict.passes,
+        problems=problems,
+        by="model",
+        reviewer_slips=slips,
     )
+    return result, records
 
 
 # --- the graph ---------------------------------------------------------------
@@ -762,7 +800,7 @@ class BriefGraph:
 
     def _wording_check(self, state):
         brief = DemandBrief.model_validate(state["brief"])
-        result, record = wording_check(
+        result, records = wording_check(
             brief,
             gateway=self.gateway,
             prompts=self.prompts["reviewer"],
@@ -784,9 +822,9 @@ class BriefGraph:
             "reviewer_error": result.reviewer_error,
             "attempts": [self._attempt.model_dump(mode="json")],
         }
-        if record is not None:
-            update["calls"] = [record.model_dump(mode="json")]
-            update["model_calls"] = state.get("model_calls", 0) + 1
+        if records:
+            update["calls"] = [r.model_dump(mode="json") for r in records]
+            update["model_calls"] = state.get("model_calls", 0) + len(records)
         if not result.passed:
             update["problems"] = [f"wording: {p}" for p in result.problems]
         return update

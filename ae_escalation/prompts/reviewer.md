@@ -20,3 +20,14 @@ The brief:
 
 Reply with JSON only, in this form:
 {"passes": true or false, "problems": ["one short sentence per problem, quoting the words at fault"]}
+
+## RETRY
+
+Your verdict could not be read. These are the problems:
+{problems}
+
+Your reply was:
+{raw}
+
+Reply again with JSON only, in exactly this form and with no other keys:
+{"passes": true or false, "problems": ["one short sentence per problem, quoting the words at fault"]}

@@ -607,3 +607,53 @@ def test_a_reply_with_no_json_is_named_in_the_retry(
         run, holidays, settings, tmp_path, AIMessage(content="Sorry, no.")
     )
     assert "holds no JSON object" in retry_ask and "Sorry, no." in retry_ask
+
+
+# --- a Reviewer format slip is the Reviewer's error (review P3-15) -----------
+
+SLIP = AIMessage(content='{"passes": true, "problems": [], "score": 9}')
+
+
+def test_a_reviewer_slip_is_retried_once_at_the_reviewer(
+    run, holidays, settings, tmp_path
+):
+    log = gw.AuditLog()
+    model = gw.ScriptedModel(
+        script=[TOOLS, DONE, reply(good_draft(run)), SLIP, WORDING_OK]
+    )
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=model,
+        log=log,
+    )
+    out = ag.BriefGraph(run, holidays, settings, gateway, log=log).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "verified" and out.route.count("investigate") == 1
+    wording = out.attempts[-1].wording
+    assert wording.passed and len(wording.reviewer_slips) == 1
+    asked_again = " ".join(str(m.content) for m in model.seen[4])
+    assert "Extra inputs are not permitted" in asked_again
+    assert '"score": 9' in asked_again
+    assert "reviewer error" in [e["kind"] for e in log.entries]
+    replay = gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "r.jsonl"), live=False
+    )
+    again = ag.BriefGraph(run, holidays, settings, replay)
+    assert again.run(ORIGIN, "T101H", "nw").status == "verified"
+
+
+def test_two_reviewer_slips_fail_closed_without_the_investigator(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, reply(good_draft(run)), SLIP, SLIP]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "not verified"
+    assert out.route.count("investigate") == 1
+    wording = out.attempts[-1].wording
+    assert wording.reviewer_error and len(wording.reviewer_slips) == 2
+    assert "no readable verdict" in wording.problems[0]
