@@ -55,6 +55,14 @@ MONTH = (
     r"|dec(?:ember)?)"
 )
 ORD = r"(?:st|nd|rd|th)?"
+# A range of days in one month's name, "from 27 to 18 Jul 2021". The first
+# day takes the second's month, or the month before when it is the larger,
+# so the range runs forwards across the month end.
+DAY_RANGE = re.compile(
+    rf"\b(?P<d1>\d{{1,2}}){ORD}\s*(?:to|-|until)\s*(?P<d>\d{{1,2}}){ORD}\s+"
+    rf"(?P<mon>{MONTH})\b\.?(?:,?\s+(?P<y>\d{{4}})\b)?",
+    re.IGNORECASE,
+)
 # Dates, longest forms first; each match is blanked before the next pattern.
 DATE_PATTERNS = [
     re.compile(r"\b(?P<y>\d{4})-(?P<mo>\d{2})-(?P<d>\d{2})\b"),
@@ -71,22 +79,45 @@ DATE_PATTERNS = [
     re.compile(rf"\b(?P<mon>{MONTH})\b\.?\s+(?P<y>\d{{4}})\b", re.IGNORECASE),
     re.compile(r"\b(?P<d>\d{1,2})/(?P<mo>\d{1,2})/(?P<y>\d{4})\b"),
 ]
-# Fixed wording whose digits are names, not figures: the model's name and
-# the brief's two range labels.
+# Fixed wording whose digits are names, not figures: the moving average's
+# name, the brief's two range labels and the pandemic's name.
+PER_CENT = r"(?:\s?%|\s+per\s?cent)"
 VOCABULARY = [
-    re.compile(r"\b4[- ]week moving average\b", re.IGNORECASE),
+    re.compile(r"\b4[- ]week\s+(?:moving\s+)?average\b", re.IGNORECASE),
     re.compile(
-        r"\b(?:80|95)\s?%(?=[^.;:\n]{0,30}?\b(?:ranges?|intervals?)\b)",
+        rf"\b(?:80|95){PER_CENT}"
+        r"(?=[^.;:\n]{0,30}?\b(?:ranges?|intervals?)\b)",
         re.IGNORECASE,
     ),
-    re.compile(r"\b(?:80|95)(?=\s*(?:and|or|,|/)\s*(?:80|95)\s?%)"),
-    re.compile(r"\((?:80|95)\s?%\)"),
-    re.compile(r"\b(?:80|95)\s?%(?=\s*:)"),
+    re.compile(
+        rf"\b(?:80|95)(?=\s*(?:and|or|,|/)\s*(?:80|95){PER_CENT})",
+        re.IGNORECASE,
+    ),
+    re.compile(rf"\((?:80|95){PER_CENT}\)", re.IGNORECASE),
+    re.compile(rf"\b(?:80|95){PER_CENT}(?=\s*:)", re.IGNORECASE),
+    re.compile(r"\bCOVID-19\b", re.IGNORECASE),
     re.compile(r"\b[A-Z]\d{3}[A-Z]\b"),
 ]
+# The two fixed forms in which a brief may name a level other than its own:
+# what the rule can give, and what to check. Any other level fails.
+CONDITIONAL_LEVEL = re.compile(
+    r"\blevels\s+3\s+and\s+4\s+come\s+only\s+from\s+a\s+surge\b"
+    r"|\bcheck\s+whether\s+level\s+(?P<n>[1-4])\s+actions\s+apply\b",
+    re.IGNORECASE,
+)
+# "4 weeks", "a 2-week view": a count of weeks, which a brief's outlook
+# bounds at four.
+WEEKS = re.compile(r"\b(?P<n>\d+)(?:-week\b|\s+weeks?\b)", re.IGNORECASE)
+# "week 26": an ISO week of the year, as a label.
+ISO_WEEK = re.compile(r"\bweek\s+(?P<n>\d{1,2})\b(?![.,]?\d)", re.IGNORECASE)
 LEVEL = re.compile(r"\blevels?\s+(?P<n>\d+)\b", re.IGNORECASE)
+# A release horizon is one digit, never followed by another digit, a
+# decimal point or a thousands group: in "release horizon 1, 1,120" the
+# 1,120 is a figure, not a second horizon.
+ONE_DIGIT = r"\d(?!\d|[.,]\d)"
 HORIZON = re.compile(
-    r"\b(?:release\s+)?horizons?\s+(?P<n>\d+(?:\s*(?:,|and|to|or|-)\s*\d+)*)",
+    rf"\b(?:release\s+)?horizons?\s+(?P<n>{ONE_DIGIT}"
+    rf"(?:\s*(?:,|and|to|or|-)\s*{ONE_DIGIT})*)",
     re.IGNORECASE,
 )
 TIME = re.compile(r"\b(?P<h>[01]?\d|2[0-3]):(?P<m>[0-5]\d)\b")
@@ -120,12 +151,44 @@ def _date_value(m):
     return year, month, day
 
 
+def _day_range(m):
+    """The two dates of "27 to 18 Jul 2021": the first day in the second's
+    month, or in the month before when it is the larger. None if either is
+    not a real date."""
+    year, month, day = _date_value(m)
+    first = int(m.group("d1"))
+    first_month, first_year = month, year
+    if first > day:
+        first_month = 12 if month == 1 else month - 1
+        if month == 1 and year:
+            first_year = year - 1
+    pair = ((first_year, first_month, first), (year, month, day))
+    try:
+        for value in pair:
+            if value[0]:
+                date(*value)
+    except ValueError:
+        return None
+    return pair
+
+
 def tokens(text):
-    """Return every number, date, year, level, release horizon and time in
-    a text, in the order they appear. Hospital codes, the 4-week moving
-    average's name and the 80% and 95% range labels are not figures."""
+    """Return every number, date, year, level, release horizon, count of
+    weeks, week label and time in a text, in the order they appear.
+    Hospital codes, the moving average's name, the 80% and 95% range labels
+    and COVID-19 are not figures, and the two fixed forms that name another
+    level are read whole."""
     found = []
     work = text
+    for m in DAY_RANGE.finditer(work):
+        pair = _day_range(m)
+        if pair is None:
+            continue
+        found.append(Token("date", m.group("d1"), m.start(), pair[0]))
+        found.append(
+            Token("date", text[m.start("d") : m.end()], m.start("d"), pair[1])
+        )
+        work = _blank(work, m.start(), m.end())
     for pattern in DATE_PATTERNS:
         for m in pattern.finditer(work):
             mon = m.groupdict().get("mon")
@@ -143,11 +206,18 @@ def tokens(text):
     for pattern in VOCABULARY:
         for m in pattern.finditer(work):
             work = _blank(work, m.start(), m.end())
+    for m in CONDITIONAL_LEVEL.finditer(work):
+        found.append(Token("conditional level", m.group(0), m.start(), None))
+        work = _blank(work, m.start(), m.end())
     for kind, pattern in (("level", LEVEL), ("horizon", HORIZON)):
         for m in pattern.finditer(work):
             numbers = [int(n) for n in re.findall(r"\d+", m.group("n"))]
             value = numbers[0] if kind == "level" else numbers
             found.append(Token(kind, m.group(0), m.start(), value))
+            work = _blank(work, m.start(), m.end())
+    for kind, pattern in (("weeks", WEEKS), ("iso week", ISO_WEEK)):
+        for m in pattern.finditer(work):
+            found.append(Token(kind, m.group(0), m.start(), int(m.group("n"))))
             work = _blank(work, m.start(), m.end())
     for m in TIME.finditer(work):
         value = f"{int(m.group('h')):02d}:{m.group('m')}"
@@ -210,6 +280,9 @@ class CodeSet(BaseModel):
     numbers: frozenset[float]
     dates: frozenset[date]
     times: frozenset[str]
+    # How many weeks the action covers, the only count of weeks its
+    # notification may state.
+    week_count: int
 
     @classmethod
     def for_action(cls, level, deadline, weeks):
@@ -218,6 +291,7 @@ class CodeSet(BaseModel):
             numbers=frozenset({float(level)}),
             dates=frozenset({deadline.date(), *weeks}),
             times=frozenset({deadline.strftime("%H:%M")}),
+            week_count=len(weeks),
         )
 
 
@@ -274,7 +348,7 @@ def _date_known(value, known):
     year, month, day = value
     return any(
         (year is None or d.year == year)
-        and d.month == month
+        and (month is None or d.month == month)
         and (day is None or d.day == day)
         for d in known
     )
@@ -394,17 +468,62 @@ def _texts(item):
         yield f"watch_points[{i}]", point
 
 
-def _token_failure(t, *, level, known, allowed_times):
+# The Investigator prompt's own rule, quoted when a brief names another
+# level, so the retry says why.
+LEVEL_RULE = (
+    "the Investigator's prompt says \"you never state any level other than "
+    'the one you are given"'
+)
+
+
+@dataclass(frozen=True)
+class Allowed:
+    """What a text may state beyond its figures.
+
+    dates are the full dates it may state; outlook is the narrower set whose
+    years and ISO weeks a bare year or a "week 26" label may name; weeks are
+    the counts of weeks it may state, as in "the next 4 weeks"."""
+
+    level: int
+    dates: frozenset
+    outlook: frozenset
+    weeks: frozenset = frozenset({1, 2, 3, 4})
+    times: frozenset = frozenset()
+    conditional_levels: bool = False
+    level_rule: str = ""
+
+
+def _token_failure(t, allowed):
+    level = allowed.level
     if t.kind == "level" and t.value != level:
-        return f"it states {t.text}, but the rule's level is {level}"
+        rule = f"; {allowed.level_rule}" if allowed.level_rule else ""
+        return f"it states {t.text}, but the rule's level is {level}{rule}"
+    if t.kind == "conditional level" and not allowed.conditional_levels:
+        return f"{t.text}: this text may state only its own level, {level}"
     if t.kind == "horizon" and any(n < 1 or n > 4 for n in t.value):
         return f"{t.text}: release horizons run from 1 to 4"
-    if t.kind == "date" and not _date_known(t.value, known):
+    if t.kind == "weeks" and t.value not in allowed.weeks:
+        counts = " or ".join(str(n) for n in sorted(allowed.weeks)) or "no"
+        return f"{t.text}: it may state {counts} weeks only"
+    if t.kind == "iso week" and t.value not in {
+        d.isocalendar()[1] for d in allowed.outlook
+    }:
+        return f"{t.text}: no week this text covers is week {t.value}"
+    if t.kind == "date" and not _date_known(t.value, allowed.dates):
         return f"{t.text}: no tool returned this date for this hospital"
-    if t.kind == "year" and not _date_known((t.value, None, None), known):
-        return f"{t.text}: no tool returned a date in this year"
-    if t.kind == "time" and t.value not in allowed_times:
+    if t.kind == "year" and t.value not in {d.year for d in allowed.outlook}:
+        return f"{t.text}: no week this text covers falls in {t.value}"
+    if t.kind == "time" and t.value not in allowed.times:
         return f"{t.text}: no time was set for this action"
+    return None
+
+
+def _figure_week(fig, call, targets):
+    """The week a passing cited figure is for, if it names one."""
+    if fig.week is not None:
+        return fig.week
+    if call.name == "get_forecast" and fig.horizon is not None:
+        return targets[fig.horizon - 1]
     return None
 
 
@@ -434,6 +553,14 @@ def check_brief(brief, ledger, rule_level):
             )
         )
     by_id = {c.id: c for c in ledger}
+    # The brief's code-set dates: its origin, release, latch date and the
+    # four weeks ahead, which the screen tells the Investigator.
+    targets = [w.date() for w in release_horizon_weeks(brief.week)]
+    outlook = {
+        d
+        for d in (brief.week, brief.release_date, brief.latched_since)
+        if d is not None
+    } | set(targets)
     good, bad = [], []
     for i, fig in enumerate(brief.cited_figures):
         problem = _figure_problem(fig, by_id, brief.hospital, brief.week)
@@ -446,17 +573,19 @@ def check_brief(brief, ledger, rule_level):
                     reason=problem,
                 )
             )
-        else:
-            good.append(plain(fig.value))
-    # The brief's code-set dates: its origin, release, latch date and the
-    # four weeks ahead, which the screen tells the Investigator.
-    targets = [w.date() for w in release_horizon_weeks(brief.week)]
-    known = ledger_dates(ledger, brief.hospital, brief.week) | {
-        d
-        for d in (brief.week, brief.release_date, brief.latched_since)
-        if d is not None
-    }
-    known |= set(targets)
+            continue
+        good.append(plain(fig.value))
+        week = _figure_week(fig, by_id[fig.tool_call_id], targets)
+        if week is not None:
+            outlook.add(week)
+    known = ledger_dates(ledger, brief.hospital, brief.week) | outlook
+    allowed = Allowed(
+        level=rule_level,
+        dates=frozenset(known),
+        outlook=frozenset(outlook),
+        conditional_levels=True,
+        level_rule=LEVEL_RULE,
+    )
     numbers = dates = 0
     for field, text in _texts(brief):
         for t in tokens(text):
@@ -474,9 +603,7 @@ def check_brief(brief, ledger, rule_level):
                 )
                 continue
             dates += t.kind in ("date", "year")
-            reason = _token_failure(
-                t, level=rule_level, known=known, allowed_times=()
-            )
+            reason = _token_failure(t, allowed)
             if reason:
                 failures.append(
                     Failure(field=field, found=t.text, reason=reason)
@@ -508,14 +635,21 @@ def check_notification(message, ledger, hospital, origin, code):
     -------
     CheckResult
     """
-    allowed = ledger_numbers(ledger, hospital, origin) | set(code.numbers)
-    known = ledger_dates(ledger, hospital, origin) | set(code.dates)
+    values = ledger_numbers(ledger, hospital, origin) | set(code.numbers)
+    known = frozenset(ledger_dates(ledger, hospital, origin) | code.dates)
+    allowed = Allowed(
+        level=code.level,
+        dates=known,
+        outlook=known,
+        weeks=frozenset({code.week_count}),
+        times=code.times,
+    )
     failures = []
     numbers = dates = 0
     for t in tokens(message):
         if t.kind == "number":
             numbers += 1
-            if not any(within_rounding(t.text, v) for v in allowed):
+            if not any(within_rounding(t.text, v) for v in values):
                 failures.append(
                     Failure(
                         field="message",
@@ -526,12 +660,7 @@ def check_notification(message, ledger, hospital, origin, code):
                 )
             continue
         dates += t.kind in ("date", "year")
-        reason = _token_failure(
-            t,
-            level=code.level,
-            known=known,
-            allowed_times=code.times,
-        )
+        reason = _token_failure(t, allowed)
         if reason:
             failures.append(
                 Failure(field="message", found=t.text, reason=reason)

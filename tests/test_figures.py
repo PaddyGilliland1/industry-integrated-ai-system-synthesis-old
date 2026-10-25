@@ -520,3 +520,103 @@ def test_the_four_target_weeks_are_code_set_dates_of_the_brief():
     assert check(b).passed, reasons(check(b))
     later = brief(watch_points=["Check staffing for w/e 25 Jul 2021."])
     assert not check(later).passed
+
+
+# --- correct briefs pass (review P1-3) ---------------------------------------
+
+HISTORY_2020 = call(
+    "T7",
+    "get_history",
+    {"hospital": "T101H", "as_of": "2021-06-13", "weeks": 53},
+    {
+        "hospital": "T101H",
+        "as_of": "2021-06-13",
+        "weeks": [{"week_ending": "2020-06-14", "attendances": 812.0}],
+    },
+)
+
+
+def test_a_figure_after_release_horizon_n_and_a_comma_is_read_as_a_figure():
+    assert kinds("At release horizon 1, 1,120 attendances are forecast.") == [
+        ("horizon", "release horizon 1"),
+        ("number", "1,120"),
+    ]
+    assert kinds("At release horizon 1, 2.9% is SA-MA's error.") == [
+        ("horizon", "release horizon 1"),
+        ("number", "2.9"),
+    ]
+    assert [t.value for t in fg.tokens("release horizons 1, 2 and 3")] == [
+        [1, 2, 3]
+    ]
+
+
+def test_a_figure_after_release_horizon_n_passes_when_cited():
+    b = brief(
+        summary="At release horizon 1, 1,120 attendances are forecast.",
+        expected_range=(
+            "Release horizon 1, 1,120 (SA-MA); release horizon 2, 1,150."
+        ),
+        cited_figures=[
+            fig(1120.3, "T1", "SA-MA", 1),
+            fig(1150.42, "T1", "SA-MA", 2),
+        ],
+    )
+    result = check(b)
+    assert result.passed, reasons(result)
+
+
+def test_a_bare_year_passes_when_the_outlook_or_a_cited_week_covers_it():
+    ledger = [*LEDGER, HISTORY_2020]
+    b = brief(
+        summary="The week ending 14 Jun 2020 saw 812, the same week of 2020.",
+        model_agreement="The outlook runs into July 2021, in 2021.",
+        cited_figures=[fig(812, "T7", week=date(2020, 6, 14))],
+    )
+    result = check(b, ledger=ledger)
+    assert result.passed, reasons(result)
+    uncovered = brief(summary="Demand rose in 2019.")
+    assert "2019" in reasons(check(uncovered, ledger=ledger))
+
+
+def test_week_counts_up_to_four_and_range_and_model_labels_are_wording():
+    b = brief(
+        summary="Check cover for the next 4 weeks.",
+        expected_range="The 80 per cent and 95 per cent ranges are wide.",
+        model_agreement="Trust the 4-week average less; a 2-week view agrees.",
+        watch_points=["Watch week 26, after the COVID-19 period."],
+    )
+    result = check(b)
+    assert result.passed, reasons(result)
+    assert not check(brief(summary="Check the next 6 weeks.")).passed
+    assert not check(brief(summary="Watch week 30.")).passed
+
+
+def test_the_fixed_conditional_level_wording_passes_in_a_level_2_brief():
+    b = brief(
+        summary="Levels 3 and 4 come only from a surge.",
+        watch_points=["Check whether level 3 actions apply."],
+    )
+    result = check(b)
+    assert result.passed, reasons(result)
+
+
+def test_any_other_level_fails_quoting_the_prompts_rule():
+    result = check(brief(summary="This is a level 3 week."))
+    assert not result.passed
+    assert "never state any level other than the one you are given" in (
+        reasons(result)
+    )
+
+
+def test_a_range_of_days_reads_the_first_day_in_its_own_month():
+    found = fg.tokens("from 27 to 18 Jul 2021")
+    assert [(t.kind, t.value) for t in found] == [
+        ("date", (2021, 6, 27)),
+        ("date", (2021, 7, 18)),
+    ]
+    assert [t.value for t in fg.tokens("from 4 to 18 Jul 2021")] == [
+        (2021, 7, 4),
+        (2021, 7, 18),
+    ]
+    b = brief(watch_points=["Check cover from 27 to 18 Jul 2021."])
+    assert check(b).passed, reasons(check(b))
