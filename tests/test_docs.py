@@ -34,7 +34,7 @@ def test_no_name_appears_and_none_is_asked_for(doc):
 
 
 def test_no_em_or_en_dash(doc):
-    assert not re.search("[–—]", doc)
+    assert not re.search("[\u2013\u2014]", doc)
 
 
 def test_the_sheet_fits_one_page_in_plain_sentences():

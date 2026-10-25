@@ -243,4 +243,4 @@ def test_the_texts_are_shown_in_a_hidden_order_fixed_by_a_seed():
 
 def test_the_template_text_holds_no_em_or_en_dash(demand, latch, surge):
     for t in (demand, latch, surge):
-        assert not re.search("[–—]", t.text())
+        assert not re.search("[\u2013\u2014]", t.text())
