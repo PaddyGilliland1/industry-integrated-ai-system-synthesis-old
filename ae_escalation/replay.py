@@ -256,6 +256,10 @@ class Paths:
         return self._approvals("adequacy", ".csv")
 
     @property
+    def adequacy_record(self):
+        return self._approvals("adequacy_record", ".md")
+
+    @property
     def outbox(self):
         name = f"notifications_{self.backend}_{self.label}.jsonl"
         return self.base / "outbox" / name

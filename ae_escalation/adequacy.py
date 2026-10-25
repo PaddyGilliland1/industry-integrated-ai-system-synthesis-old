@@ -4,12 +4,16 @@ brief existed (build spec, section 2, item 5).
 A brief is adequate if it passes the code figure check and meets at least 5
 of the 6 approval criteria, as the main session's reviewer judges it. The
 approver never scores it, so the approval stays independent. Code fills in
-the code check; the reviewer marks the six criteria on the form this module
-writes. Fewer than 6 of the 7 local briefs adequate after one bounded
-prompt-tuning round is the stated case for running the frontier backend,
-once, on the same replay set. The result, either way, is recorded in
-approvals/ with the briefs and criteria that failed, before the approver
-reads any brief.
+the brief's status; the reviewer marks the six criteria on the form this
+module writes. A brief counts only when its status is verified: one that
+passed the code check but failed the wording check twice can never be
+approved, so it cannot count towards 6 of 7 (review P2-6). Fewer than 6 of
+the 7 local briefs adequate after one bounded prompt-tuning round is the
+stated case for running the frontier backend, once, on the same replay set.
+The result, either way, is recorded in approvals/ with the briefs and
+criteria that failed, before the approver reads any brief; the live
+command releases the approver's queue only once this record sends the set
+to approval.
 """
 
 import csv
@@ -30,10 +34,15 @@ def code_check_passed(outcome):
     return bool(last and last.check and last.check.passed)
 
 
-def is_adequate(code_ok, criteria):
-    """The adequacy rule: the code check passed and at least 5 of the 6
-    criteria met."""
-    return code_ok and criteria.count() >= THRESHOLD_CRITERIA
+def verified(outcome):
+    """Whether the brief passed both checks, so it could be approved."""
+    return outcome.status == "verified"
+
+
+def is_adequate(is_verified, criteria):
+    """The adequacy rule: the brief verified, its code check passed among
+    its checks, and at least 5 of the 6 criteria met."""
+    return is_verified and criteria.count() >= THRESHOLD_CRITERIA
 
 
 class BriefScore(BaseModel):
@@ -52,7 +61,7 @@ class BriefAdequacy(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     brief_id: str
-    code_check_passed: bool
+    verified: bool
     criteria_met: int
     unmet: list[str]
     adequate: bool
@@ -71,6 +80,9 @@ class AdequacyRecord(BaseModel):
     adequate: int
     total: int
     frontier_case: bool
+    # True when this set goes to the approver: the local set with 6 of 7
+    # adequate. A frontier set waits for the approver's choice of set.
+    to_approval: bool
     verdict: str
 
 
@@ -113,9 +125,12 @@ def write_form(result, paths):
         "form, so the approval stays independent.",
         "",
         "A brief is adequate if it passes the code figure check and meets at "
-        "least 5 of the 6 approval criteria. Code has filled in the code "
-        "check. Mark each criterion yes or no in the scores sheet, "
-        f"`{paths.adequacy_scores.name}`, one row per brief.",
+        "least 5 of the 6 approval criteria. Only a verified brief counts, "
+        "since only a verified brief can be approved. Code has filled in "
+        "each brief's status. Mark each criterion yes or no in the scores "
+        f"sheet, `{paths.adequacy_scores.name}`, one row per brief, then run "
+        "`python -m ae_escalation.live adequacy --label "
+        f"{paths.label}` to record the verdict.",
         "",
         "Fewer than 6 of the 7 briefs adequate after one bounded "
         "prompt-tuning round is the stated case for running the frontier "
@@ -127,7 +142,7 @@ def write_form(result, paths):
     paths.adequacy_form.write_text("\n".join(lines), encoding="utf-8")
     fields = [
         "brief_id",
-        "code_check",
+        "status",
         *[c.field for c in CRITERIA],
         "reviewer",
         "scored_at",
@@ -138,12 +153,7 @@ def write_form(result, paths):
         writer.writeheader()
         for outcome in result.outcomes:
             writer.writerow(
-                {
-                    "brief_id": outcome.run_id,
-                    "code_check": (
-                        "passed" if code_check_passed(outcome) else "failed"
-                    ),
-                }
+                {"brief_id": outcome.run_id, "status": outcome.status}
             )
     return paths.adequacy_form
 
@@ -195,19 +205,19 @@ def assess(result, scores, round, label):
     briefs = []
     for o in result.outcomes:
         c = by_id[o.run_id].criteria
-        code_ok = code_check_passed(o)
+        ok = verified(o)
         briefs.append(
             BriefAdequacy(
                 brief_id=o.run_id,
-                code_check_passed=code_ok,
+                verified=ok,
                 criteria_met=c.count(),
                 unmet=[x.name for x in CRITERIA if not getattr(c, x.field)],
-                adequate=is_adequate(code_ok, c),
+                adequate=is_adequate(ok, c),
             )
         )
     adequate = sum(b.adequate for b in briefs)
     total = len(briefs)
-    case = False
+    case = to_approval = False
     if result.backend == "frontier":
         verdict = (
             f"{adequate} of {total} adequate on the frontier backend. Both "
@@ -215,6 +225,7 @@ def assess(result, scores, round, label):
             "which goes to approval."
         )
     elif adequate >= THRESHOLD_BRIEFS:
+        to_approval = True
         verdict = (
             f"{adequate} of {total} adequate: the local briefs go to "
             "approval, and the frontier backend does not run."
@@ -240,6 +251,7 @@ def assess(result, scores, round, label):
         adequate=adequate,
         total=total,
         frontier_case=case,
+        to_approval=to_approval,
         verdict=verdict,
     )
 
@@ -247,8 +259,7 @@ def assess(result, scores, round, label):
 def write_record(record, paths):
     """Record the adequacy test's result in approvals/, with the briefs
     and criteria that failed; an existing record is never written over."""
-    name = f"adequacy_record_{record.backend}_{record.label}.md"
-    path = paths.base / "approvals" / name
+    path = paths.adequacy_record
     if path.exists():
         raise FileExistsError(f"{path} exists; it is never replaced")
     lines = [
@@ -257,11 +268,14 @@ def write_record(record, paths):
         "",
         record.verdict,
         "",
-        "| Brief | Code check | Criteria met | Not met | Adequate |",
+        f"Frontier case: {'yes' if record.frontier_case else 'no'}",
+        f"Goes to approval: {'yes' if record.to_approval else 'no'}",
+        "",
+        "| Brief | Status | Criteria met | Not met | Adequate |",
         "|---|---|---|---|---|",
     ]
     lines += [
-        f"| {b.brief_id} | {'passed' if b.code_check_passed else 'failed'} "
+        f"| {b.brief_id} | {'verified' if b.verified else 'not verified'} "
         f"| {b.criteria_met} of 6 | {', '.join(b.unmet) or 'none'} "
         f"| {'yes' if b.adequate else 'no'} |"
         for b in record.briefs
@@ -269,3 +283,13 @@ def write_record(record, paths):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
+
+
+def record_says(path):
+    """The record's two verdict lines, read back: whether it states the
+    frontier case and whether its set goes to approval."""
+    text = path.read_text(encoding="utf-8")
+    return {
+        "frontier_case": "Frontier case: yes" in text,
+        "to_approval": "Goes to approval: yes" in text,
+    }

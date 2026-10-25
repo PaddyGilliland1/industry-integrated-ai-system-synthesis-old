@@ -1,12 +1,16 @@
 """The live run of the replay set, for the main session.
 
-    python -m ae_escalation.live briefs [--label round1]
-    python -m ae_escalation.live notify [--label round1]
+    python -m ae_escalation.live briefs [--label round1] [--resume]
+    python -m ae_escalation.live adequacy [--label round1] [--round 1]
+    python -m ae_escalation.live notify [--label round1] [--resume]
 
 "briefs" runs the seven replay briefs and the designed failure on the
 backend config.json names, recording every model call, then writes the
-approval queue for Paddy and the adequacy form for the main session's
-reviewer. "notify" runs after Paddy's decisions are in
+adequacy form and scores sheet for the main session's reviewer. "adequacy"
+reads the reviewer's scores, records the adequacy test in approvals/ and,
+only when the verdict sends the set to approval, releases the approval
+queue for Paddy, so the record exists before he reads any brief.
+"notify" runs after Paddy's decisions are in
 approvals/decisions_<backend>_<label>.csv: the coordinator drafts the
 notifications for the approved briefs, live, and writes them to the outbox,
 which is never sent. Each run is held to its time budget, checked before
@@ -31,7 +35,7 @@ from pathlib import Path
 
 from . import data as dt
 from . import design as ds
-from .adequacy import write_form
+from .adequacy import assess, read_scores, write_form, write_record
 from .approval import CRITERIA
 from .config import CONFIG_PATH, ENV_PATH, REPO, frontier_key, load_config
 from .gateway import _fetch_json, check_local_model, make_chat_model
@@ -124,7 +128,6 @@ def _briefs(settings, paths, model, digest, resume):
         )
     except BudgetExceeded as exc:
         return _stopped(exc, paths, "briefs")
-    write_queue(result, paths)
     write_form(result, paths)
     caught = result.planted.planted_caught
     print(
@@ -141,9 +144,41 @@ def _briefs(settings, paths, model, digest, resume):
         + (f", in attempt {result.planted.planted_attempt}" if caught else "")
     )
     print(f"recordings: {paths.briefs}")
-    print(f"approval queue: {paths.queue_csv}")
     print(f"adequacy form for the reviewer: {paths.adequacy_form}")
+    print(
+        "the approval queue is released by `python -m ae_escalation.live "
+        f"adequacy --label {paths.label}` once the verdict sends the set to "
+        "approval"
+    )
     return 0 if caught is True else 1
+
+
+def _adequacy(settings, paths, round_):
+    """Record the adequacy test from the reviewer's scores, and release the
+    approver's queue only when the verdict sends this set to approval
+    (review P2-6). It calls no model."""
+    record_path = paths.adequacy_record
+    if record_path.exists():
+        print(f"{record_path} exists; it is never replaced")
+        return 2
+    if not paths.adequacy_scores.exists():
+        print(f"no scores yet: the reviewer fills {paths.adequacy_scores}")
+        return 2
+    try:
+        scores = read_scores(paths.adequacy_scores)
+    except ValueError as exc:
+        print(f"the scores sheet is not complete: {exc}")
+        return 2
+    run, holidays = load_run(settings)
+    result = run_set(run, holidays, settings, paths, live=False)
+    record = assess(result, scores, round_, paths.label)
+    write_record(record, paths)
+    print(record.verdict)
+    print(f"record: {record_path}")
+    if record.to_approval:
+        write_queue(result, paths)
+        print(f"approval queue released: {paths.queue_csv}")
+    return 0
 
 
 def _notify(settings, paths, model, digest, resume):
@@ -185,7 +220,7 @@ def main(
         prog="python -m ae_escalation.live",
         description="Run the replay set live on the configured backend.",
     )
-    parser.add_argument("command", choices=("briefs", "notify"))
+    parser.add_argument("command", choices=("briefs", "adequacy", "notify"))
     parser.add_argument("--label", default="round1")
     parser.add_argument("--out", default=str(REPO))
     parser.add_argument("--config", default=str(CONFIG_PATH))
@@ -194,10 +229,19 @@ def main(
         action="store_true",
         help="take up a run that stopped at its time budget",
     )
+    parser.add_argument(
+        "--round",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="adequacy: 2 after the one bounded prompt-tuning round",
+    )
     args = parser.parse_args(argv)
     settings = load_config(args.config)
     paths = Paths.under(args.out, settings.llm_backend, args.label)
     step = args.command
+    if step == "adequacy":
+        return _adequacy(settings, paths, args.round)
     recorded = paths.briefs if step == "briefs" else paths.notify
     started = any(e.get("step") == step for e in progress(paths))
     if args.resume and not can_resume(paths, step):

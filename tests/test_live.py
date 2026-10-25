@@ -39,15 +39,60 @@ def briefs(tmp_path, fetch, label="t1"):
     )
 
 
-def test_the_briefs_command_records_the_set_and_writes_the_queue(
+def score_all(tmp_path, label="t1", unmet=0):
+    """The reviewer's scores: every criterion met, except two in the first
+    unmet briefs."""
+    sheet = tmp_path / "approvals" / f"adequacy_local_{label}.csv"
+    with open(sheet, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    for n, row in enumerate(rows):
+        row.update({c: "yes" for c in lv.CRITERIA_FIELDS})
+        if n < unmet:
+            row.update(disagreement_named="no", uncertainty_stated="no")
+        row.update(reviewer="main session", scored_at="2026-10-26T10:00:00")
+    with open(sheet, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def adequacy(tmp_path, label="t1", *extra):
+    return lv.main(
+        ["adequacy", "--label", label, "--out", str(tmp_path), *extra]
+    )
+
+
+def test_the_briefs_command_records_the_set_and_writes_the_form_only(
     tmp_path, pinned, capsys
 ):
     assert briefs(tmp_path, pinned) == 0
     rec = tmp_path / "recordings" / "local" / "t1"
     assert (rec / "briefs.jsonl").exists() and (rec / "audit.jsonl").exists()
-    assert (tmp_path / "approvals" / "queue_local_t1.csv").exists()
+    assert (tmp_path / "approvals" / "adequacy_local_t1.md").exists()
+    assert not (tmp_path / "approvals" / "queue_local_t1.csv").exists()
     shown = capsys.readouterr().out
     assert "7 briefs" in shown and "planted figure caught: yes" in shown
+
+
+def test_the_adequacy_command_records_the_verdict_and_releases_the_queue(
+    tmp_path, pinned, capsys
+):
+    assert briefs(tmp_path, pinned) == 0
+    score_all(tmp_path)
+    assert adequacy(tmp_path) == 0
+    record = tmp_path / "approvals" / "adequacy_record_local_t1.md"
+    assert "7 of 7 adequate" in record.read_text(encoding="utf-8")
+    assert (tmp_path / "approvals" / "queue_local_t1.csv").exists()
+    assert adequacy(tmp_path) == 2
+
+
+def test_a_set_sent_to_tuning_releases_no_queue(tmp_path, pinned):
+    assert briefs(tmp_path, pinned) == 0
+    score_all(tmp_path, unmet=2)
+    assert adequacy(tmp_path) == 0
+    record = tmp_path / "approvals" / "adequacy_record_local_t1.md"
+    assert "prompt-tuning round" in record.read_text(encoding="utf-8")
+    assert not (tmp_path / "approvals" / "queue_local_t1.csv").exists()
 
 
 def test_a_label_already_recorded_is_never_run_again(tmp_path, pinned):
@@ -66,6 +111,8 @@ def test_a_wrong_local_digest_stops_the_run_before_any_call(tmp_path, capsys):
 
 def test_notify_needs_the_approvers_decisions(tmp_path, pinned, capsys):
     assert briefs(tmp_path, pinned) == 0
+    score_all(tmp_path)
+    assert adequacy(tmp_path) == 0
     args = ["notify", "--label", "t1", "--out", str(tmp_path)]
     assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 2
     assert "decisions" in capsys.readouterr().out

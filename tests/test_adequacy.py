@@ -60,19 +60,19 @@ def test_the_form_lists_every_brief_with_its_code_check_and_criteria(
     form = paths.adequacy_form.read_text(encoding="utf-8")
     for o in result.outcomes:
         assert o.run_id in form
-    assert form.count("Code figure check: passed") == 7
+    assert form.count("Status: verified") == 7
     for c in ap.CRITERIA:
         assert c.name in form and c.test in form
     assert "main session's reviewer" in form
     assert "at least 5 of the 6" in form
 
 
-def test_the_scores_sheet_is_prefilled_with_the_code_check_only(result, paths):
+def test_the_scores_sheet_is_prefilled_with_the_status_only(result, paths):
     aq.write_form(result, paths)
     with open(paths.adequacy_scores, newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
     assert [r["brief_id"] for r in rows] == [o.run_id for o in result.outcomes]
-    assert {r["code_check"] for r in rows} == {"passed"}
+    assert {r["status"] for r in rows} == {"verified"}
     assert all(r[c.field] == "" for r in rows for c in ap.CRITERIA)
 
 
@@ -117,6 +117,7 @@ def test_six_of_seven_adequate_means_no_case_for_the_frontier(result):
     unmet = {first: ("disagreement_named", "uncertainty_stated")}
     record = aq.assess(result, scores(result, unmet), round=1, label="round1")
     assert record.adequate == 6 and not record.frontier_case
+    assert record.to_approval
     assert "frontier backend does not run" in record.verdict
 
 
@@ -155,6 +156,35 @@ def test_a_brief_that_failed_the_code_check_is_never_adequate(result):
     failed = result.planted.model_copy(update={"run_id": "x"})
     first = failed.attempts[0]
     assert not first.check.passed
-    assert not aq.code_check_passed(
-        failed.model_copy(update={"attempts": [first]})
+    assert not aq.verified(
+        failed.model_copy(
+            update={"attempts": [first], "status": "not verified"}
+        )
     )
+
+
+def test_a_brief_not_verified_is_never_adequate_even_past_the_code_check(
+    result,
+):
+    # Passed the code check, failed the wording check twice: it can never
+    # be approved, so it cannot count towards 6 of 7 (review P2-6).
+    worded = result.outcomes[0].model_copy(update={"status": "not verified"})
+    assert worded.attempts[-1].check.passed
+    swapped = result.model_copy(
+        update={"outcomes": [worded, *result.outcomes[1:]]}
+    )
+    record = aq.assess(swapped, scores(swapped), round=1, label="round1")
+    first = record.briefs[0]
+    assert not first.verified and not first.adequate
+    assert record.adequate == 6 and record.to_approval
+
+
+def test_the_record_says_whether_the_set_goes_to_approval(result, paths):
+    two = {
+        o.run_id: ("disagreement_named", "uncertainty_stated")
+        for o in result.outcomes[:2]
+    }
+    tuning = aq.assess(result, scores(result, two), round=1, label="round1")
+    assert not tuning.to_approval and not tuning.frontier_case
+    text = aq.write_record(tuning, paths).read_text(encoding="utf-8")
+    assert "Frontier case: no" in text and "Goes to approval: no" in text
