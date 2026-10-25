@@ -523,3 +523,16 @@ def test_a_sheet_saved_in_the_wrong_encoding_is_named(tmp_path):
     sheet.write_bytes("brief_id,action,note\nx,approve,£5\n".encode("cp1252"))
     with pytest.raises(ValueError, match="CSV UTF-8"):
         ap.read_decisions(sheet)
+
+
+def test_the_pre_run_check_is_the_first_entry_in_the_audit_log(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    first = json.loads(paths.audit.read_text().splitlines()[0])
+    assert first["kind"] == "pre-run check"
+    assert first["total"] == 7 and first["matches_probe"] is True
+    assert first["by_source"] == {"latch": 4, "demand": 2, "surge": 1}

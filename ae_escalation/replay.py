@@ -373,10 +373,13 @@ def run_set(
         was recorded on another model digest.
     """
     check = pre_run_check(run)
-    if not check["matches_probe"]:
-        raise PreRunMismatch(f"the built rules give {check}, not {EXPECTED}")
     if log is None:
         log = AuditLog(paths.audit) if live else AuditLog()
+    # The recount is logged before any agent runs, so the live run's own
+    # record holds it, not the notebook's output alone (review P3-14).
+    log.write(kind="pre-run check", **check)
+    if not check["matches_probe"]:
+        raise PreRunMismatch(f"the built rules give {check}, not {EXPECTED}")
     if live and budget is None:
         budget = Budget(settings.agents.run_budget_s)
     gateway = ModelGateway.for_settings(
