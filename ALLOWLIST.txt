@@ -18,3 +18,5 @@ tests/test_timing.py
 .flake8
 ae_escalation/forecasts.py
 tests/test_forecasts.py
+ae_escalation/backtest.py
+tests/test_backtest.py
