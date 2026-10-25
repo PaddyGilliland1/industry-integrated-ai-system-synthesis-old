@@ -84,3 +84,7 @@ def test_the_sheet_says_what_the_figure_check_proves_and_no_more():
     assert "already checked every figure" not in text
     assert "checked against its source" in text
     assert "does not judge" in text
+    # Each figure carries a label saying what it is, which the reader can
+    # hold the sentence to.
+    assert "label in brackets saying what it is" in text
+    assert "calls a figure something its label does not" in text

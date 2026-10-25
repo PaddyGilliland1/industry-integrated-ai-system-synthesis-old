@@ -6,7 +6,7 @@ You are Reader B. Please do not write your name on anything you return.
 
 A computer system writes a short weekly note, the demand brief, for the manager who staffs a Scottish emergency department's front door. It helps decide whether extra shifts, bank staff or held leave are needed. You will read past weeks, replayed as if live. Nothing was sent; a person approves every note before anyone acts.
 
-You did not build the system, so please work alone and discuss the notes with nobody until you finish.
+Please work alone, and discuss the notes with nobody until you finish.
 
 ## What the demand level means
 
@@ -21,7 +21,7 @@ Each note carries a demand level from 1 to 4, set by fixed rules, not by the wri
 
 Read each brief as the duty manager would. Mark each of the six criteria as met or not met:
 
-1. Figures correct. Code wrote each figure from a value it checked against its source and refused any figure beside another model or week, but does not judge the words around it. Mark it not met if a figure is marked NOT VERIFIED, two figures contradict each other, or one looks wrong to you.
+1. Figures correct. Each figure is followed by a label in brackets saying what it is. Code wrote each figure and its label from a value it checked against its source, but does not judge what a sentence says about it. Mark it not met if a figure is marked NOT VERIFIED, a sentence calls a figure something its label does not, two figures contradict each other, or one looks wrong to you.
 2. Uncertainty stated. The note gives a range, the hospital's own past forecast error and its track record.
 3. Model disagreement named. Where the forecasts disagree, the note says so, and says which to trust less and why.
 4. The level's meaning stated. The note makes clear the level is demand for the time of year, not pressure, need or priority.
@@ -31,7 +31,7 @@ Read each brief as the duty manager would. Mark each of the six criteria as met 
 Then tick one decision:
 
 - approve: you would act on the note as written;
-- edit: you would act on it after a change. Write the change in the notes, and say whether it alters a figure, a date, the hospital or the level, or corrects a fact;
+- edit: you would act on it after a change. Write the change in the notes, saying whether it alters a figure, date, hospital or level, or corrects a fact;
 - reject: you would not act on it.
 
 ## How to rate each pair
@@ -40,4 +40,4 @@ Mark each text in a pair against the same six criteria, and say whether you foun
 
 ## Good to know
 
-There are no right answers, and no note is about any patient. You will not see anyone else's ratings, and nobody sees yours until you finish. The task takes about 45 minutes. Then return the form.
+There are no right answers, and no note is about any patient. Nobody sees your ratings until you finish. It takes about 45 minutes; then return the form.
