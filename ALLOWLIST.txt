@@ -41,3 +41,6 @@ ae_escalation/config.py
 tests/test_config.py
 ae_escalation/gateway.py
 tests/test_gateway.py
+ae_escalation/briefs.py
+ae_escalation/figures.py
+tests/test_figures.py
