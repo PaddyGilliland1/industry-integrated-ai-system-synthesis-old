@@ -191,3 +191,14 @@ def test_dot_env_is_git_ignored_and_never_tracked():
         text=True,
     ).stdout.split()
     assert not any(p == ".env" or p.startswith(".env.") for p in tracked)
+
+
+def test_the_template_pairs_order_has_its_own_seed():
+    s = cf.load_config(REPO / "config.json").seeds
+    assert s.template_order == 20261025
+
+
+def test_the_secret_scan_ignores_image_data_but_not_an_aws_key_id():
+    assert not cf.secret_like('"image/png": "iVBORaKiAp98shQAMG7cY4iMN"')
+    assert cf.secret_like("AKIA" + "ABCDEFGHIJKLMNOP")
+    assert cf.secret_like('{"API_KEY": "abcdefgh12345"}')

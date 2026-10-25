@@ -38,15 +38,16 @@ ENV_PATH = REPO / ".env"
 # The reasoning efforts Ollama's OpenAI-compatible endpoint names.
 REASONING_EFFORTS = ("none", "low", "medium", "high")
 # Shapes that real keys and tokens take, for the secret scan. A config
-# value names a variable, which none of these match.
+# value names a variable, which none of these match. The shapes are case
+# sensitive, as the keys are, so base64 image data in the notebook does not
+# match by chance; only a JSON key's name ignores case.
 SECRET_SHAPES = re.compile(
     r"sk-[A-Za-z0-9_\-]{16,}"
     r"|AKIA[0-9A-Z]{16}"
     r"|gh[pousr]_[A-Za-z0-9]{20,}"
     r"|xox[abprs]-[A-Za-z0-9\-]{10,}"
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
-    r'|"(?:api_?key|token|password|secret)"\s*:\s*"[^"]{8,}"',
-    re.IGNORECASE,
+    r'|"(?i:api_?key|token|password|secret)"\s*:\s*"[^"]{8,}"'
 )
 
 
@@ -150,6 +151,8 @@ class Seeds(_Frozen):
     data_test_intervals: int
     data_test_paired: int
     acknowledgements: int
+    # The hidden order of the template comparison's pairs.
+    template_order: int
 
 
 class Settings(_Frozen):

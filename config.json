@@ -40,6 +40,7 @@
     "bootstrap": 0,
     "data_test_intervals": 1,
     "data_test_paired": 2,
-    "acknowledgements": 20261025
+    "acknowledgements": 20261025,
+    "template_order": 20261025
   }
 }
