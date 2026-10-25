@@ -22,7 +22,8 @@ live.
 
 Before any model call it checks the backend: for local, that Ollama on this
 machine holds the model at its pinned digest, and it prints nvidia-smi; for
-frontier, that a key is set in the git-ignored .env, which it never prints.
+frontier, that a key is set in the git-ignored .env, never the shell's
+environment, and it names that file but never prints the key.
 A label already recorded is never run again, so no recording is replaced;
 a second round, such as after the one prompt-tuning round, takes a new
 label. The frontier backend runs the set only with the stated case: the
@@ -96,7 +97,7 @@ def gpu_status():
     return out.stdout.strip() or out.stderr.strip()
 
 
-def preflight(settings, fetch, env_file, environ):
+def preflight(settings, fetch, env_file):
     """Check the backend before any model call; return what to print and
     the model digest observed, which every request then records (None for
     the frontier model, which cannot be pinned the same way)."""
@@ -107,10 +108,10 @@ def preflight(settings, fetch, env_file, environ):
             "GPU (the Ollama server should run with CUDA_VISIBLE_DEVICES=0):",
             gpu_status(),
         ], digest
-    frontier_key(settings, env_file, environ)
+    frontier_key(settings, env_file)
     return [
-        f"backend: frontier, {settings.frontier.model}; the key is set in "
-        f"{settings.frontier.api_key_env} (not shown)"
+        f"backend: frontier, {settings.frontier.model}; the key is read from "
+        f"{settings.frontier.api_key_env} in {env_file} (not shown)"
     ], None
 
 
@@ -300,7 +301,6 @@ def main(
     chat_model=None,
     fetch=_fetch_json,
     env_file=ENV_PATH,
-    environ=None,
 ):
     """Run one live step; return the exit code. chat_model stands in for
     the backend's model in tests."""
@@ -359,13 +359,13 @@ def main(
         )
         return 2
     try:
-        lines, digest = preflight(settings, fetch, env_file, environ)
+        lines, digest = preflight(settings, fetch, env_file)
     except RuntimeError as exc:
         print(f"stopped before any model call: {exc}")
         return 2
     for line in lines:
         print(line)
-    model = chat_model or make_chat_model(settings, env_file, environ)
+    model = chat_model or make_chat_model(settings, env_file)
     if step == "briefs":
         return _briefs(settings, paths, model, digest, args.resume)
     return _notify(settings, paths, model, digest, args.resume)

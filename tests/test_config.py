@@ -150,22 +150,22 @@ def test_the_frontier_key_is_read_from_the_env_file(tmp_path, raw):
         f'# the frontier key\nOTHER=1\nANTHROPIC_API_KEY="{FAKE_KEY}"\n',
         encoding="utf-8",
     )
-    assert cf.frontier_key(s, env_file=env, environ={}) == FAKE_KEY
+    assert cf.frontier_key(s, env_file=env) == FAKE_KEY
 
 
-def test_the_frontier_key_falls_back_to_the_environment(tmp_path, raw):
+def test_a_key_exported_in_the_shell_is_never_used(tmp_path, raw, monkeypatch):
+    # Spec 2.5 reads the key from .env only, so a shell's exported key can
+    # never bill another account without notice (review P3-1).
     s = cf.Settings.model_validate({**raw, "llm_backend": "frontier"})
-    missing = tmp_path / ".env"
-    got = cf.frontier_key(
-        s, env_file=missing, environ={"ANTHROPIC_API_KEY": FAKE_KEY}
-    )
-    assert got == FAKE_KEY
+    monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
+    with pytest.raises(RuntimeError, match=".env"):
+        cf.frontier_key(s, env_file=tmp_path / ".env")
 
 
 def test_a_missing_frontier_key_names_the_variable_not_a_value(tmp_path, raw):
     s = cf.Settings.model_validate({**raw, "llm_backend": "frontier"})
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY") as info:
-        cf.frontier_key(s, env_file=tmp_path / ".env", environ={})
+        cf.frontier_key(s, env_file=tmp_path / ".env")
     assert ".env" in str(info.value)
 
 
@@ -173,7 +173,7 @@ def test_the_settings_never_hold_the_key(tmp_path, raw):
     s = cf.Settings.model_validate({**raw, "llm_backend": "frontier"})
     env = tmp_path / ".env"
     env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
-    cf.frontier_key(s, env_file=env, environ={})
+    cf.frontier_key(s, env_file=env)
     assert FAKE_KEY not in s.model_dump_json()
     assert FAKE_KEY not in repr(s)
 

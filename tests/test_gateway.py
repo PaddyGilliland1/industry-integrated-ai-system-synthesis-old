@@ -286,7 +286,7 @@ def test_the_frontier_backend_is_the_claude_api_with_the_key_from_env(
 ):
     env = tmp_path / ".env"
     env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
-    model = gw.make_chat_model(frontier, env_file=env, environ={})
+    model = gw.make_chat_model(frontier, env_file=env)
     assert type(model).__name__ == "ChatAnthropic"
     assert model.model == "claude-sonnet-5-5"
     assert model.anthropic_api_key.get_secret_value() == FAKE_KEY
@@ -295,7 +295,7 @@ def test_the_frontier_backend_is_the_claude_api_with_the_key_from_env(
 
 def test_no_frontier_model_is_made_without_a_key(frontier, tmp_path):
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
-        gw.make_chat_model(frontier, env_file=tmp_path / ".env", environ={})
+        gw.make_chat_model(frontier, env_file=tmp_path / ".env")
 
 
 def test_the_frontier_key_never_reaches_a_recording_or_the_log(
@@ -303,7 +303,7 @@ def test_the_frontier_key_never_reaches_a_recording_or_the_log(
 ):
     env = tmp_path / ".env"
     env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
-    real = gw.make_chat_model(frontier, env_file=env, environ={})
+    real = gw.make_chat_model(frontier, env_file=env)
     log = gw.AuditLog(tmp_path / "audit.jsonl")
     g = gw.ModelGateway.for_settings(
         frontier,

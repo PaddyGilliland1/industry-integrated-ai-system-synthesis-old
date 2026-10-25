@@ -638,7 +638,7 @@ def parse_structured(message, schema, context=None):
 # --- the chat models behind the switch ---------------------------------------
 
 
-def make_chat_model(settings, env_file=ENV_PATH, environ=None):
+def make_chat_model(settings, env_file=ENV_PATH):
     """The configured backend's chat model, made only for a live run.
 
     Local is ChatOpenAI pointed at Ollama's OpenAI-compatible endpoint on
@@ -667,7 +667,7 @@ def make_chat_model(settings, env_file=ENV_PATH, environ=None):
         options["temperature"] = frontier.temperature
     return ChatAnthropic(
         model=frontier.model,
-        api_key=frontier_key(settings, env_file, environ),
+        api_key=frontier_key(settings, env_file),
         max_tokens=frontier.max_tokens,
         timeout=settings.agents.time_limit_s + 5,
         max_retries=0,

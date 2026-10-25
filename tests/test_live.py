@@ -178,6 +178,14 @@ def test_the_frontier_key_is_checked_and_never_printed(
         assert FAKE_KEY not in path.read_text(encoding="utf-8")
 
 
+def test_the_preflight_names_where_the_key_came_from_not_the_key(tmp_path):
+    settings = cf.load_config(frontier_config(tmp_path))
+    lines, digest = lv.preflight(settings, None, key_file(tmp_path))
+    shown = " ".join(lines)
+    assert str(tmp_path / ".env") in shown and "not shown" in shown
+    assert FAKE_KEY not in shown and digest is None
+
+
 def test_the_frontier_backend_stops_without_a_key(tmp_path, capsys, pinned):
     stated_case(tmp_path, "t1", pinned)
     capsys.readouterr()

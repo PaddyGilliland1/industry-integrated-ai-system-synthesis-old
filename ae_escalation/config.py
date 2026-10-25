@@ -6,10 +6,12 @@ Claude API, used only with a stated case from the adequacy test
 (D-FRAME-03). The graph, tools, schema and Reviewer are the same on either,
 so only the model changes.
 
-The file names the environment variable that holds the frontier key, never
-the key. The key is read only from a git-ignored .env (or the environment),
-at the moment a live frontier call needs it, and is never stored in the
-settings, logged or recorded.
+The file names the variable that holds the frontier key, never the key.
+The key is read only from the git-ignored .env, as spec 2.5 says, never
+from the shell's environment, so a key exported for something else cannot
+bill a frontier run without notice (review P3-1). It is read at the moment a
+live frontier call needs it, and is never stored in the settings, logged
+or recorded.
 
 I adapted the configuration model and the local-endpoint check from Agentic
 AI Systems (agentic_system.py, Settings, load_config, is_local_endpoint and
@@ -20,7 +22,6 @@ local model's messages never leave the machine. The backend choice and the
 
 import ipaddress
 import json
-import os
 import re
 from pathlib import Path
 from typing import Literal
@@ -202,8 +203,8 @@ def _env_file_value(path, name):
     return None
 
 
-def frontier_key(settings, env_file=ENV_PATH, environ=None):
-    """Return the frontier key, from the .env file or else the environment.
+def frontier_key(settings, env_file=ENV_PATH):
+    """Return the frontier key from the .env file.
 
     Called only when a live frontier call needs it. The key is returned to
     the caller and never kept, printed or logged here.
@@ -211,17 +212,13 @@ def frontier_key(settings, env_file=ENV_PATH, environ=None):
     Raises
     ------
     RuntimeError
-        Naming the variable, never a value, when no key is set.
+        Naming the variable and the file, never a value, when no key is set.
     """
     name = settings.frontier.api_key_env
     key = _env_file_value(env_file, name)
     if key:
         return key
-    environ = os.environ if environ is None else environ
-    key = environ.get(name)
-    if key:
-        return key
     raise RuntimeError(
-        f"the frontier backend needs {name}: put it in the git-ignored .env "
-        "file in the repository root"
+        f"the frontier backend needs {name} in the git-ignored .env file, "
+        f"{env_file}; a key in the shell's environment is not used"
     )
