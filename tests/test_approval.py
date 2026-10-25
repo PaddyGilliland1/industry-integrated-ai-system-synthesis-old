@@ -300,7 +300,7 @@ def test_the_queue_exports_to_csv_and_reads_the_decisions_back(
     assert d.decided_at == WHEN
 
 
-# --- the raters do not see the author (review P2-9) --------------------------
+# --- the raters do not see the author ----------------------------------------
 
 
 def test_the_queue_csv_shows_the_brief_without_its_author(verified, tmp_path):
@@ -314,7 +314,7 @@ def test_the_queue_csv_shows_the_brief_without_its_author(verified, tmp_path):
     assert verified.brief.backend == "local"
 
 
-# --- an opted-out run is labelled simulated (review P3-2) --------------------
+# --- an opted-out run is labelled simulated ----------------------------------
 
 
 def test_the_decisions_csv_has_a_simulated_column_read_back(
@@ -347,7 +347,7 @@ def test_the_decisions_csv_has_a_simulated_column_read_back(
     assert not ap.read_decisions(tmp_path / "g.csv")[0].simulated
 
 
-# --- the clock's zone and the decision's time (review P3-3) ------------------
+# --- the clock's zone and the decision's time --------------------------------
 
 
 def test_a_decision_time_without_a_zone_is_uk_time():
@@ -381,7 +381,7 @@ def test_a_decision_dated_before_the_run_started_is_refused(verified):
     assert q.decide(decide("nw", "approve")).state == "approved"
 
 
-# --- code detects a factual edit (review P3-4) -------------------------------
+# --- code detects a factual edit ---------------------------------------------
 
 
 def edited_copy(good, **fields):
@@ -443,7 +443,7 @@ def test_the_approver_may_still_declare_a_factual_edit(
     assert log.entries[-1]["factual_edit_by"] == "approver"
 
 
-# --- an edit faces the wording checks too (review P3-5) ----------------------
+# --- an edit faces the wording checks too ------------------------------------
 
 
 def test_an_edit_with_a_device_word_fails_in_code(verified, good, tmp_path):

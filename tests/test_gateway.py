@@ -377,7 +377,7 @@ def test_the_frontier_backend_asks_for_json_schema_structured_output(
         assert model.structured_kwargs == [want]
 
 
-# --- a failed call is recorded and replayed exactly (review P1-4) ------------
+# --- a failed call is recorded and replayed exactly --------------------------
 
 
 class Picky(Exception):
@@ -473,7 +473,7 @@ def test_a_call_past_the_time_limit_is_recorded_as_a_timeout(
     assert saved["error"]["class"] == "ae_escalation.gateway.CallTimeout"
 
 
-# --- the settings and the digest are pinned (review P2-3) --------------------
+# --- the settings and the digest are pinned ----------------------------------
 
 
 def test_the_request_record_holds_the_backend_settings_and_digest(
@@ -529,7 +529,7 @@ def test_a_replay_with_other_generation_settings_is_refused(
         call_once(replay)
 
 
-# --- the run's budget bounds each call, and a replayed error reads the same --
+# --- the budget bounds each call, and a replayed error reads the same -------
 
 
 def test_a_call_is_cut_at_the_budget_left_and_never_recorded(

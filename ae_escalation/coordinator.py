@@ -147,7 +147,7 @@ UK = ZoneInfo("Europe/London")
 def clock_start(release_date, start_hour):
     """The replay's clock: the release day at the assumed hour, UK time,
     Europe/London, so 10:00 is 10:00 on a ward clock in summer and winter
-    alike (review P3-3)."""
+    alike."""
     return datetime.combine(release_date, time(start_hour), tzinfo=UK)
 
 
@@ -241,6 +241,7 @@ class Notification(BaseModel):
 
     @model_validator(mode="after")
     def placeholders_only(self, info):
+        """The word and placeholder rules for this action."""
         context = info.context or {}
         found = ph.problems(
             {"message": self.message},
@@ -306,10 +307,12 @@ class ActionOutcome(BaseModel):
 
     @property
     def code(self):
+        """The action's code."""
         return self.action.code
 
     @property
     def state(self):
+        """The action's state now: its last step, or planned."""
         return self.history[-1].state if self.history else "planned"
 
 
@@ -323,7 +326,7 @@ class CoordinationResult(BaseModel):
     def summary(self):
         """A short table of the actions, for the notebook and the live
         command, with each held action's draft as the manager sees it, its
-        failing figures marked (review P3-6)."""
+        failing figures marked."""
         lines = []
         for a in self.actions:
             lines.append(
@@ -336,6 +339,7 @@ class CoordinationResult(BaseModel):
 
 
 def _action_lines(actions):
+    """Each action as the prompt lists it, with its tokens."""
     return "\n".join(
         f"- {a.code}: {a.task} Owner: {a.owner}. Weeks: {{WEEK1}} to "
         f"{{WEEK4}}. Reply deadline: {{DEADLINE}}, which code writes as "
@@ -396,6 +400,7 @@ class Coordinator:
     approved brief."""
 
     def __init__(self, settings, gateway, outbox, prompts=None, log=None):
+        """Hold the settings, gateway, outbox, prompts and log."""
         self.settings = settings
         self.gateway = gateway
         self.outbox = Path(outbox)
@@ -403,6 +408,7 @@ class Coordinator:
         self.log = log or gateway.log
 
     def _write(self, record):
+        """Append one record to the outbox file, and log it."""
         self.outbox.parent.mkdir(parents=True, exist_ok=True)
         with open(self.outbox, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, default=str) + "\n")

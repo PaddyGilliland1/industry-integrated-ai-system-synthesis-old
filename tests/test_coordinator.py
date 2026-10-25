@@ -134,7 +134,7 @@ def test_the_clock_starts_on_release_day_and_sets_each_deadline(
     assert {a.deadline for a in plan} == {
         datetime(2021, 6, 24, 10, 0, tzinfo=london)
     }
-    # British Summer Time: 10:00 in the UK is 09:00 UTC (review P3-3).
+    # British Summer Time: 10:00 in the UK is 09:00 UTC.
     assert plan[0].deadline.astimezone(timezone.utc).hour == 9
     assert plan[0].weeks == [
         date(2021, 6, 27),
@@ -381,7 +381,7 @@ def test_nothing_in_the_coordinator_can_send():
         assert f"import {word}" not in source
 
 
-# --- a failed model call (review P1-4) ---------------------------------------
+# --- a failed model call -----------------------------------------------------
 
 
 def failing(exc):
@@ -416,7 +416,7 @@ def test_two_coordinator_errors_hold_every_action_for_the_manager(
     assert {a.state for a in again.actions} == {"held"}
 
 
-# --- the manager sees what was held (review P3-6) ----------------------------
+# --- the manager sees what was held ------------------------------------------
 
 
 def test_the_summary_shows_a_held_drafts_marked_text(
@@ -438,7 +438,7 @@ def test_the_summary_says_why_there_is_no_draft(approved, settings, tmp_path):
     assert "no draft was written for this action: model error" in shown
 
 
-# --- a notification states the brief's figures for its own weeks only -------
+# --- a notification states the brief's figures for its own weeks only --------
 
 
 def test_a_past_week_the_brief_states_is_neither_offered_nor_written(

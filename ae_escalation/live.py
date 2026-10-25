@@ -134,6 +134,7 @@ def _stopped(exc, paths, step):
 
 
 def _briefs(settings, paths, model, digest, resume):
+    """Run the set live, write the form and say what happened."""
     run, holidays = load_run(settings)
     try:
         result = run_set(
@@ -249,7 +250,7 @@ def _adequacy(settings, paths):
 
 def frontier_refusal(out, label):
     """Why the frontier backend may not run the set as this label, or None
-    (D-FRAME-03; review P2-5): it runs only with the stated case, the local
+    (D-FRAME-03): it runs only with the stated case, the local
     set's adequacy record for the same label saying "Frontier case: yes",
     and only once on the replay set."""
     local = Paths.under(out, "local", label).adequacy_record
@@ -322,6 +323,7 @@ def _choose(settings, out, label, chosen, initials):
 
 
 def _notify(settings, paths, model, digest, resume):
+    """Apply the decisions and draft the notifications, live."""
     if not paths.decisions.exists():
         print(f"no decisions yet: Paddy's go in {paths.decisions}")
         return 2

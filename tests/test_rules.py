@@ -89,7 +89,7 @@ def test_an_outlook_takes_the_highest_band_of_its_weeks():
     assert np.isnan(ru.band_of(np.array([1.0, np.nan]), CUTS))
 
 
-# --- the real-time runner, from test_realtime.py ----------------------------
+# --- the real-time runner, from test_realtime.py -----------------------------
 
 
 def test_the_point_level_uses_data_horizons_two_to_five_only():
@@ -464,7 +464,7 @@ def test_a_week_is_flagged_when_any_horizon_reaches_the_setting():
     np.testing.assert_array_equal(ru.any_at_least(P, 0.2), [T, T, F])
 
 
-# --- the demand level, from test_flags.py's raised_with_flag ----------------
+# --- the demand level, from test_flags.py's raised_with_flag -----------------
 
 
 def test_the_demand_level_takes_the_flag_the_surge_and_the_held_flag():
@@ -518,7 +518,7 @@ def test_the_demand_level_is_unset_where_the_rule_could_not_set_one():
     assert np.isnan(level[0]) and level[1] == 1
 
 
-# --- the screen and the track record ----------------------------------------
+# --- the screen and the track record -----------------------------------------
 
 
 def test_the_screen_admits_latched_and_flagged_weeks_with_their_kind():

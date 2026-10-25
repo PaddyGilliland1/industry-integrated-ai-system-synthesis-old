@@ -5,7 +5,7 @@ the configured backend within a time limit and records the full request and
 reply, with the backend, model and digest that answered. A call that fails,
 a timeout or a dropped connection, is recorded too, with the error's class,
 message and latency, so its number is never used again and the replay
-raises the same error at the same point (review P1-4). In replay it returns
+raises the same error at the same point. In replay it returns
 the recorded reply, or raises the recorded error, and calls no model; a
 missing recording or a changed request raises ReplayMiss, so a replay can
 never quietly differ from the run it repeats. Every call, with its prompt
@@ -45,6 +45,7 @@ class AuditLog:
     path it keeps its entries in memory only."""
 
     def __init__(self, path=None):
+        """Open the log, with a file to append to or in memory only."""
         self.path = Path(path) if path else None
         self.entries = []
         # While a resumed run repeats what the stopped run already logged,
@@ -84,6 +85,7 @@ class Budget:
     whole run, resumes and all."""
 
     def __init__(self, limit_s, clock=time.monotonic, spent_before=0.0):
+        """Start the clock, carrying any seconds spent before a resume."""
         self.limit_s = limit_s
         self.clock = clock
         self.started = clock()
@@ -111,6 +113,7 @@ class RecordingStore:
     a recording is never silently replaced."""
 
     def __init__(self, path):
+        """Read the recordings already in the file, if any."""
         self.path = Path(path)
         self._records = {}
         if self.path.exists():
@@ -120,6 +123,7 @@ class RecordingStore:
                     self._records[record["key"]] = record
 
     def __len__(self):
+        """How many recordings the store holds."""
         return len(self._records)
 
     def get(self, key):
@@ -160,6 +164,7 @@ def call_with_deadline(fn, timeout_s, slice_s=0.05):
     box = {}
 
     def target():
+        """Run fn, keeping its value or its error."""
         try:
             box["value"] = fn()
         except BaseException as exc:
@@ -221,8 +226,7 @@ def tool_record(tool):
 
 def backend_options(settings):
     """The active backend's generation settings, which change the reply as
-    surely as the prompt does, so the request hash covers them (review
-    P2-3)."""
+    surely as the prompt does, so the request hash covers them."""
     if settings.llm_backend == "local":
         return {
             "temperature": settings.local.temperature,
@@ -290,6 +294,7 @@ class CallRecord(BaseModel):
 
 
 def _class_path(exc):
+    """An exception's class as module.name, for the replay."""
     kind = type(exc)
     return f"{kind.__module__}.{kind.__qualname__}"
 
@@ -333,6 +338,7 @@ class ModelGateway:
         budget=None,
         resume=False,
     ):
+        """Hold the backend, model, digest, store and limits."""
         if live and chat_model is None:
             raise ValueError("a live gateway needs a chat model")
         self.backend = backend
@@ -635,7 +641,7 @@ def raw_text(message):
 def read_structured(message, schema, context=None):
     """The schema's object from a reply, from a tool call's arguments or
     from JSON in the text with or without a code fence, with why it could
-    not be read and the raw reply, so a retry is never blind (review P2-1).
+    not be read and the raw reply, so a retry is never blind.
     context goes to the schema's validators.
 
     Returns
@@ -721,6 +727,7 @@ def make_chat_model(settings, env_file=ENV_PATH):
 
 
 def _fetch_json(url):
+    """A URL's JSON, read within ten seconds."""
     with urllib.request.urlopen(url, timeout=10) as reply:
         return json.load(reply)
 
@@ -752,6 +759,7 @@ def check_local_model(settings, fetch=_fetch_json):
 
 
 def _scripted_model_class():
+    """The stand-in's class, built when LangChain loads."""
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.outputs import ChatGeneration, ChatResult
     from langchain_core.runnables import RunnableLambda
@@ -772,6 +780,7 @@ def _scripted_model_class():
 
         @property
         def _llm_type(self):
+            """The stand-in's type name for LangChain."""
             return "scripted"
 
         @property
@@ -800,6 +809,7 @@ def _scripted_model_class():
             )
 
         def _generate(self, messages, stop=None, run_manager=None, **kw):
+            """Play the next scripted reply, with ids for its tool calls."""
             self._seen.append(list(messages))
             number = len(self._seen)
             if number > len(self.script):

@@ -118,7 +118,7 @@ def worst_quarter(values, groups):
     return (v <= q).to_numpy()
 
 
-# --- the operating point and calibration, from probe 6's flags.py -----------
+# --- the operating point and calibration, from probe 6's flags.py ------------
 
 
 def naive_flag(act, lag=52):

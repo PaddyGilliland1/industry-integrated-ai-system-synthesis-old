@@ -93,6 +93,7 @@ def drift_sentence(latched, since, direction):
 
 
 def _range(r):
+    """A range as the template prints it."""
     return "no range" if r is None else f"{r.low:,.0f} to {r.high:,.0f}"
 
 
@@ -157,6 +158,7 @@ class TemplateBrief(BaseModel):
         ]
 
         def table(head, rows):
+            """A Markdown table of rows under a heading row."""
             out = [
                 "| " + " | ".join(["Model", *head]) + " |",
                 "|" + "---|" * (len(head) + 1),
@@ -197,6 +199,7 @@ def template_brief(run, entry):
     ledger = []
 
     def call(name, request, result):
+        """Run one tool call into the ledger and return its result."""
         ledger.append(
             ToolCall(
                 id=f"T{len(ledger) + 1}",
@@ -290,7 +293,7 @@ def comparison_verdict(ratings):
 def rater_view(outcome):
     """The agent's brief as a rater sees it in a pair: without the line
     naming the backend and model that wrote it, which would tell the
-    rater which text is the agent's (review P2-9)."""
+    rater which text is the agent's."""
     return outcome.display(written_by=False)
 
 

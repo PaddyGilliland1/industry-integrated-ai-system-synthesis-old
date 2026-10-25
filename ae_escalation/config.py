@@ -9,7 +9,7 @@ so only the model changes.
 The file names the variable that holds the frontier key, never the key.
 The key is read only from the git-ignored .env, as spec 2.5 says, never
 from the shell's environment, so a key exported for something else cannot
-bill a frontier run without notice (review P3-1). It is read at the moment a
+bill a frontier run without notice. It is read at the moment a
 live frontier call needs it, and is never stored in the settings, logged
 or recorded.
 

@@ -5,7 +5,7 @@ initials and a timestamp, and records which of the six approval criteria
 each brief met (D-EVAL-19; build spec, section 2, item 6). Only a verified
 brief can be approved. Every edit re-runs the code figure check, then the
 device-word screen and the Reviewer's wording check, before it can be
-approved (review P3-5); an edit that fails comes back to the manager marked
+approved; an edit that fails comes back to the manager marked
 "not verified, do not act" with its failing figures or words marked, never
 to the Investigator, which would overwrite it. A brief that is "not
 verified" can never be approved, edited or not, and counts as a G4 event;
@@ -128,13 +128,14 @@ class Decision(BaseModel):
     @classmethod
     def uk_time_unless_stated(cls, value):
         """A time typed without a zone is UK time, Europe/London, the
-        approver's clock (review P3-3)."""
+        approver's clock."""
         if value.tzinfo is None:
             return value.replace(tzinfo=UK)
         return value
 
     @model_validator(mode="after")
     def consistent(self):
+        """Only an edit carries its text and can be factual."""
         if (self.action == "edit") != (self.edited is not None):
             raise ValueError("an edit, and only an edit, carries its text")
         if self.factual_edit and self.action != "edit":
@@ -233,6 +234,7 @@ def _facts(texts):
 
 
 def _figure_set(figures):
+    """The cited figures as sortable tuples, to compare sets."""
     return sorted(
         tuple(str(v) for v in f.model_dump(mode="json").values())
         for f in figures
@@ -257,16 +259,17 @@ class ApprovalQueue:
     """The approval queue file, its items and the decisions on them."""
 
     def __init__(self, path=None, log=None, not_before=None, reviewer=None):
+        """Open the queue, from its file if one is given."""
         self.path = Path(path) if path else None
         self.log = log or AuditLog()
         # The Reviewer's wording check for an edit: a function of the
         # edited brief and a run id. With none, no edit can pass.
         self.reviewer = reviewer
         # When the live run that wrote the briefs began: no decision can
-        # come before it (review P3-3).
+        # come before it.
         self.not_before = not_before
         # Every decision refused, each with its row and reason, so one bad
-        # row stops nothing (review P3-7).
+        # row stops nothing.
         self.refusals = []
         # Who found the last decision's factual edit, for the audit log.
         self._factual_by = ""
@@ -294,6 +297,7 @@ class ApprovalQueue:
                 )
 
     def _save(self, event):
+        """Append one event to the queue file, if there is one."""
         if not self.path:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -305,6 +309,7 @@ class ApprovalQueue:
         return list(self._items.values())
 
     def item(self, brief_id):
+        """The item for one brief id."""
         return self._items[brief_id]
 
     def items_by_id(self):
@@ -312,6 +317,7 @@ class ApprovalQueue:
         return dict(self._items)
 
     def _add(self, outcome):
+        """Hold one outcome as an item, awaiting a decision or not."""
         state = (
             "awaiting decision"
             if outcome.status == "verified"
@@ -561,8 +567,7 @@ class ApprovalQueue:
         """Write the queue for the approver: one row per brief, its text as
         the manager sees it, and empty columns for the decision, with the
         edit file named where one was written for it. The file is UTF-8
-        with a byte-order mark, so a spreadsheet opens it as UTF-8 (review
-        P3-8)."""
+        with a byte-order mark, so a spreadsheet opens it as UTF-8."""
         edit_files = edit_files or {}
         rows = []
         for i in self._items.values():
@@ -600,7 +605,7 @@ class ApprovalQueue:
     def write_edit_files(self, folder):
         """Write each brief's text and cited figures as the JSON an edit
         replaces, so the approver edits a copy rather than writing one by
-        hand (review P3-8); return each file's name by brief id."""
+        hand; return each file's name by brief id."""
         folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=True)
         out = {}
@@ -625,12 +630,13 @@ DECISION_COLUMNS = (
     "note",
     "edited_file",
     # "yes" only if the approver opts out and the decisions are simulated
-    # (D-EVAL-19); blank is no (review P3-2).
+    # (D-EVAL-19); blank is no.
     "simulated",
 )
 
 
 def _yes(value):
+    """A yes or no cell as True or False; anything else fails."""
     text = (value or "").strip().lower()
     if text not in ("yes", "no"):
         raise ValueError(f"write yes or no, not {value!r}")
@@ -644,7 +650,7 @@ def read_decisions(path, refused=None):
 
     A row that cannot be read raises ValueError naming it, unless a list
     is given as refused: then the row is added to it with its reason and
-    the rest are read (review P3-7)."""
+    the rest are read."""
     path = Path(path)
     out = []
     try:

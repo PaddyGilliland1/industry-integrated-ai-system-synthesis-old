@@ -124,6 +124,7 @@ def numbered(items):
 
 
 def _rounded(value):
+    """A tool result with its floats rounded to two places."""
     if isinstance(value, float):
         return round(value, 2)
     if isinstance(value, dict):
@@ -146,6 +147,7 @@ class Toolbox:
     """
 
     def __init__(self, run, holidays, entry, log, run_id):
+        """Hold the run and the screen entry this brief's calls are for."""
         self.run = run
         self.holidays = holidays
         self.entry = entry
@@ -159,6 +161,7 @@ class Toolbox:
         from langchain_core.tools import StructuredTool
 
         def never(**kwargs):
+            """Never called: the graph runs each tool itself."""
             raise RuntimeError("the graph runs the tools, not LangChain")
 
         return [
@@ -172,6 +175,7 @@ class Toolbox:
         ]
 
     def _refuse(self, name, args, why):
+        """Log a refused call, and say why for the model."""
         self.log.write(
             kind="tool",
             run_id=self.run_id,
@@ -505,6 +509,7 @@ def device_words(text):
 
 
 def _agent_text(brief):
+    """The brief's text fields as the reader sees them."""
     return "\n".join(brief.rendered().values())
 
 
@@ -650,7 +655,7 @@ class BriefOutcome(BaseModel):
     @property
     def planted_caught(self):
         """True when the code check failed at the planted figure itself, not
-        merely failed (review P2-8); None if nothing was planted."""
+        merely failed; None if nothing was planted."""
         attempt = next((a for a in self.attempts if a.planted), None)
         if attempt is None:
             return None
@@ -738,6 +743,7 @@ class BriefOutcome(BaseModel):
 
 
 def _number(text):
+    """A failure's found text as a number, or None."""
     try:
         return float(text.replace(",", ""))
     except ValueError:
@@ -774,6 +780,7 @@ class BriefGraph:
     def __init__(
         self, run, holidays, settings, gateway, prompts=None, log=None
     ):
+        """Build the graph for this run, its settings, gateway and prompts."""
         self.run_design = run
         self.holidays = holidays
         self.settings = settings
@@ -789,6 +796,7 @@ class BriefGraph:
     # Each node returns only what it changes.
 
     def _screen(self, state):
+        """The screen node: the entry the screen sends, if any."""
         entries = tl.screen_at(self.run_design, state["origin"])
         entry = next(
             (e for e in entries if e.hospital == state["hospital"]), None
@@ -805,6 +813,7 @@ class BriefGraph:
         return {"route": ["screen"], "entry": entry.model_dump(mode="json")}
 
     def _investigate(self, state):
+        """The Investigator node: a pass, any plant, the brief."""
         entry = tl.ScreenEntry.model_validate(state["entry"])
         attempt = state.get("attempt", 0) + 1
         previous = state.get("draft") if attempt > 1 else None
@@ -887,6 +896,7 @@ class BriefGraph:
     def _code_check(self, state):
         # Each attempt is recorded once, where it ends: here when the code
         # check fails, or at the wording check.
+        """The code check node: every stage, on brief or draft."""
         record = self._attempt
         entry = tl.ScreenEntry.model_validate(state["entry"])
         ledger = self._toolbox.ledger
@@ -931,6 +941,7 @@ class BriefGraph:
         return update
 
     def _wording_check(self, state):
+        """The wording node: the device words, then the Reviewer."""
         brief = DemandBrief.model_validate(state["brief"])
         result, records = wording_check(
             brief,
@@ -963,19 +974,23 @@ class BriefGraph:
 
     @staticmethod
     def _verified(state):
+        """The end for a brief that passed both checks."""
         return {"route": ["verified"], "status": "verified"}
 
     @staticmethod
     def _not_verified(state):
+        """The end for a brief that did not."""
         return {"route": ["not_verified"], "status": "not verified"}
 
     # The routers.
 
     @staticmethod
     def _after_screen(state):
+        """On to the Investigator only if the screen sent it."""
         return "end" if state.get("status") == "not screened" else "go"
 
     def _after_check(self, state):
+        """Pass, retry once, or end not verified."""
         if state["passed"]:
             return "pass"
         if state.get("reviewer_error"):
@@ -983,6 +998,7 @@ class BriefGraph:
         return "retry" if state["attempt"] <= self.retries else "fail"
 
     def _build(self):
+        """Wire the nodes and routers into a compiled StateGraph."""
         from langgraph.graph import END, START, StateGraph
 
         graph = StateGraph(BriefState)

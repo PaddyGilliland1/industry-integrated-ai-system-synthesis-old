@@ -140,7 +140,7 @@ def test_the_seeds_in_the_config_are_the_codes_own():
     )
 
 
-# --- the frontier key ------------------------------------------------------
+# --- the frontier key --------------------------------------------------------
 
 
 def test_the_frontier_key_is_read_from_the_env_file(tmp_path, raw):
@@ -155,7 +155,7 @@ def test_the_frontier_key_is_read_from_the_env_file(tmp_path, raw):
 
 def test_a_key_exported_in_the_shell_is_never_used(tmp_path, raw, monkeypatch):
     # Spec 2.5 reads the key from .env only, so a shell's exported key can
-    # never bill another account without notice (review P3-1).
+    # never bill another account without notice.
     s = cf.Settings.model_validate({**raw, "llm_backend": "frontier"})
     monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
     with pytest.raises(RuntimeError, match=".env"):

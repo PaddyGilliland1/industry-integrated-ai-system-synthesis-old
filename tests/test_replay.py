@@ -233,7 +233,7 @@ def test_a_run_past_its_budget_is_stopped(
         )
 
 
-# --- the prompts are kept with each label (review P2-10) ---------------------
+# --- the prompts are kept with each label ------------------------------------
 
 
 def test_a_label_keeps_its_prompts_and_replays_from_them(
@@ -290,7 +290,7 @@ def test_a_frontier_label_needs_the_local_labels_prompts(tmp_path):
     assert not frontier.prompts.exists()
 
 
-# --- the budget, a stop and a resume (review P2-4) ---------------------------
+# --- the budget, a stop and a resume -----------------------------------------
 
 
 def ticking():
@@ -416,7 +416,7 @@ def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
     assert len(done) == 2 and paths.outbox.exists()
 
 
-# --- decisions reach the audit file and the queue file (review P2-7) ---------
+# --- decisions reach the audit file and the queue file -----------------------
 
 
 def decisions_csv(paths, rows):
@@ -553,7 +553,7 @@ def test_the_run_start_bounds_the_approvers_decisions(
     assert queue.not_before == started
 
 
-# --- one bad row stops nothing (review P3-7) ---------------------------------
+# --- one bad row stops nothing -----------------------------------------------
 
 
 def test_each_bad_row_is_refused_and_logged_and_the_rest_apply(
@@ -580,7 +580,7 @@ def test_each_bad_row_is_refused_and_logged_and_the_rest_apply(
     assert [e["kind"] for e in log.entries].count("refused") == 3
 
 
-# --- the approver's files survive a spreadsheet (review P3-8) ----------------
+# --- the approver's files survive a spreadsheet ------------------------------
 
 
 def test_each_brief_gets_a_prefilled_edit_file_named_in_the_sheet(

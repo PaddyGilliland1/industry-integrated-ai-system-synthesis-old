@@ -443,7 +443,7 @@ def test_the_brief_is_dated_by_the_origin(run, holidays, settings, tmp_path):
     assert out.brief.release_date == date(2021, 6, 22)
 
 
-# --- a failed model call (review P1-4) ---------------------------------------
+# --- a failed model call -----------------------------------------------------
 
 
 def failing(exc):
@@ -578,7 +578,7 @@ def test_not_verified_says_why(run, holidays, settings, tmp_path):
     assert out.cause is None
 
 
-# --- an unreadable draft's retry is not blind (review P2-1) ------------------
+# --- an unreadable draft's retry is not blind --------------------------------
 
 
 def retry_text(run, holidays, settings, tmp_path, first):
@@ -659,7 +659,7 @@ def test_a_reply_with_no_json_is_named_in_the_retry(
     assert "holds no JSON object" in retry_ask and "Sorry, no." in retry_ask
 
 
-# --- a Reviewer format slip is the Reviewer's error (review P3-15) -----------
+# --- a Reviewer format slip is the Reviewer's error --------------------------
 
 SLIP = AIMessage(content='{"passes": true, "problems": [], "score": 9}')
 
@@ -709,7 +709,7 @@ def test_two_reviewer_slips_fail_closed_without_the_investigator(
     assert "no readable verdict" in wording.problems[0]
 
 
-# --- the designed failure's accounting (review P2-8) -------------------------
+# --- the designed failure's accounting ---------------------------------------
 
 
 def plant_value(value):

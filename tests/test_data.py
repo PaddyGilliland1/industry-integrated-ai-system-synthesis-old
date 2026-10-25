@@ -12,7 +12,7 @@ from ae_escalation import timing as tm
 
 from .conftest import CSV, DATA
 
-# --- synthetic -----------------------------------------------------------
+# --- synthetic ---------------------------------------------------------------
 
 
 def small_frame():
@@ -205,7 +205,7 @@ def test_series_from_sums_sites_into_the_national_series_from_the_start():
     assert wide.loc["2015-06-14", "Scotland"] == 207
 
 
-# --- the frozen file -----------------------------------------------------
+# --- the frozen file ---------------------------------------------------------
 
 
 def test_the_frozen_files_match_the_manifest():

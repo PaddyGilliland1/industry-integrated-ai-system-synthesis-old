@@ -182,7 +182,7 @@ def test_a_brief_not_verified_is_never_adequate_even_past_the_code_check(
     result,
 ):
     # Passed the code check, failed the wording check twice: it can never
-    # be approved, so it cannot count towards 6 of 7 (review P2-6).
+    # be approved, so it cannot count towards 6 of 7.
     worded = result.outcomes[0].model_copy(update={"status": "not verified"})
     assert worded.attempts[-1].check.passed
     swapped = result.model_copy(

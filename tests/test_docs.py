@@ -79,7 +79,7 @@ def test_the_form_rates_both_texts_of_both_template_pairs():
 
 def test_the_sheet_says_what_the_figure_check_proves_and_no_more():
     # Saying every figure was checked would prime the automation bias the
-    # risks list names (review P3-13).
+    # risks list names.
     text = SHEET.read_text(encoding="utf-8")
     assert "already checked every figure" not in text
     assert "checked against its source" in text

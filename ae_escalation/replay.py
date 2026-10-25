@@ -111,6 +111,7 @@ def sizes(run):
 
 
 def _first(entries, test):
+    """The first entry that passes the test, or None."""
     return next((e for e in entries if test(e)), None)
 
 
@@ -208,14 +209,17 @@ class Paths:
 
     @classmethod
     def under(cls, base, backend, label):
+        """The paths for one backend and label under a base folder."""
         return cls(Path(base), backend, label)
 
     @property
     def _recordings(self):
+        """The label's recordings folder."""
         return self.base / "recordings" / self.backend / self.label
 
     @property
     def briefs(self):
+        """The brief run's recordings."""
         return self._recordings / "briefs.jsonl"
 
     @property
@@ -226,6 +230,7 @@ class Paths:
 
     @property
     def notify(self):
+        """The notify step's recordings."""
         return self._recordings / "notify.jsonl"
 
     @property
@@ -240,22 +245,27 @@ class Paths:
 
     @property
     def audit(self):
+        """The label's audit log."""
         return self._recordings / "audit.jsonl"
 
     def _approvals(self, name, suffix):
+        """A file in approvals/, named for its backend and label."""
         stem = f"{name}_{self.backend}_{self.label}"
         return self.base / "approvals" / f"{stem}{suffix}"
 
     @property
     def queue(self):
+        """The approval queue's event file."""
         return self._approvals("queue", ".jsonl")
 
     @property
     def queue_csv(self):
+        """The approver's sheet."""
         return self._approvals("queue", ".csv")
 
     @property
     def decisions(self):
+        """The approver's filled-in sheet."""
         return self._approvals("decisions", ".csv")
 
     @property
@@ -271,14 +281,17 @@ class Paths:
 
     @property
     def adequacy_scores(self):
+        """The reviewer's scores sheet."""
         return self._approvals("adequacy", ".csv")
 
     @property
     def adequacy_record(self):
+        """The adequacy test's record."""
         return self._approvals("adequacy_record", ".md")
 
     @property
     def outbox(self):
+        """The outbox file, never sent."""
         name = f"notifications_{self.backend}_{self.label}.jsonl"
         return self.base / "outbox" / name
 
@@ -377,6 +390,7 @@ def spent(paths, step):
 
 
 def _spent(budget):
+    """The budget's seconds spent, rounded, or None."""
     return None if budget is None else round(budget.spent_s, 1)
 
 
@@ -509,9 +523,9 @@ def run_set(
 
 def write_queue(result, paths, log=None):
     """Write the approval queue file and its CSV for the approver, once,
-    with a pre-filled edit file for each brief (review P3-8). An existing
+    with a pre-filled edit file for each brief. An existing
     queue is never overwritten. Each brief queued goes to the
-    label's audit log (review P2-7). The designed failure is evidence for
+    label's audit log. The designed failure is evidence for
     the check, not a brief to approve, so it is not queued."""
     if paths.queue.exists():
         raise FileExistsError(f"{paths.queue} exists; it is never replaced")
@@ -559,6 +573,7 @@ def edit_reviewer(
     prompts = label_prompts(paths, live)["reviewer"]
 
     def review(brief, run_id):
+        """The wording check on one edited brief."""
         result, _ = ag.wording_check(
             brief,
             gateway=gateway,
@@ -577,6 +592,7 @@ def same_act(a, b):
     that code found since, which the approver's sheet does not."""
 
     def key(d):
+        """What makes a decision the act it is."""
         edited = None if d.edited is None else d.edited.model_dump(mode="json")
         return (d.brief_id, d.action, d.initials, d.decided_at, edited)
 
@@ -593,11 +609,11 @@ def queue_with_decisions(
     writes nothing, so the notebook can run it again and again. With
     record=True, as the live notify step runs it, it opens the queue file
     and appends each decision not yet in it, to that file and the label's
-    audit log (review P2-7); a decision already recorded is not added
-    twice. A row it cannot read, or a decision the queue refuses, is logged
-    and listed in queue.refusals, and the other rows still apply (review
-    P3-7). An edit is checked by reviewer; given settings and no reviewer,
-    the edits' recorded wording checks are replayed from paths.edit_reviews.
+    audit log; a decision already recorded is not added twice. A row it
+    cannot read, or a decision the queue refuses, is logged and listed in
+    queue.refusals, and the other rows still apply. An edit is checked by
+    reviewer; given settings and no reviewer, the edits' recorded wording
+    checks are replayed from paths.edit_reviews.
     """
     started = run_started(paths)
     if reviewer is None and settings is not None:

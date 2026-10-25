@@ -108,6 +108,7 @@ class TextProblems(ValueError):
     the retry and marked for the manager."""
 
     def __init__(self, problems):
+        """Keep the problems, and name each in the error's text."""
         self.problems = list(problems)
         super().__init__(
             "\n".join(f"{p.field}: {p.reason}" for p in self.problems)
@@ -190,6 +191,7 @@ def resolved(fig, ctx):
 
 
 def _joined(*parts):
+    """The parts that are set, joined by commas."""
     return ", ".join(p for p in parts if p)
 
 
@@ -272,6 +274,7 @@ def render(text, figures, ctx, failed=frozenset(), marks=()):
     written."""
 
     def value(m):
+        """What code writes for one placeholder."""
         name = m.group("name")
         if m.group("n"):
             n = int(m.group("n"))
@@ -515,6 +518,7 @@ WORD_RULES = (
 
 
 def _blank(text, start, end):
+    """The text with a span blanked, so later rules skip it."""
     return text[:start] + " " * (end - start) + text[end:]
 
 
@@ -657,6 +661,7 @@ def _placeholder_problems(field, text, figures, ctx):
     out = []
 
     def fail(at, found, reason):
+        """Note one problem where it stands."""
         out.append(Failure(field=field, found=found, reason=reason, at=at))
 
     last = None

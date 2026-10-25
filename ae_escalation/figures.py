@@ -170,10 +170,12 @@ class Token:
 
 
 def _blank(text, start, end):
+    """The text with a span blanked, so the next pattern skips it."""
     return text[:start] + " " * (end - start) + text[end:]
 
 
 def _date_value(m):
+    """A date match as (year, month, day), None where unwritten."""
     groups = m.groupdict()
     mon = groups.get("mon")
     month = MONTHS[mon[:3].lower()] if mon else int(groups["mo"])
@@ -183,6 +185,7 @@ def _date_value(m):
 
 
 def _small(m):
+    """A small count, in digits or words, as a number."""
     n = m.group("n").lower()
     return SMALL[n] if n in SMALL else int(n)
 
@@ -312,6 +315,7 @@ class CheckResult(BaseModel):
 
 
 def _same_place(call, hospital, origin):
+    """Whether a tool call was for this hospital and origin."""
     req = call.request
     if req.get("hospital") not in (None, hospital):
         return False
@@ -319,6 +323,7 @@ def _same_place(call, hospital, origin):
 
 
 def _walk(value):
+    """Every value in a tool result, however deeply nested."""
     if isinstance(value, dict):
         for item in value.values():
             yield from _walk(item)

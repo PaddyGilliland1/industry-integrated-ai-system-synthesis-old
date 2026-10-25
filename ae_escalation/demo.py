@@ -43,16 +43,19 @@ WHEN = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
 
 
 def _ai(content="", tool_calls=()):
+    """A scripted AI message."""
     from langchain_core.messages import AIMessage
 
     return AIMessage(content=content, tool_calls=list(tool_calls))
 
 
 def _entry(run):
+    """The screen's entry for Ninewells at the demand week."""
     return next(e for e in tl.screen_at(run, ORIGIN) if e.hospital == HOSPITAL)
 
 
 def _requests(entry):
+    """The four tool requests the stand-in makes."""
     base = {"hospital": entry.hospital, "as_of": entry.as_of}
     return [
         ("get_forecast", tl.ForecastRequest(**base)),
@@ -63,6 +66,7 @@ def _requests(entry):
 
 
 def _ledger(run, holidays, entry):
+    """The ledger those four calls give."""
     out = []
     for name, req in _requests(entry):
         if name == "get_calendar":
@@ -96,6 +100,7 @@ def true_draft(ledger, entry):
     low, high = f["range_80"]["low"], f["range_80"]["high"]
 
     def cite(value, call, measure, **context):
+        """A cited figure, its unit taken from its measure."""
         return CitedFigure(
             value=value,
             tool_call_id=call,
@@ -138,10 +143,12 @@ def true_draft(ledger, entry):
 
 
 def _reply(draft):
+    """A draft as the stand-in's reply."""
     return _ai(json.dumps(draft.model_dump(mode="json")))
 
 
 def _gateway(settings, folder, name, script):
+    """A live gateway on the stand-in, recording to the folder."""
     return ModelGateway.for_settings(
         settings,
         RecordingStore(Path(folder) / f"{name}.jsonl"),
@@ -218,6 +225,7 @@ class SafeguardDemo(BaseModel):
 
 
 def _decision(brief_id, action, edited=None):
+    """A simulated decision on one brief, every criterion met."""
     return Decision(
         brief_id=brief_id,
         action=action,
@@ -256,6 +264,7 @@ def safeguards(run, holidays, settings):
     actions = plan(item, settings)
 
     def message(a, deadline=None):
+        """A notification, its deadline a token or written out."""
         when = (
             "{DEADLINE}"
             if deadline is None
@@ -264,6 +273,7 @@ def safeguards(run, holidays, settings):
         return f"{{HOSPITAL}}, {{LEVEL}}: {a.task} Please reply by {when}."
 
     def notes(pairs):
+        """The stand-in's notifications reply."""
         return _ai(
             json.dumps(
                 {

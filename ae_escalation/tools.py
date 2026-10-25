@@ -257,6 +257,7 @@ class ScreenEntry(Result):
 
 
 def _locate(run, hospital, as_of):
+    """The origin's index in the run, once hospital and week check."""
     if hospital not in run.series:
         raise ValueError(f"unknown hospital: {hospital}")
     origin = pd.Timestamp(as_of)

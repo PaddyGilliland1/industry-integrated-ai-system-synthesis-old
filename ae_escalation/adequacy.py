@@ -7,7 +7,7 @@ approver never scores it, so the approval stays independent. Code fills in
 the brief's status; the reviewer marks the six criteria on the form this
 module writes. A brief counts only when its status is verified: one that
 passed the code check but failed the wording check twice can never be
-approved, so it cannot count towards 6 of 7 (review P2-6). Fewer than 6 of
+approved, so it cannot count towards 6 of 7. Fewer than 6 of
 the 7 local briefs adequate after one bounded prompt-tuning round is the
 stated case for running the frontier backend, once, on the same replay set.
 The result, either way, is recorded in approvals/ with the briefs and
@@ -95,6 +95,7 @@ class AdequacyRecord(BaseModel):
 
 
 def _brief_block(outcome):
+    """One brief's part of the form: status, text, criteria."""
     entry = outcome.entry
     passed = code_check_passed(outcome)
     lines = [
@@ -169,6 +170,7 @@ def write_form(result, paths):
 
 
 def _yes(value):
+    """A yes or no cell as True or False; anything else fails."""
     text = (value or "").strip().lower()
     if text not in ("yes", "no"):
         raise ValueError(f"write yes or no, not {value!r}")
@@ -270,6 +272,7 @@ def assess(result, scores, round, label):
 
 
 def _status(brief):
+    """A brief's status for the record, with why if not verified."""
     if brief.verified:
         return "verified"
     return f"not verified: {brief.cause}" if brief.cause else "not verified"

@@ -201,7 +201,7 @@ def test_the_frontier_backend_stops_without_a_key(tmp_path, capsys, pinned):
     assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
 
 
-# --- the frontier backend only with the stated case (review P2-5) ------------
+# --- the frontier backend only with the stated case --------------------------
 
 
 def test_the_frontier_backend_never_runs_without_the_stated_case(

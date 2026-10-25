@@ -557,7 +557,7 @@ def test_a_draft_refused_by_the_text_rules_is_checked_in_full():
     assert "back-test error field" in named and "track record field" in named
 
 
-# --- the literal reader, for code-written text such as the template ---------
+# --- the literal reader, for code-written text such as the template ----------
 
 
 def kinds(text):

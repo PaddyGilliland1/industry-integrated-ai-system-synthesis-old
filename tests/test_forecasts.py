@@ -29,7 +29,7 @@ def no_mask(n):
     return np.zeros(n, dtype=bool)
 
 
-# --- seasonal naive, moving average, linear --------------------------------
+# --- seasonal naive, moving average, linear ----------------------------------
 
 
 def test_seasonal_naive_uses_the_same_week_last_year():
@@ -105,7 +105,7 @@ def test_linear_gives_no_forecast_when_the_history_is_too_short():
     assert np.all(np.isnan(model(np.ones(50), 49, 4)))
 
 
-# --- SA-MA: the circular smoothing -----------------------------------------
+# --- SA-MA: the circular smoothing -------------------------------------------
 
 
 def test_the_smoothing_weights_reach_round_the_year_end():
@@ -126,7 +126,7 @@ def test_a_missing_slot_is_filled_from_its_neighbours():
     assert np.isclose(out[5], (0.25 * 1 + 0.25 * 3) / 0.5)
 
 
-# --- SA-MA: the seasonal index over 52-week blocks -------------------------
+# --- SA-MA: the seasonal index over 52-week blocks ---------------------------
 
 
 def test_the_index_recovers_the_pattern_of_a_purely_seasonal_series():
@@ -196,7 +196,7 @@ def test_fewer_than_three_years_released_uses_what_there_is():
     np.testing.assert_allclose(si, pattern())
 
 
-# --- SA-MA: the seasonal index over calendar years -------------------------
+# --- SA-MA: the seasonal index over calendar years ---------------------------
 
 
 class Years:
@@ -285,7 +285,7 @@ def test_steady_growth_is_not_turned_into_a_bias():
     assert (blocks < 0.985 * y[t + 1 : t + 6]).all()
 
 
-# --- SA-MA: the forecast ---------------------------------------------------
+# --- SA-MA: the forecast -----------------------------------------------------
 
 
 def test_a_flat_seasonal_series_is_forecast_exactly():
@@ -312,7 +312,7 @@ def test_too_little_history_gives_no_forecast():
     assert np.isnan(fc.sa_ma(y, 29, no_mask(30))).all()
 
 
-# --- probe 6's decomposition -----------------------------------------------
+# --- probe 6's decomposition -------------------------------------------------
 
 
 def test_a_straight_line_is_its_own_trend_and_the_ends_are_missing():
@@ -352,7 +352,7 @@ def test_each_busy_week_is_classed_by_the_larger_part_of_its_excess():
     assert np.isclose(out["level_alone_reaches_pct"], 25.0)
 
 
-# --- the design's model set ------------------------------------------------
+# --- the design's model set --------------------------------------------------
 
 
 def test_the_design_has_four_simple_models_in_tie_break_order():
