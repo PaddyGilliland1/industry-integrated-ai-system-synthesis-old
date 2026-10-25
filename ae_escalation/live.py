@@ -2,6 +2,8 @@
 
     python -m ae_escalation.live briefs [--label round1] [--resume]
     python -m ae_escalation.live adequacy [--label round1] [--round 1]
+    python -m ae_escalation.live choose --label round2 --set frontier \\
+        --initials PG
     python -m ae_escalation.live notify [--label round1] [--resume]
 
 "briefs" runs the seven replay briefs and the designed failure on the
@@ -23,11 +25,15 @@ machine holds the model at its pinned digest, and it prints nvidia-smi; for
 frontier, that a key is set in the git-ignored .env, which it never prints.
 A label already recorded is never run again, so no recording is replaced;
 a second round, such as after the one prompt-tuning round, takes a new
-label. The notebook then replays every run from the recordings, without the
-model.
+label. The frontier backend runs the set only with the stated case: the
+local set's adequacy record for the same label saying "Frontier case: yes",
+and only once. "choose" then records the approver's choice between the two
+sets and releases the chosen set's queue. The notebook then replays every
+run from the recordings, without the model.
 """
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -35,11 +41,19 @@ from pathlib import Path
 
 from . import data as dt
 from . import design as ds
-from .adequacy import assess, read_scores, write_form, write_record
+from datetime import datetime, timezone
+
+from .adequacy import (
+    assess,
+    read_scores,
+    record_says,
+    write_form,
+    write_record,
+)
 from .approval import CRITERIA
 from .config import CONFIG_PATH, ENV_PATH, REPO, frontier_key, load_config
 from .gateway import _fetch_json, check_local_model, make_chat_model
-from .gateway import BudgetExceeded
+from .gateway import AuditLog, BudgetExceeded
 from .replay import (
     Paths,
     can_resume,
@@ -181,6 +195,80 @@ def _adequacy(settings, paths, round_):
     return 0
 
 
+def frontier_refusal(out, label):
+    """Why the frontier backend may not run the set as this label, or None
+    (D-FRAME-03; review P2-5): it runs only with the stated case, the local
+    set's adequacy record for the same label saying "Frontier case: yes",
+    and only once on the replay set."""
+    local = Paths.under(out, "local", label).adequacy_record
+    if not local.exists() or not record_says(local)["frontier_case"]:
+        return (
+            "the frontier backend runs only with the stated case: "
+            f'{local} must record "Frontier case: yes" after the '
+            "prompt-tuning round"
+        )
+    folder = Path(out) / "recordings" / "frontier"
+    others = sorted(
+        d.name for d in folder.glob("*") if d.is_dir() and d.name != label
+    )
+    if others:
+        return (
+            "the frontier backend runs once on the replay set, and it has "
+            f"run already as {', '.join(others)}"
+        )
+    return None
+
+
+def _choose(settings, out, label, chosen, initials):
+    """Record the approver's choice of set, once both backends have run on
+    the replay set and been scored, and release that set's queue."""
+    local = Paths.under(out, "local", label)
+    other = Paths.under(out, "frontier", label)
+    choice = Path(out) / "approvals" / f"set_choice_{label}.md"
+    if choice.exists():
+        print(f"{choice} exists; it is never replaced")
+        return 2
+    case = local.adequacy_record
+    if not case.exists() or not record_says(case)["frontier_case"]:
+        print(
+            "there is no choice to make: the local set's record states no "
+            "case for the frontier backend"
+        )
+        return 2
+    if not other.adequacy_record.exists():
+        print(f"the frontier set has no adequacy record yet: {other}")
+        return 2
+    if not re.fullmatch(r"[A-Z]{2,4}", initials or ""):
+        print("give the approver's initials, two to four capital letters")
+        return 2
+    paths = local if chosen == "local" else other
+    picked = settings.model_copy(update={"llm_backend": chosen})
+    run, holidays = load_run(picked)
+    result = run_set(run, holidays, picked, paths, live=False)
+    at = datetime.now(timezone.utc).isoformat()
+    choice.parent.mkdir(parents=True, exist_ok=True)
+    choice.write_text(
+        "\n".join(
+            [
+                f"# The approver's choice of set: {label}",
+                "",
+                f"Chosen: the {chosen} set, {result.model}.",
+                f"By: {initials}, at {at}.",
+                f"Local record: {local.adequacy_record.name}.",
+                f"Frontier record: {other.adequacy_record.name}.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    AuditLog(paths.audit).write(
+        kind="set choice", label=label, chosen=chosen, initials=initials
+    )
+    write_queue(result, paths)
+    print(f"the {chosen} set goes to approval: {paths.queue_csv}")
+    return 0
+
+
 def _notify(settings, paths, model, digest, resume):
     if not paths.decisions.exists():
         print(f"no decisions yet: Paddy's go in {paths.decisions}")
@@ -220,7 +308,9 @@ def main(
         prog="python -m ae_escalation.live",
         description="Run the replay set live on the configured backend.",
     )
-    parser.add_argument("command", choices=("briefs", "adequacy", "notify"))
+    parser.add_argument(
+        "command", choices=("briefs", "adequacy", "choose", "notify")
+    )
     parser.add_argument("--label", default="round1")
     parser.add_argument("--out", default=str(REPO))
     parser.add_argument("--config", default=str(CONFIG_PATH))
@@ -236,12 +326,27 @@ def main(
         default=1,
         help="adequacy: 2 after the one bounded prompt-tuning round",
     )
+    parser.add_argument(
+        "--set",
+        choices=("local", "frontier"),
+        help="choose: the set the approver chose for approval",
+    )
+    parser.add_argument("--initials", help="choose: the approver's initials")
     args = parser.parse_args(argv)
     settings = load_config(args.config)
     paths = Paths.under(args.out, settings.llm_backend, args.label)
     step = args.command
     if step == "adequacy":
         return _adequacy(settings, paths, args.round)
+    if step == "choose":
+        return _choose(settings, args.out, args.label, args.set, args.initials)
+    if step == "briefs" and settings.llm_backend == "frontier":
+        refusal = (
+            None if args.resume else frontier_refusal(args.out, args.label)
+        )
+        if refusal:
+            print(refusal)
+            return 2
     recorded = paths.briefs if step == "briefs" else paths.notify
     started = any(e.get("step") == step for e in progress(paths))
     if args.resume and not can_resume(paths, step):

@@ -39,10 +39,10 @@ def briefs(tmp_path, fetch, label="t1"):
     )
 
 
-def score_all(tmp_path, label="t1", unmet=0):
+def score_all(tmp_path, label="t1", unmet=0, backend="local"):
     """The reviewer's scores: every criterion met, except two in the first
     unmet briefs."""
-    sheet = tmp_path / "approvals" / f"adequacy_local_{label}.csv"
+    sheet = tmp_path / "approvals" / f"adequacy_{backend}_{label}.csv"
     with open(sheet, newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
     for n, row in enumerate(rows):
@@ -136,51 +136,101 @@ def test_notify_needs_the_approvers_decisions(tmp_path, pinned, capsys):
     assert (tmp_path / "outbox" / "notifications_local_t1.jsonl").exists()
 
 
-def test_the_frontier_key_is_checked_and_never_printed(
-    tmp_path, capsys, monkeypatch
-):
-    env = tmp_path / ".env"
-    env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
+def frontier_config(tmp_path):
     raw = (REPO / "config.json").read_text(encoding="utf-8")
     config = tmp_path / "frontier.json"
     config.write_text(
         raw.replace('"llm_backend": "local"', '"llm_backend": "frontier"'),
         encoding="utf-8",
     )
-    code = lv.main(
-        [
-            "briefs",
-            "--label",
-            "f1",
-            "--out",
-            str(tmp_path),
-            "--config",
-            str(config),
-        ],
+    return str(config)
+
+
+def key_file(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
+    return env
+
+
+def stated_case(tmp_path, label, pinned):
+    """The local set's second round, scored under 6 of 7: the stated
+    case for the frontier backend, recorded by the adequacy command."""
+    assert briefs(tmp_path, pinned, label) == 0
+    score_all(tmp_path, label, unmet=2)
+    assert adequacy(tmp_path, label, "--round", "2") == 0
+
+
+def frontier(tmp_path, *args, env_file=None):
+    return lv.main(
+        [*args, "--out", str(tmp_path), "--config", frontier_config(tmp_path)],
         chat_model=stand_in(),
-        env_file=env,
+        env_file=env_file or key_file(tmp_path),
     )
-    assert code == 0
+
+
+def test_the_frontier_key_is_checked_and_never_printed(
+    tmp_path, capsys, pinned
+):
+    stated_case(tmp_path, "t1", pinned)
+    assert frontier(tmp_path, "briefs", "--label", "t1") == 0
     assert FAKE_KEY not in capsys.readouterr().out
     for path in tmp_path.rglob("*.jsonl"):
         assert FAKE_KEY not in path.read_text(encoding="utf-8")
 
 
-def test_the_frontier_backend_stops_without_a_key(tmp_path, capsys):
-    raw = (REPO / "config.json").read_text(encoding="utf-8")
-    config = tmp_path / "frontier.json"
-    config.write_text(
-        raw.replace('"llm_backend": "local"', '"llm_backend": "frontier"'),
-        encoding="utf-8",
-    )
-    code = lv.main(
-        ["briefs", "--out", str(tmp_path), "--config", str(config)],
-        chat_model=stand_in(),
-        env_file=tmp_path / "missing.env",
-        environ={},
+def test_the_frontier_backend_stops_without_a_key(tmp_path, capsys, pinned):
+    stated_case(tmp_path, "t1", pinned)
+    capsys.readouterr()
+    code = frontier(
+        tmp_path, "briefs", "--label", "t1", env_file=tmp_path / "none.env"
     )
     assert code == 2
     assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+# --- the frontier backend only with the stated case (review P2-5) ------------
+
+
+def test_the_frontier_backend_never_runs_without_the_stated_case(
+    tmp_path, capsys, pinned
+):
+    assert frontier(tmp_path, "briefs", "--label", "t1") == 2
+    assert "stated case" in capsys.readouterr().out
+    assert not (tmp_path / "recordings" / "frontier").exists()
+    assert briefs(tmp_path, pinned, "t1") == 0
+    score_all(tmp_path, "t1")
+    assert adequacy(tmp_path, "t1") == 0
+    assert frontier(tmp_path, "briefs", "--label", "t1") == 2
+    assert not (tmp_path / "recordings" / "frontier").exists()
+
+
+def test_the_frontier_backend_runs_once_per_set(tmp_path, capsys, pinned):
+    stated_case(tmp_path, "t1", pinned)
+    assert frontier(tmp_path, "briefs", "--label", "t1") == 0
+    stated_case(tmp_path, "t2", pinned)
+    capsys.readouterr()
+    assert frontier(tmp_path, "briefs", "--label", "t2") == 2
+    assert "once" in capsys.readouterr().out
+
+
+def test_the_approvers_choice_of_set_is_recorded_and_releases_it(
+    tmp_path, capsys, pinned
+):
+    stated_case(tmp_path, "t1", pinned)
+    choose = ["choose", "--label", "t1", "--set", "frontier"]
+    assert lv.main([*choose, "--initials", "PG", "--out", str(tmp_path)]) == 2
+    assert frontier(tmp_path, "briefs", "--label", "t1") == 0
+    score_all(tmp_path, "t1", backend="frontier")
+    assert frontier(tmp_path, "adequacy", "--label", "t1") == 0
+    out = tmp_path / "approvals"
+    assert not (out / "queue_frontier_t1.csv").exists()
+    args = [*choose, "--initials", "PG", "--out", str(tmp_path)]
+    assert lv.main(args) == 0
+    choice = (out / "set_choice_t1.md").read_text(encoding="utf-8")
+    assert "frontier" in choice and "PG" in choice
+    assert (out / "queue_frontier_t1.csv").exists()
+    assert not (out / "queue_local_t1.csv").exists()
+    assert lv.main(args) == 2
 
 
 def test_the_command_line_explains_itself():
