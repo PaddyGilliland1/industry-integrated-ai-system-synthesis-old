@@ -349,3 +349,29 @@ def test_the_local_model_must_carry_the_pinned_digest(settings):
         gw.check_local_model(settings, lambda url: tags("f" * 64))
     with pytest.raises(RuntimeError, match="not pulled"):
         gw.check_local_model(settings, lambda url: {"models": []})
+
+
+def test_the_frontier_backend_asks_for_json_schema_structured_output(
+    settings, frontier, tmp_path
+):
+    # langchain-anthropic does not support forced tool calling for
+    # structured output on claude-sonnet-5-5, so the frontier backend asks
+    # for json_schema; the local backend keeps the default Agentic AI
+    # Systems ran on this model.
+    for s, want in ((settings, {}), (frontier, {"method": "json_schema"})):
+        model = gw.ScriptedModel(script=[AIMessage(content='{"text": "x"}')])
+        g = gw.ModelGateway.for_settings(
+            s,
+            gw.RecordingStore(tmp_path / f"{s.llm_backend}.jsonl"),
+            live=True,
+            chat_model=model,
+        )
+        g.call(
+            run_id="r1",
+            call_number=1,
+            agent="reviewer",
+            purpose="x",
+            messages=ask(),
+            schema=Answer,
+        )
+        assert model.structured_kwargs == [want]

@@ -285,8 +285,17 @@ class ModelGateway:
             if tools:
                 runnable = runnable.bind_tools(tools)
             elif schema is not None:
+                # langchain-anthropic does not support forced tool calling
+                # for structured output on claude-sonnet-5-5 and asks for
+                # json_schema; the local backend keeps the default that
+                # Agentic AI Systems ran on this model.
+                method = (
+                    {"method": "json_schema"}
+                    if self.backend == "frontier"
+                    else {}
+                )
                 runnable = runnable.with_structured_output(
-                    schema, include_raw=True
+                    schema, include_raw=True, **method
                 )
             reply = call_with_deadline(
                 lambda: runnable.invoke(messages), self.time_limit_s
@@ -488,6 +497,7 @@ def _scripted_model_class():
 
         script: list[Any]
         _seen: list = PrivateAttr(default_factory=list)
+        _structured: list = PrivateAttr(default_factory=list)
 
         @property
         def _llm_type(self):
@@ -502,8 +512,14 @@ def _scripted_model_class():
             """Accept the tools; the script decides the replies."""
             return self
 
+        @property
+        def structured_kwargs(self):
+            """The options each structured-output request asked for."""
+            return self._structured
+
         def with_structured_output(self, schema, include_raw=False, **kw):
             """Return the scripted reply raw, for the caller to parse."""
+            self._structured.append(dict(kw))
             return RunnableLambda(
                 lambda messages: {
                     "raw": self.invoke(messages),
