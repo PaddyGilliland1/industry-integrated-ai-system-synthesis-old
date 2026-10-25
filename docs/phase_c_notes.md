@@ -11,8 +11,8 @@ live run records.
 - **P3-11, built beyond the spec, for the method table.** The MHRA device-word code screen; the tool-call
   cap and the run budget, with the resume after a budget stop; the "Written by" line; the scripted
   safeguard demonstrations (`demo.py`); the placeholder rules, which bind each figure to the model,
-  release horizon, week and unit its clause names (option A, Paddy's ruling); the Reviewer's one retry
-  after a verdict in the wrong form; and the `adequacy` and `choose` commands.
+  release horizon, week and unit its clause names (option A, ruled on 25 Oct 2026); the Reviewer's one
+  retry after a verdict in the wrong form; and the `adequacy` and `choose` commands.
 - **P3-12, the drafted staff actions.** Spec 1b and 2.6 say the LLM drafts "the staff actions and
   notifications". The action text is fixed by code (`coordinator.py`), and the model drafts one
   notification for each action. Say so in the case study.
