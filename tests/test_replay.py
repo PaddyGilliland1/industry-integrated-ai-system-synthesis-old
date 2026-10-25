@@ -13,6 +13,7 @@ import pytest
 from ae_escalation import approval as ap
 from ae_escalation import briefs as br
 from ae_escalation import figures as fg
+from ae_escalation import gateway as gw
 from ae_escalation import replay as rp
 
 from .scripted import stand_in
@@ -452,3 +453,30 @@ def test_the_run_start_bounds_the_approvers_decisions(
     assert started.isoformat() == first["at"]
     queue = rp.queue_with_decisions(result, paths)
     assert queue.not_before == started
+
+
+# --- one bad row stops nothing (review P3-7) ---------------------------------
+
+
+def test_each_bad_row_is_refused_and_logged_and_the_rest_apply(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    ids = [o.run_id for o in result.outcomes]
+    early = {**approval_row(ids[0]), "decided_at": "2020-01-01T09:00:00"}
+    unknown = approval_row("19990101-NOPE")
+    garbled = {**approval_row(ids[2]), "figures_correct": "maybe"}
+    good = approval_row(ids[3])
+    decisions_csv(paths, [early, unknown, garbled, good])
+    log = gw.AuditLog()
+    queue = rp.queue_with_decisions(result, paths, log=log)
+    assert queue.item(ids[3]).state == "approved"
+    assert queue.item(ids[0]).state == "awaiting decision"
+    reasons = " | ".join(r["reason"] for r in queue.refusals)
+    assert len(queue.refusals) == 3
+    assert "before the run" in reasons and "NOPE" in reasons
+    assert "maybe" in reasons
+    assert [e["kind"] for e in log.entries].count("refused") == 3

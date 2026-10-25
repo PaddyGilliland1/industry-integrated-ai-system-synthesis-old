@@ -160,6 +160,10 @@ class TooEarly(Refused):
     """A decision dated before the run that wrote the brief began."""
 
 
+class UnknownBrief(Refused):
+    """A decision on a brief the queue does not hold."""
+
+
 State = Literal[
     "not verified",
     "awaiting decision",
@@ -217,6 +221,9 @@ class ApprovalQueue:
         # When the live run that wrote the briefs began: no decision can
         # come before it (review P3-3).
         self.not_before = not_before
+        # Every decision refused, each with its row and reason, so one bad
+        # row stops nothing (review P3-7).
+        self.refusals = []
         self._items = {}
         if self.path and self.path.exists():
             for line in self.path.read_text(encoding="utf-8").splitlines():
@@ -242,6 +249,10 @@ class ApprovalQueue:
 
     def item(self, brief_id):
         return self._items[brief_id]
+
+    def items_by_id(self):
+        """Every item, by its brief id."""
+        return dict(self._items)
 
     def _add(self, outcome):
         state = (
@@ -292,6 +303,8 @@ class ApprovalQueue:
         return edited, result
 
     def _decide(self, decision):
+        if decision.brief_id not in self._items:
+            raise UnknownBrief(f"{decision.brief_id} is not in the queue")
         item = self._items[decision.brief_id]
         if self.not_before and decision.decided_at <= self.not_before:
             raise TooEarly(
@@ -465,37 +478,52 @@ def _yes(value):
     return text == "yes"
 
 
-def read_decisions(path):
+def read_decisions(path, refused=None):
     """Read the decisions from a filled-in queue CSV: every row with an
     action. An edit names a JSON file of the edited brief's fields,
-    relative to the CSV's folder."""
+    relative to the CSV's folder.
+
+    A row that cannot be read raises ValueError naming it, unless a list
+    is given as refused: then the row is added to it with its reason and
+    the rest are read (review P3-7)."""
     path = Path(path)
     out = []
     with open(path, newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
+        for number, row in enumerate(csv.DictReader(fh), 2):
             if not (row.get("action") or "").strip():
                 continue
-            edited = None
-            if (row.get("edited_file") or "").strip():
-                source = path.parent / row["edited_file"].strip()
-                edited = BriefDraft.model_validate_json(
-                    source.read_text(encoding="utf-8")
+            try:
+                out.append(_decision(row, path.parent))
+            except (ValueError, KeyError, OSError) as exc:
+                reason = f"row {number}, {row.get('brief_id')}: {exc}"
+                if refused is None:
+                    raise ValueError(reason) from exc
+                refused.append(
+                    {
+                        "row": number,
+                        "brief_id": row.get("brief_id"),
+                        "reason": reason,
+                    }
                 )
-            out.append(
-                Decision(
-                    brief_id=row["brief_id"],
-                    action=row["action"].strip(),
-                    initials=row["initials"].strip(),
-                    decided_at=datetime.fromisoformat(
-                        row["decided_at"].strip()
-                    ),
-                    criteria=Criteria(
-                        **{c.field: _yes(row[c.field]) for c in CRITERIA}
-                    ),
-                    factual_edit=_yes(row["factual_edit"]),
-                    edited=edited,
-                    note=row.get("note", ""),
-                    simulated=_yes(row.get("simulated") or "no"),
-                )
-            )
     return out
+
+
+def _decision(row, folder):
+    """One row of the approver's sheet as a Decision."""
+    edited = None
+    if (row.get("edited_file") or "").strip():
+        source = folder / row["edited_file"].strip()
+        edited = BriefDraft.model_validate_json(
+            source.read_text(encoding="utf-8")
+        )
+    return Decision(
+        brief_id=row["brief_id"],
+        action=row["action"].strip(),
+        initials=row["initials"].strip(),
+        decided_at=datetime.fromisoformat(row["decided_at"].strip()),
+        criteria=Criteria(**{c.field: _yes(row[c.field]) for c in CRITERIA}),
+        factual_edit=_yes(row["factual_edit"]),
+        edited=edited,
+        note=row.get("note", ""),
+        simulated=_yes(row.get("simulated") or "no"),
+    )

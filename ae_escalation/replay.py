@@ -39,7 +39,7 @@ from . import agents as ag
 from . import evaluation as ev
 from . import tools as tl
 from .agents import BriefGraph, BriefOutcome, load_prompts
-from .approval import ApprovalQueue, read_decisions
+from .approval import ApprovalQueue, Refused, read_decisions
 from .backtest import site_sizes
 from .briefs import CitedFigure
 from .coordinator import Coordinator
@@ -441,7 +441,9 @@ def queue_with_decisions(result, paths, log=None, record=False):
     record=True, as the live notify step runs it, it opens the queue file
     and appends each decision not yet in it, to that file and the label's
     audit log (review P2-7); a decision already recorded is not added
-    twice.
+    twice. A row it cannot read, or a decision the queue refuses, is logged
+    and listed in queue.refusals, and the other rows still apply (review
+    P3-7).
     """
     started = run_started(paths)
     if record:
@@ -452,11 +454,23 @@ def queue_with_decisions(result, paths, log=None, record=False):
         queue = ApprovalQueue(log=log, not_before=started)
         for outcome in result.outcomes:
             queue.add(outcome)
-    if paths.decisions.exists():
-        for decision in read_decisions(paths.decisions):
-            if decision in queue.item(decision.brief_id).decisions:
-                continue
+    if not paths.decisions.exists():
+        return queue
+    unread = []
+    decisions = read_decisions(paths.decisions, refused=unread)
+    for refusal in unread:
+        queue.log.write(kind="refused", **refusal)
+    queue.refusals += unread
+    for decision in decisions:
+        held = queue.items_by_id().get(decision.brief_id)
+        if held is not None and decision in held.decisions:
+            continue
+        try:
             queue.decide(decision)
+        except Refused as exc:
+            queue.refusals.append(
+                {"brief_id": decision.brief_id, "reason": str(exc)}
+            )
     return queue
 
 
