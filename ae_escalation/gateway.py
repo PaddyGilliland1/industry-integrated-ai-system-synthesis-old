@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
+from openai.lib._parsing import type_to_response_format_param
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .config import ENV_PATH, frontier_key
@@ -439,18 +440,22 @@ class ModelGateway:
             runnable = self.chat_model
             if tools:
                 runnable = runnable.bind_tools(tools)
-            elif schema is not None:
+            elif schema is not None and self.backend == "frontier":
                 # langchain-anthropic does not support forced tool calling
                 # for structured output on claude-sonnet-5-5 and asks for
-                # json_schema; the local backend keeps the default that
-                # Agentic AI Systems ran on this model.
-                method = (
-                    {"method": "json_schema"}
-                    if self.backend == "frontier"
-                    else {}
-                )
+                # json_schema.
                 runnable = runnable.with_structured_output(
-                    schema, include_raw=True, **method
+                    schema, include_raw=True, method="json_schema"
+                )
+            elif schema is not None:
+                # The local backend asks for the JSON schema OpenAI's client
+                # would send for the class, not the class: given the class,
+                # the client checks the reply against it inside the call,
+                # validators and all, and raises with the reply lost, so a
+                # draft the text rules refuse could never reach the code
+                # check or the retry. The reply is read in code instead.
+                runnable = runnable.bind(
+                    response_format=type_to_response_format_param(schema)
                 )
             try:
                 reply = call_with_deadline(
@@ -488,9 +493,7 @@ class ModelGateway:
                 raise self._failed(
                     exc, where, request, latency, False, error["message"]
                 )
-            message = (
-                reply["raw"] if schema is not None and not tools else reply
-            )
+            message = reply["raw"] if isinstance(reply, dict) else reply
             latency = time.monotonic() - started
             response = message_record(message)
             response["usage"] = dict(message.usage_metadata or {})

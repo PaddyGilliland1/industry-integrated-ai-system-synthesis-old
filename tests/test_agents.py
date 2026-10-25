@@ -24,8 +24,10 @@ from .scripted import (
     WORDING_OK,
     figure,
     good_draft,
+    ollama_wire,
     planted_draft,
     reply,
+    schema_asked,
     tc,
 )
 
@@ -845,6 +847,48 @@ def test_a_refused_draft_is_named_whole_and_retried_as_a_draft(
     assert "The Reviewer's check failed your brief" in retry_ask
     assert "could not be read" not in retry_ask
     for named in ("SA-MA: each figure's label", "next week: write", wrong):
+        assert named in retry_ask
+    assert json.dumps(as_written(bad)) in retry_ask
+
+
+def test_a_refused_draft_reaches_the_retry_through_the_local_client(
+    run, holidays, settings, tmp_path, monkeypatch
+):
+    # The local backend's real chat model, its requests answered in
+    # process, so the typed reply passes through OpenAI's client as a live
+    # run's does; the scripted stand-in skips that client.
+    bad = refused_draft(run)
+    drafts = [bad, good_draft(run)]
+
+    def respond(body):
+        asked = schema_asked(body)
+        if asked == "BriefDraft":
+            return json.dumps(drafts.pop(0))
+        if asked == "WordingVerdict":
+            return '{"passes": true, "problems": []}'
+        if body["messages"][-1]["role"] == "tool":
+            return "done"
+        return [(c["name"], c["args"]) for c in TOOLS.tool_calls]
+
+    sent = ollama_wire(monkeypatch, respond)
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=gw.make_chat_model(settings),
+    )
+    out = ag.BriefGraph(run, holidays, settings, gateway).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "verified" and len(out.attempts) == 2
+    first = out.attempts[0]
+    assert first.stop_reason == "" and first.draft == as_written(bad)
+    asked = [n for n, b in enumerate(sent) if schema_asked(b) == "BriefDraft"]
+    retry_ask = " ".join(
+        str(m.get("content")) for m in sent[asked[0] + 1]["messages"]
+    )
+    assert "The Reviewer's check failed your brief" in retry_ask
+    for named in ("SA-MA: each figure's label", "next week: write"):
         assert named in retry_ask
     assert json.dumps(as_written(bad)) in retry_ask
 

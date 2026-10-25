@@ -14,6 +14,7 @@ from ae_escalation import config as cf
 from ae_escalation import gateway as gw
 
 from .conftest import REPO
+from .scripted import ollama_wire, schema_asked
 
 FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
 
@@ -281,47 +282,6 @@ def test_the_local_backend_is_ollama_on_this_machine(settings):
     assert model.temperature == 0
 
 
-def ollama_wire(monkeypatch, content='{"text": "a"}'):
-    """The body of every request the local chat model sends, caught before
-    it leaves the process and answered with content, so no test reaches
-    Ollama."""
-    from functools import partial
-
-    import httpx
-    import langchain_openai
-
-    sent = []
-
-    def answer(request):
-        sent.append(json.loads(request.content))
-        return httpx.Response(
-            200,
-            json={
-                "id": "c1",
-                "object": "chat.completion",
-                "created": 0,
-                "model": "m",
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {"role": "assistant", "content": content},
-                        "finish_reason": "stop",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": 1,
-                    "completion_tokens": 1,
-                    "total_tokens": 2,
-                },
-            },
-        )
-
-    client = httpx.Client(transport=httpx.MockTransport(answer))
-    made = partial(langchain_openai.ChatOpenAI, http_client=client)
-    monkeypatch.setattr(langchain_openai, "ChatOpenAI", made)
-    return sent
-
-
 def wire_gateway(settings, tmp_path):
     """A live local gateway on the real chat model, its requests caught by
     ollama_wire."""
@@ -358,13 +318,60 @@ def test_the_local_output_cap_reaches_ollama_as_the_field_it_reads(
     # Ollama's OpenAI-compatible endpoint reads max_tokens as num_predict
     # and has no max_completion_tokens field, which is the name ChatOpenAI
     # gives its own max_tokens, so a cap set that way never arrives.
-    sent = ollama_wire(monkeypatch)
+    sent = ollama_wire(monkeypatch, lambda body: '{"text": "a"}')
     call_each_way(wire_gateway(settings, tmp_path))
     assert len(sent) == 3
     for body in sent:
         assert body["max_tokens"] == settings.local.num_predict
         assert "max_completion_tokens" not in body
     assert settings.local.num_predict == 8192
+
+
+def test_a_local_typed_reply_the_rules_refuse_comes_back_whole(
+    settings, tmp_path, monkeypatch
+):
+    # OpenAI's client checks a reply against a Pydantic schema inside the
+    # call, validators and all, and raises with the reply lost. A draft the
+    # text rules refuse must come back whole, for the code check to name
+    # every problem and the retry to show the draft.
+    from openai.lib._parsing import type_to_response_format_param
+
+    from ae_escalation import briefs as br
+
+    draft = {
+        "summary": "The primary model forecasts {F1}.",
+        "expected_range": "It starts at {F1}.",
+        "model_agreement": "The models broadly agree.",
+        "watch_points": ["Check cover this week."],
+        "cited_figures": [
+            {
+                "value": 834,
+                "tool_call_id": "T1",
+                "measure": "point",
+                "model": "SA-MA",
+                "horizon": 1,
+                "week": None,
+                "unit": "attendances",
+            }
+        ],
+    }
+    sent = ollama_wire(monkeypatch, lambda body: json.dumps(draft))
+    reply, record = wire_gateway(settings, tmp_path).call(
+        run_id="r1",
+        call_number=1,
+        agent="investigator",
+        purpose="draft",
+        messages=ask(),
+        schema=br.BriefDraft,
+    )
+    found, problems, _ = gw.read_structured(reply, br.DraftFields)
+    assert not record.error and not problems
+    assert found.summary == draft["summary"]
+    # The schema goes out as the client would send it for the class.
+    assert schema_asked(sent[0]) == "BriefDraft"
+    assert sent[0]["response_format"] == type_to_response_format_param(
+        br.BriefDraft
+    )
 
 
 def test_the_frontier_backend_is_the_claude_api_with_the_key_from_env(
@@ -505,9 +512,9 @@ def test_the_frontier_backend_asks_for_json_schema_structured_output(
 ):
     # langchain-anthropic does not support forced tool calling for
     # structured output on claude-sonnet-5-5, so the frontier backend asks
-    # for json_schema; the local backend keeps the default Agentic AI
-    # Systems ran on this model.
-    for s, want in ((settings, {}), (frontier, {"method": "json_schema"})):
+    # for json_schema. The local backend binds the schema's JSON form
+    # instead, whose request is tested on the wire above.
+    for s, want in ((settings, []), (frontier, [{"method": "json_schema"}])):
         model = gw.ScriptedModel(script=[AIMessage(content='{"text": "x"}')])
         g = gw.ModelGateway.for_settings(
             s,
@@ -523,7 +530,7 @@ def test_the_frontier_backend_asks_for_json_schema_structured_output(
             messages=ask(),
             schema=Answer,
         )
-        assert model.structured_kwargs == [want]
+        assert model.structured_kwargs == want
 
 
 # --- a failed call is recorded and replayed exactly --------------------------

@@ -185,3 +185,63 @@ def answer(messages):
 
 def stand_in():
     return gw.ScriptedModel(script=[answer] * 200)
+
+
+def ollama_wire(monkeypatch, respond):
+    """Catch every request the local backend's real chat model sends, before
+    it leaves the process, and answer each with respond(body): the reply's
+    content, or a list of (tool name, arguments) for tool calls. Returns
+    the request bodies, in order. No request reaches Ollama."""
+    from functools import partial
+
+    import httpx
+    import langchain_openai
+
+    sent = []
+
+    def answer_request(request):
+        body = json.loads(request.content)
+        sent.append(body)
+        said = respond(body)
+        message = {"role": "assistant", "content": said}
+        finish = "stop"
+        if isinstance(said, list):
+            message["content"] = None
+            message["tool_calls"] = [
+                {
+                    "id": f"call_{len(sent)}_{i}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(args)},
+                }
+                for i, (name, args) in enumerate(said)
+            ]
+            finish = "tool_calls"
+        return httpx.Response(
+            200,
+            json={
+                "id": f"c{len(sent)}",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "m",
+                "choices": [
+                    {"index": 0, "message": message, "finish_reason": finish}
+                ],
+                "usage": {
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "total_tokens": 2,
+                },
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(answer_request))
+    made = partial(langchain_openai.ChatOpenAI, http_client=client)
+    monkeypatch.setattr(langchain_openai, "ChatOpenAI", made)
+    return sent
+
+
+def schema_asked(body):
+    """The name of the typed answer a request asks for, or None."""
+    return (
+        (body.get("response_format") or {}).get("json_schema", {}).get("name")
+    )
