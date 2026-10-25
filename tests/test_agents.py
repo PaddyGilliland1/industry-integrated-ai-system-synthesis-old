@@ -153,7 +153,8 @@ def test_a_draft_that_sets_a_level_is_refused_by_the_schema(
     out = graph(run, holidays, settings, script, tmp_path).run(
         ORIGIN, "T101H", "nw"
     )
-    assert out.attempts[0].stop_reason == "could not read the brief"
+    assert out.attempts[0].stop_reason.startswith("could not read the brief")
+    assert "level" in out.attempts[0].stop_reason
     assert out.status == "verified" and out.brief.level == 2
 
 
@@ -542,3 +543,67 @@ def test_a_reviewer_error_fails_closed_without_asking_the_investigator(
         ORIGIN, "T101H", "nw"
     )
     assert again.status == "not verified"
+
+
+# --- an unreadable draft's retry is not blind (review P2-1) ------------------
+
+
+def retry_text(run, holidays, settings, tmp_path, first):
+    model = gw.ScriptedModel(
+        script=[TOOLS, DONE, first, DONE, reply(good_draft(run)), WORDING_OK]
+    )
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    out = ag.BriefGraph(run, holidays, settings, gateway).run(
+        ORIGIN, "T101H", "nw"
+    )
+    first_ask = " ".join(str(m.content) for m in model.seen[0])
+    retry_ask = " ".join(str(m.content) for m in model.seen[3])
+    return out, first_ask, retry_ask
+
+
+def extra_key(draft):
+    return {**draft, "level": 3}
+
+
+def horizon_5(draft):
+    first = {**draft["cited_figures"][0], "horizon": 5}
+    return {**draft, "cited_figures": [first, *draft["cited_figures"][1:]]}
+
+
+def written_out(draft):
+    return {**draft, "summary": "Expect 1,120 attendances."}
+
+
+@pytest.mark.parametrize(
+    "spoil, named",
+    [
+        (extra_key, "level: Extra inputs are not permitted"),
+        (horizon_5, "less than or equal to 4"),
+        (written_out, "1,120: write every"),
+    ],
+)
+def test_the_retry_carries_the_problems_and_the_raw_reply(
+    run, holidays, settings, tmp_path, spoil, named
+):
+    bad = spoil(good_draft(run))
+    out, first_ask, retry_ask = retry_text(
+        run, holidays, settings, tmp_path, reply(bad)
+    )
+    assert out.status == "verified" and len(out.attempts) == 2
+    assert named in retry_ask
+    assert json.dumps(bad) in retry_ask
+    assert retry_ask != first_ask
+
+
+def test_a_reply_with_no_json_is_named_in_the_retry(
+    run, holidays, settings, tmp_path
+):
+    out, _, retry_ask = retry_text(
+        run, holidays, settings, tmp_path, AIMessage(content="Sorry, no.")
+    )
+    assert "holds no JSON object" in retry_ask and "Sorry, no." in retry_ask

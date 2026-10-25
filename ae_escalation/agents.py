@@ -35,7 +35,12 @@ from . import placeholders as ph
 from . import tools as tl
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief, ToolCall
 from .figures import CheckResult, check_brief, marked
-from .gateway import CallRecord, ReplayMiss, parse_structured
+from .gateway import (
+    CallRecord,
+    ReplayMiss,
+    parse_structured,
+    read_structured,
+)
 from .timing import release_horizon_weeks
 
 PROMPTS_PATH = Path(__file__).with_name("prompts")
@@ -220,13 +225,16 @@ class _Stop(Exception):
 
 
 class InvestigatorPass(BaseModel):
-    """One pass of the Investigator: its draft, or why it stopped."""
+    """One pass of the Investigator: its draft, or why it stopped. An
+    unreadable draft keeps its problems and the raw reply for the retry."""
 
     status: Literal["ok", "stopped"]
     stop_reason: str = ""
     cap_reached: bool = False
     draft: BriefDraft | None = None
     calls: list[CallRecord] = Field(default_factory=list)
+    problems: list[str] = Field(default_factory=list)
+    raw_reply: str = ""
 
 
 def entry_text(entry):
@@ -334,9 +342,11 @@ def investigator_pass(
     first_call,
     previous=None,
     problems=(),
+    raw=None,
 ):
     """One pass of the Investigator: the tool loop, then the draft as
-    typed JSON. A retry first shows the problems and the previous draft.
+    typed JSON. A retry first shows the problems and the previous draft,
+    or, when the previous reply could not be read, why and the raw reply.
 
     An error, the time limit or an unreadable draft ends the pass as
     "stopped". A replay miss is raised, never hidden.
@@ -360,6 +370,16 @@ def investigator_pass(
                     prompts["RETRY"],
                     problems=numbered(problems) or "1. (none given)",
                     draft=json.dumps(previous.model_dump(mode="json")),
+                )
+            )
+        )
+    elif raw is not None:
+        messages.append(
+            HumanMessage(
+                content=fill(
+                    prompts["RETRY UNREADABLE"],
+                    problems=numbered(problems) or "1. (none given)",
+                    raw=raw,
                 )
             )
         )
@@ -389,11 +409,11 @@ def investigator_pass(
             schema=BriefDraft,
         )
         calls.append(record)
-        draft = parse_structured(
+        draft, unread, raw_reply = read_structured(
             reply, BriefDraft, context={"text": entry_context(entry)}
         )
         if draft is None:
-            raise _Stop("could not read the brief")
+            raise _Stop("could not read the brief: " + "; ".join(unread))
     except ReplayMiss:
         raise
     except _Stop as exc:
@@ -402,6 +422,8 @@ def investigator_pass(
             stop_reason=str(exc),
             cap_reached=cap_reached,
             calls=calls,
+            problems=unread,
+            raw_reply=raw_reply,
         )
     except Exception as exc:
         # A failed model call is recorded under its own number, so the next
@@ -587,6 +609,7 @@ class BriefState(TypedDict, total=False):
     entry: dict | None
     attempt: int
     draft: dict | None
+    raw: str | None
     brief: dict | None
     passed: bool
     problems: list[str]
@@ -643,6 +666,7 @@ class BriefGraph:
             if attempt > 1 and state.get("draft")
             else None
         )
+        raw = state.get("raw") if attempt > 1 else None
         out = investigator_pass(
             entry,
             gateway=self.gateway,
@@ -653,6 +677,7 @@ class BriefGraph:
             first_call=state.get("model_calls", 0) + 1,
             previous=previous,
             problems=state.get("problems", []) if attempt > 1 else [],
+            raw=raw,
         )
         record = Attempt(number=attempt, stop_reason=out.stop_reason)
         draft = out.draft
@@ -674,7 +699,9 @@ class BriefGraph:
         }
         if draft is None:
             update["brief"] = None
-            update["problems"] = [
+            update["draft"] = None
+            update["raw"] = out.raw_reply if out.problems else None
+            update["problems"] = out.problems or [
                 f"the Investigator gave no readable brief: {out.stop_reason}"
             ]
             return update
@@ -689,9 +716,11 @@ class BriefGraph:
             )
         except ValidationError as exc:
             update["brief"] = None
+            update["draft"] = draft.model_dump(mode="json")
             update["problems"] = ph.problems_of(exc)
             return update
         update["draft"] = draft.model_dump(mode="json")
+        update["raw"] = None
         update["brief"] = brief.model_dump(mode="json")
         return update
 

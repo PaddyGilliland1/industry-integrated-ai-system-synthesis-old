@@ -46,6 +46,16 @@ Your brief was:
 
 Fix each problem, using your tools if you need to, then write the brief again. Every figure must come from a tool result, be cited, and appear in the text only as its placeholder.
 
+## RETRY UNREADABLE
+
+Your last reply could not be read as the brief, once. These are the problems:
+{problems}
+
+Your reply was:
+{raw}
+
+Fix each problem, using your tools if you need to, then write the brief again as JSON only, in the form asked for. Every figure must come from a tool result, be cited, and appear in the text only as its placeholder.
+
 ## DRAFT
 
 Write the demand brief now. Reply with JSON only, with these fields:

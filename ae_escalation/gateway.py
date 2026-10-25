@@ -477,15 +477,48 @@ class ModelGateway:
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
-def parse_structured(message, schema, context=None):
-    """The schema's object from a reply: from a tool call's arguments, or
-    from JSON in the text with or without a code fence; None if there is
-    no valid one. context goes to the schema's validators."""
+RAW_LIMIT = 8000
+
+
+def raw_text(message):
+    """A reply as text for a retry: its content, or its tool calls'
+    arguments when it has none, cut to a bounded length."""
+    content = message.content
+    if isinstance(content, list):
+        content = "".join(
+            part.get("text", "") if isinstance(part, dict) else str(part)
+            for part in content
+        )
+    text = content if isinstance(content, str) else str(content)
+    if not text.strip() and message.tool_calls:
+        text = json.dumps([c["args"] for c in message.tool_calls])
+    if len(text) > RAW_LIMIT:
+        text = text[:RAW_LIMIT] + f" (cut at {RAW_LIMIT:,} characters)"
+    return text
+
+
+def read_structured(message, schema, context=None):
+    """The schema's object from a reply, from a tool call's arguments or
+    from JSON in the text with or without a code fence, with why it could
+    not be read and the raw reply, so a retry is never blind (review P2-1).
+    context goes to the schema's validators.
+
+    Returns
+    -------
+    tuple of (schema or None, list of str, str)
+        The object, the problems with the first JSON object that failed,
+        and the reply as text.
+    """
+    from .placeholders import problems_of
+
+    problems = []
     for tool_call in message.tool_calls:
         try:
-            return schema.model_validate(tool_call["args"], context=context)
-        except ValidationError:
-            continue
+            found = schema.model_validate(tool_call["args"], context=context)
+            return found, [], raw_text(message)
+        except ValidationError as exc:
+            problems = problems or problems_of(exc)
+    raw = raw_text(message)
     content = message.content
     if isinstance(content, list):
         content = "".join(
@@ -493,16 +526,23 @@ def parse_structured(message, schema, context=None):
             for part in content
         )
     if not isinstance(content, str) or not content.strip():
-        return None
+        return None, problems or ["the reply is empty"], raw
     decoder = json.JSONDecoder()
     for text in [m.strip() for m in _FENCE.findall(content)] + [content]:
         for start in (i for i, ch in enumerate(text) if ch == "{"):
             try:
                 found, _ = decoder.raw_decode(text, start)
-                return schema.model_validate(found, context=context)
-            except (json.JSONDecodeError, ValidationError, TypeError):
+                return schema.model_validate(found, context=context), [], raw
+            except ValidationError as exc:
+                problems = problems or problems_of(exc)
+            except (json.JSONDecodeError, TypeError):
                 continue
-    return None
+    return None, problems or ["the reply holds no JSON object"], raw
+
+
+def parse_structured(message, schema, context=None):
+    """The schema's object from a reply, or None if there is no valid one."""
+    return read_structured(message, schema, context)[0]
 
 
 # --- the chat models behind the switch ---------------------------------------
