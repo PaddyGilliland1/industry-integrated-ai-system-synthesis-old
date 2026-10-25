@@ -81,6 +81,7 @@ VOCABULARY = [
     ),
     re.compile(r"\b(?:80|95)(?=\s*(?:and|or|,|/)\s*(?:80|95)\s?%)"),
     re.compile(r"\((?:80|95)\s?%\)"),
+    re.compile(r"\b(?:80|95)\s?%(?=\s*:)"),
     re.compile(r"\b[A-Z]\d{3}[A-Z]\b"),
 ]
 LEVEL = re.compile(r"\blevels?\s+(?P<n>\d+)\b", re.IGNORECASE)

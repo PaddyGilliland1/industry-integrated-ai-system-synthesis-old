@@ -255,6 +255,17 @@ def test_a_surge_brief_is_marked_forecasts_untrusted():
     b = brief(entry=surge)
     assert b.drift_alarm and not b.forecasts_trusted
     assert "surge: forecasts untrusted" in b.text()
+    assert "after an upward breach" in b.text()
+    held = surge.model_copy(
+        update={
+            "kind": "latch",
+            "level_source": "held",
+            "breach_direction": "downward",
+        }
+    )
+    assert "after a downward breach; held: forecasts untrusted" in (
+        brief(entry=held).text()
+    )
 
 
 # --- the text's numbers and dates --------------------------------------------

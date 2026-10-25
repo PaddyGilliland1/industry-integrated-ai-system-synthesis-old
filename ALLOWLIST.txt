@@ -54,3 +54,5 @@ tests/scripted.py
 ae_escalation/coordinator.py
 ae_escalation/prompts/coordinator.md
 tests/test_coordinator.py
+ae_escalation/template.py
+tests/test_template.py

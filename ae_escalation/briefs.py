@@ -203,9 +203,10 @@ class DemandBrief(BaseModel):
             self.level_meaning,
         ]
         if self.drift_alarm:
+            article = "an" if self.breach_direction == "upward" else "a"
             lines.append(
                 f"Drift alarm: latched since w/e {self.latched_since:%d %b %Y}"
-                f", after an {self.breach_direction} breach; "
+                f", after {article} {self.breach_direction} breach; "
                 f"{self.trust_note}."
             )
         else:
