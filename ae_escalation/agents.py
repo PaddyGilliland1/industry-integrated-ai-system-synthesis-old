@@ -247,16 +247,25 @@ class InvestigatorPass(BaseModel):
 
 
 def entry_text(entry):
-    """What the screen tells the Investigator: code-set facts only."""
-    weeks = release_horizon_weeks(entry.as_of)
+    """What the screen tells the Investigator: code-set facts only, and
+    what code writes for each token in this brief."""
+    weeks = [w.date() for w in release_horizon_weeks(entry.as_of)]
+    ctx = entry_context(entry)
+    tokens = ["HOSPITAL", "PRIMARY", "LEVEL", "ORIGIN", "RELEASE"]
+    tokens += [f"WEEK{k}" for k in (1, 2, 3, 4)]
+    if entry.latched_since:
+        tokens.append("LATCHED")
+    written = "; ".join(
+        f"{{{t}}} {ph.render(f'{{{t}}}', [], ctx)}" for t in tokens
+    )
     lines = [
         "The screen sent this hospital to you.",
         f"Hospital: {entry.name} ({entry.hospital})",
-        f"Origin: the week ending {entry.as_of:%d %b %Y}, released "
-        f"{entry.release_date:%a %d %b %Y}",
+        f"Origin: the week ending {ph.day_text(entry.as_of)}, released "
+        f"{ph.release_text(entry.release_date)}",
         "The four weeks ahead: "
         + "; ".join(
-            f"release horizon {k}, w/e {w:%d %b %Y}"
+            f"release horizon {k}, {ph.week_text(w)}"
             for k, w in enumerate(weeks, 1)
         ),
         f"Demand level: {entry.level}, from the {entry.level_source}.",
@@ -269,14 +278,16 @@ def entry_text(entry):
             "actual",
             "latch": "held: the level is held from the week before the alarm",
         }[entry.kind]
+        article = "an" if entry.breach_direction == "upward" else "a"
         lines.append(
-            f"Drift: the drift latch is set since w/e "
-            f"{entry.latched_since:%d %b %Y}, after an "
+            f"Drift: the drift latch is set since "
+            f"{ph.week_text(entry.latched_since)}, after {article} "
             f"{entry.breach_direction} breach. The forecasts are untrusted; "
             f"this is {how}."
         )
     else:
         lines.append("Drift: none. The forecasts fit recent weeks.")
+    lines.append(f"Tokens, as code writes them for this brief: {written}.")
     return "\n".join(lines)
 
 
