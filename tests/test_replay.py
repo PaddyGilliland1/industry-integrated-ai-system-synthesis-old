@@ -4,6 +4,8 @@ weeks are picked by the stated rules; a designed failure plants a figure no
 tool returned; every run is recorded so it replays without the model. The
 live side is a scripted stand-in: no test calls a language model."""
 
+import csv
+import json
 from datetime import date
 
 import pytest
@@ -380,3 +382,58 @@ def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
         q, settings, paths, live=True, chat_model=stand_in(), resume=True
     )
     assert len(done) == 2 and paths.outbox.exists()
+
+
+# --- decisions reach the audit file and the queue file (review P2-7) ---------
+
+
+def decisions_csv(paths, rows):
+    paths.decisions.parent.mkdir(parents=True, exist_ok=True)
+    with open(paths.decisions, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def approval_row(brief_id):
+    return {
+        "brief_id": brief_id,
+        "action": "approve",
+        "initials": "AB",
+        "decided_at": "2026-10-27T09:30:00+00:00",
+        "factual_edit": "no",
+        **{c.field: "yes" for c in ap.CRITERIA},
+        "note": "",
+        "edited_file": "",
+    }
+
+
+def kinds(path):
+    return [json.loads(x)["kind"] for x in path.read_text().splitlines()]
+
+
+def test_the_queue_and_each_decision_reach_the_audit_and_queue_files(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    rp.write_queue(result, paths)
+    assert kinds(paths.audit).count("queued") == 7
+    decisions_csv(paths, [approval_row(result.outcomes[0].run_id)])
+    rp.queue_with_decisions(result, paths, record=True)
+    events = [
+        json.loads(x)["event"] for x in paths.queue.read_text().splitlines()
+    ]
+    assert events.count("decision") == 1
+    assert kinds(paths.audit).count("decision") == 1
+    again = rp.queue_with_decisions(result, paths, record=True)
+    events = [
+        json.loads(x)["event"] for x in paths.queue.read_text().splitlines()
+    ]
+    assert events.count("decision") == 1
+    assert again.item(result.outcomes[0].run_id).state == "approved"
+    before = paths.queue.read_text()
+    rp.queue_with_decisions(result, paths)
+    assert paths.queue.read_text() == before

@@ -404,28 +404,40 @@ def run_set(
 
 
 def write_queue(result, paths, log=None):
-    """Write the approval queue file and its CSV for the approver, once,
-    after the live run. An existing queue is never overwritten. The
-    designed failure is evidence for the check, not a brief to approve, so
-    it is not queued."""
+    """Write the approval queue file and its CSV for the approver, once.
+    An existing queue is never overwritten. Each brief queued goes to the
+    label's audit log (review P2-7). The designed failure is evidence for
+    the check, not a brief to approve, so it is not queued."""
     if paths.queue.exists():
         raise FileExistsError(f"{paths.queue} exists; it is never replaced")
-    queue = ApprovalQueue(paths.queue, log=log)
+    queue = ApprovalQueue(paths.queue, log=log or AuditLog(paths.audit))
     for outcome in result.outcomes:
         queue.add(outcome)
     queue.export_csv(paths.queue_csv)
     return queue
 
 
-def queue_with_decisions(result, paths, log=None):
-    """The queue rebuilt in memory from the replayed outcomes, with the
-    approver's decisions from paths.decisions when that file exists. It
-    writes nothing, so the notebook can run it again and again."""
-    queue = ApprovalQueue(log=log)
-    for outcome in result.outcomes:
-        queue.add(outcome)
+def queue_with_decisions(result, paths, log=None, record=False):
+    """The queue with the approver's decisions from paths.decisions, when
+    that file exists.
+
+    By default it is rebuilt in memory from the replayed outcomes and
+    writes nothing, so the notebook can run it again and again. With
+    record=True, as the live notify step runs it, it opens the queue file
+    and appends each decision not yet in it, to that file and the label's
+    audit log (review P2-7); a decision already recorded is not added
+    twice.
+    """
+    if record:
+        queue = ApprovalQueue(paths.queue, log=log or AuditLog(paths.audit))
+    else:
+        queue = ApprovalQueue(log=log)
+        for outcome in result.outcomes:
+            queue.add(outcome)
     if paths.decisions.exists():
         for decision in read_decisions(paths.decisions):
+            if decision in queue.item(decision.brief_id).decisions:
+                continue
             queue.decide(decision)
     return queue
 

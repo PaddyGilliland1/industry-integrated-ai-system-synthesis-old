@@ -152,7 +152,7 @@ def _notify(settings, paths, model, digest, resume):
         return 2
     run, holidays = load_run(settings)
     result = run_set(run, holidays, settings, paths, live=False)
-    queue = queue_with_decisions(result, paths)
+    queue = queue_with_decisions(result, paths, record=True)
     try:
         done = coordinate_approved(
             queue,
