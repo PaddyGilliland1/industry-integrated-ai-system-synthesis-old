@@ -304,3 +304,49 @@ def test_the_evaluation_never_changes_the_frame(run):
     ev.calibration(run.frame)
     ev.by_month(run.frame)
     pd.testing.assert_frame_equal(run.frame, before)
+
+
+def test_the_gru_comparison_pairs_it_with_the_primary_in_three_scopes(run):
+    # A GRU that repeats the primary's forecasts differs from it by nothing.
+    s = "A"
+    r = run.runs[s]
+    rows = []
+    for t0 in range(len(run.weeks) - 1):
+        for h in range(1, 6):
+            if t0 + h < len(run.weeks):
+                rows.append(
+                    (
+                        s,
+                        "gru",
+                        run.weeks[t0],
+                        h,
+                        run.weeks[t0 + h],
+                        run.series[s][t0 + h],
+                        r["issued"][t0, h - 1],
+                    )
+                )
+    fake = pd.DataFrame(
+        rows,
+        columns=[
+            "series",
+            "model",
+            "origin",
+            "h",
+            "target",
+            "actual",
+            "forecast",
+        ],
+    )
+    out = ev.gru_against_primary(run, fake, [s])
+    assert set(out["scope"]) == {
+        "all weeks",
+        "outside drift episodes",
+        "outside March 2020 to March 2022",
+    }
+    assert (out["gru_minus_primary"] == 0).all()
+    assert (out["lo"] == 0).all() and (out["hi"] == 0).all()
+    every = out[out["scope"] == "all weeks"].set_index("release_horizon")
+    covid = out[out["scope"] == "outside March 2020 to March 2022"]
+    covid = covid.set_index("release_horizon")
+    assert (covid["n"] < every["n"]).all()
+    np.testing.assert_allclose(covid["mape_gru"], covid["mape_primary"])

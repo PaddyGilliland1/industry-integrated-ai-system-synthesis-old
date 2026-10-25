@@ -12,7 +12,14 @@ import pandas as pd
 
 from . import rules as ru
 from .backtest import block_bootstrap_ci, ratio_range
-from .design import DRIFT_START, NATIONAL, REPLAY, STEADY_YEARS, run_design
+from .design import (
+    COVID,
+    DRIFT_START,
+    NATIONAL,
+    REPLAY,
+    STEADY_YEARS,
+    run_design,
+)
 from .timing import RELEASE_LAG
 
 SCORE_START = pd.Timestamp("2018-01-07")
@@ -26,6 +33,11 @@ ORIGINS = (
 SIXTH_FROM = pd.Timestamp("2023-04-01")
 EDGES = np.round(np.arange(0, 1.01, 0.1), 1)
 SIMPLE_BARS = ("4-week moving average", "seasonal naive")
+GRU_SCOPES = (
+    "all weeks",
+    "outside drift episodes",
+    "outside March 2020 to March 2022",
+)
 
 
 def _pct(num, den):
@@ -887,8 +899,10 @@ def gru_against_primary(design_run, gru_long, series, score_start=SCORE_START):
     simple models and the GRU, and the GRU's paired difference against the
     primary with a 95% moving-block interval.
 
-    Each series is scored from score_start, on all weeks and outside its own
-    drift episodes. A negative difference favours the GRU.
+    Each series is scored from score_start in three scopes: all weeks;
+    outside its own drift episodes, as G1 scores the national series; and
+    outside March 2020 to March 2022, the data test's window. A negative
+    difference favours the GRU.
 
     Parameters
     ----------
@@ -899,6 +913,7 @@ def gru_against_primary(design_run, gru_long, series, score_start=SCORE_START):
     series : list of str
     """
     weeks, n = design_run.weeks, len(design_run.weeks)
+    covid = np.asarray((weeks >= COVID[0]) & (weeks <= COVID[1]))
     rows = []
     for s in series:
         run, y = design_run.runs[s], design_run.series[s]
@@ -907,11 +922,13 @@ def gru_against_primary(design_run, gru_long, series, score_start=SCORE_START):
         for k in range(1, 5):
             h = k + 1
             gh = g[g["h"] == h].set_index("target")["forecast"]
-            for scope in ("all weeks", "outside drift episodes"):
+            for scope in GRU_SCOPES:
                 tg = np.arange(h, n)
                 tg = tg[weeks[tg] >= score_start]
-                if scope != "all weeks":
+                if scope == "outside drift episodes":
                     tg = tg[~skip[tg]]
+                elif scope == "outside March 2020 to March 2022":
+                    tg = tg[~covid[tg]]
                 tg = tg[np.isin(weeks[tg], gh.index)]
                 gf = gh.reindex(weeks[tg]).to_numpy()
 
