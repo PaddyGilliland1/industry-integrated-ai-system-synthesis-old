@@ -638,18 +638,21 @@ class BriefOutcome(BaseModel):
         last = self.attempts[-1] if self.attempts else None
         return list(last.check.failures) if last and last.check else []
 
-    def display(self):
+    def display(self, written_by=True):
         """The brief as the manager sees it; a brief that is not verified
-        carries the banner and its failing figures marked."""
+        carries the banner and its failing figures marked. written_by=False
+        is the raters' view, without the author's line."""
         if self.status != "not verified":
-            return self.brief.text() if self.brief else ""
+            return self.brief.text(written_by=written_by) if self.brief else ""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
         if self.brief is None:
             reason = self.attempts[-1].stop_reason if self.attempts else ""
             return f"{banner}\nNo readable brief: {reason}"
         last = self.attempts[-1]
         failed = set(last.check.failed_figures) if last.check else set()
-        text = marked(self.brief.text(failed), self.failures)
+        text = marked(
+            self.brief.text(failed, written_by=written_by), self.failures
+        )
         last = last.wording
         notes = (
             ["Wording problems:", *[f"- {p}" for p in last.problems]]

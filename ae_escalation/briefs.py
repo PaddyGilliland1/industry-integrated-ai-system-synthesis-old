@@ -259,9 +259,11 @@ class DemandBrief(BaseModel):
             return "held: forecasts untrusted"
         return ""
 
-    def text(self, failed=frozenset()):
+    def text(self, failed=frozenset(), written_by=True):
         """The brief as the manager reads it, with every placeholder filled
-        in by code; the cited figures numbered in failed are marked."""
+        in by code; the cited figures numbered in failed are marked. The
+        raters' view leaves out the line naming the backend and model that
+        wrote it, which the record keeps (review P2-9)."""
         shown = self.rendered(failed)
         points = [v for k, v in shown.items() if k.startswith("watch_points")]
         lines = [
@@ -288,8 +290,11 @@ class DemandBrief(BaseModel):
             f"Track record: {shown['track_record']}",
             "Watch points:",
             *[f"- {w}" for w in points],
-            f"Written by: the {self.backend} backend, {self.model}.",
         ]
+        if written_by:
+            lines.append(
+                f"Written by: the {self.backend} backend, {self.model}."
+            )
         return "\n".join(lines)
 
 

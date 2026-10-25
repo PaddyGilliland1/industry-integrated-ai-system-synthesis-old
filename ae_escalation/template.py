@@ -286,6 +286,13 @@ def comparison_verdict(ratings):
     return out
 
 
+def rater_view(outcome):
+    """The agent's brief as a rater sees it in a pair: without the line
+    naming the backend and model that wrote it, which would tell the
+    rater which text is the agent's (review P2-9)."""
+    return outcome.display(written_by=False)
+
+
 def blind_order(week, seed):
     """The order the two texts are shown in for a week, hidden from the
     raters and fixed by a seed, so it can be shown afterwards."""

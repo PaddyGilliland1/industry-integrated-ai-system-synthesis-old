@@ -160,8 +160,9 @@ class QueueItem(BaseModel):
     last_edit: CheckResult | None = None
     decisions: list[Decision] = Field(default_factory=list)
 
-    def display(self):
-        """The brief as the manager sees it now."""
+    def display(self, written_by=True):
+        """The brief as the manager sees it now; written_by=False leaves out
+        the author's line, as the approver's CSV does."""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
         if self.state == "edit failed":
             failures = self.last_edit.failures
@@ -169,17 +170,19 @@ class QueueItem(BaseModel):
                 named = "\n".join(f"- {f.field}: {f.reason}" for f in failures)
                 return f"{banner}\nYour edit was refused:\n{named}"
             failed = set(self.last_edit.failed_figures)
-            text = marked(self.edit.text(failed), failures)
+            text = marked(
+                self.edit.text(failed, written_by=written_by), failures
+            )
             return f"{banner}\nYour edit failed the code check.\n{text}"
         if self.state == "not verified":
-            shown = self.outcome.display()
+            shown = self.outcome.display(written_by=written_by)
             if self.edit is not None:
                 verdict = "passed" if self.last_edit.passed else "failed"
                 shown += (
                     f"\nYour edit {verdict} the code check, for the record."
                 )
             return shown
-        return self.current.text()
+        return self.current.text(written_by=written_by)
 
 
 class ApprovalQueue:
@@ -390,7 +393,11 @@ class ApprovalQueue:
                     "status": i.outcome.status,
                     "backend": i.outcome.backend,
                     "model": i.outcome.model,
-                    "brief": i.display() if b else i.outcome.display(),
+                    "brief": (
+                        i.display(written_by=False)
+                        if b
+                        else i.outcome.display(written_by=False)
+                    ),
                     **{name: "" for name in DECISION_COLUMNS},
                 }
             )

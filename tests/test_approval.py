@@ -290,3 +290,17 @@ def test_the_queue_exports_to_csv_and_reads_the_decisions_back(
     assert d.action == "edit" and d.edited == good
     assert d.criteria.count() == 5 and not d.criteria.disagreement_named
     assert d.decided_at == WHEN
+
+
+# --- the raters do not see the author (review P2-9) --------------------------
+
+
+def test_the_queue_csv_shows_the_brief_without_its_author(verified, tmp_path):
+    q = queue(tmp_path, verified)
+    q.export_csv(tmp_path / "queue.csv")
+    with open(tmp_path / "queue.csv", newline="", encoding="utf-8-sig") as fh:
+        (row,) = list(csv.DictReader(fh))
+    assert "Written by" not in row["brief"]
+    assert "Demand level 2" in row["brief"]
+    assert "Written by: the local backend" in verified.brief.text()
+    assert verified.brief.backend == "local"

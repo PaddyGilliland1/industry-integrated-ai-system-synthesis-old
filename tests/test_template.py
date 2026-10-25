@@ -244,3 +244,17 @@ def test_the_texts_are_shown_in_a_hidden_order_fixed_by_a_seed():
 def test_the_template_text_holds_no_em_or_en_dash(demand, latch, surge):
     for t in (demand, latch, surge):
         assert not re.search("[\u2013\u2014]", t.text())
+
+
+def test_the_raters_view_of_the_agents_brief_hides_its_author(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import demo as dm
+
+    outcome = dm.scripted_brief(
+        replay_run, holidays, settings, plants=0, run_id="t"
+    )
+    shown = tp.rater_view(outcome)
+    assert "Written by" not in shown
+    assert shown == outcome.display(written_by=False)
+    assert "Written by" in outcome.display()
