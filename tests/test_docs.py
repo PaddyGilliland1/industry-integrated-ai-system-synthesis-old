@@ -39,7 +39,7 @@ def test_no_em_or_en_dash(doc):
 
 def test_the_sheet_fits_one_page_in_plain_sentences():
     text = SHEET.read_text(encoding="utf-8")
-    assert len(text.split()) <= 550
+    assert len(text.split()) <= 480
     assert max(len(s.split()) for s in sentences(text)) < 45
 
 
