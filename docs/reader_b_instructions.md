@@ -15,13 +15,13 @@ Each note carries a demand level from 1 to 4, set by fixed rules, not by the wri
 ## What you will read
 
 1. Four demand briefs, labelled Brief 1 to Brief 4.
-2. Two pairs of texts, each about one week, labelled Text A and Text B. Their order tells you nothing about how either was written.
+2. Two pairs of texts, each about one week, labelled Text A and Text B. Their order means nothing.
 
 ## How to rate each brief
 
-Read each brief as the duty manager would. Mark each of the six criteria on the form as met or not met:
+Read each brief as the duty manager would. Mark each of the six criteria as met or not met:
 
-1. Figures correct. The system has already checked every figure against its source. Mark it not met if a figure is marked NOT VERIFIED, two figures contradict each other, or one looks wrong to you.
+1. Figures correct. Code wrote each figure from a value it checked against its source, beside its own model and week, but does not judge the words around it. Mark it not met if a figure is marked NOT VERIFIED, two figures contradict each other, or one looks wrong to you.
 2. Uncertainty stated. The note gives a range, the hospital's own past forecast error and its track record.
 3. Model disagreement named. Where the forecasts disagree, the note says so, and says which to trust less and why.
 4. The level's meaning stated. The note makes clear the level is demand for the time of year, not pressure, need or priority.
@@ -40,4 +40,4 @@ Mark each text in a pair against the same six criteria, and say whether you foun
 
 ## Good to know
 
-There are no right answers, and no note is about any patient. You will not see anyone else's ratings, and nobody sees yours until you finish. The task takes about 45 minutes. Return the form to the person who gave it to you.
+There are no right answers, and no note is about any patient. You will not see anyone else's ratings, and nobody sees yours until you finish. The task takes about 45 minutes. Then return the form.

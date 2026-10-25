@@ -75,3 +75,12 @@ def test_the_form_rates_both_texts_of_both_template_pairs():
         for label in ("A", "B"):
             assert f"### Week {week}, Text {label}" in text
     assert text.count("Any factual error?") == 4
+
+
+def test_the_sheet_says_what_the_figure_check_proves_and_no_more():
+    # Saying every figure was checked would prime the automation bias the
+    # risks list names (review P3-13).
+    text = SHEET.read_text(encoding="utf-8")
+    assert "already checked every figure" not in text
+    assert "checked against its source" in text
+    assert "does not judge" in text
