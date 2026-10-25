@@ -154,12 +154,17 @@ def plant_figure(draft, ledger):
     tool returned. With a forecast in the ledger, it is cited to that call
     as the primary model's release horizon 1 forecast, at 1.37 times the
     true one; without one, it is cited to a call that never happened.
-    Either way the code check must reject it."""
+    Either way the code check must reject it. Its sentence starts on a line
+    of its own, so it never joins the summary's last sentence."""
     forecast = next((c for c in ledger if c.name == "get_forecast"), None)
     n = len(draft.cited_figures) + 1
     if forecast is None:
-        figure = CitedFigure(value=7777, tool_call_id="T0", unit="attendances")
-        text = f" Expect {{F{n}}} attendances."
+        figure = CitedFigure(
+            value=7777,
+            tool_call_id="T0",
+            measure="point",
+            unit="attendances",
+        )
     else:
         result = forecast.result
         primary = result["primary"]
@@ -177,17 +182,14 @@ def plant_figure(draft, ledger):
         figure = CitedFigure(
             value=value,
             tool_call_id=forecast.id,
+            measure="point",
             model=primary,
             horizon=1,
             unit="attendances",
         )
-        text = (
-            f" The {primary} forecast for release horizon 1 is {{F{n}}} "
-            "attendances."
-        )
     return draft.model_copy(
         update={
-            "summary": draft.summary + text,
+            "summary": f"{draft.summary}\n{{PRIMARY}} forecasts {{F{n}}}.",
             "cited_figures": [*draft.cited_figures, figure],
         }
     )

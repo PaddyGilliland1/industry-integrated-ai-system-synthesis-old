@@ -111,11 +111,16 @@ def test_a_planted_figure_is_one_no_tool_returned(replay_run):
         fg.within_rounding(fg.plain(added.value), v) for v in numbers
     )
     n = len(planted.cited_figures)
-    assert f"{{F{n}}} attendances" in planted.summary
+    # Its sentence starts a line of its own, so it never joins the last
+    # sentence of the summary, whatever that ends with.
+    assert (
+        planted.summary == f"{draft.summary}\n{{PRIMARY}} forecasts {{F{n}}}."
+    )
+    assert (added.measure, added.model, added.horizon) == ("point", "SA-MA", 1)
     assert added.unit == "attendances" and added.tool_call_id == "T1"
     bare = rp.plant_figure(draft, [])
     assert bare.cited_figures[-1].tool_call_id == "T0"
-    assert "{F8} attendances" in bare.summary
+    assert bare.summary.endswith("\n{PRIMARY} forecasts {F8}.")
 
 
 # --- live with the stand-in, then replay -------------------------------------

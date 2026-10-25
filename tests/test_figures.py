@@ -1,10 +1,11 @@
 """The demand brief's schema and the Reviewer's code figure check
-(D-SAFE-19, as amended): every number and date in a brief traced to a tool
-result for the same hospital, week, model and horizon, the level equal to
-the rule's, and the same check on drafted staff notifications."""
+(D-SAFE-19, as amended): every cited figure traced to its tool call by its
+value, measure, model, release horizon, week and unit, the figures every
+brief must state, the level equal to the rule's, and every text rule named
+at once."""
 
 import typing
-from datetime import date, datetime
+from datetime import date
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -29,6 +30,15 @@ def forecast_item(model, k, week, point, r80, r95):
 
 def call(cid, name, request, result):
     return br.ToolCall(id=cid, name=name, request=request, result=result)
+
+
+def calendar(cid, week, holidays):
+    return call(
+        cid,
+        "get_calendar",
+        {"week": week, "as_of": "2021-06-13"},
+        {"holidays": holidays, "covered": True},
+    )
 
 
 LEDGER = [
@@ -103,20 +113,16 @@ LEDGER = [
             "unflagged_busy_pct": 21.3235,
         },
     ),
-    call(
+    calendar(
         "T4",
-        "get_calendar",
-        {"week": None, "as_of": "2021-06-13"},
-        {
-            "holidays": [
-                {
-                    "date": "2021-08-02",
-                    "title": "Summer bank holiday",
-                    "release_horizon": None,
-                }
-            ],
-            "covered": True,
-        },
+        None,
+        [
+            {
+                "date": "2021-07-02",
+                "title": "Summer holiday",
+                "release_horizon": 2,
+            }
+        ],
     ),
     call(
         "T5",
@@ -141,6 +147,23 @@ LEDGER = [
             "weeks": [{"week_ending": "2021-06-13", "attendances": 1500.0}],
         },
     ),
+    calendar("T7", "2021-07-04", []),
+    call(
+        "T8",
+        "get_backtest_error",
+        {
+            "hospital": "T101H",
+            "as_of": "2021-06-13",
+            "horizon": 1,
+            "model": "linear",
+        },
+        {
+            "hospital": "T101H",
+            "as_of": "2021-06-13",
+            "release_horizon": 1,
+            "errors": [{"model": "linear", "mape": 9.8765, "targets": 104}],
+        },
+    ),
 ]
 
 ENTRY = tl.ScreenEntry(
@@ -159,12 +182,13 @@ ENTRY = tl.ScreenEntry(
 )
 
 
-def fig(value, cid, model=None, horizon=None, week=None, unit=None):
+def fig(value, cid, measure, model=None, horizon=None, week=None, unit=None):
     if unit is None:
-        unit = "attendances" if model or week else "count"
+        unit = tl.MEASURES[measure][1]
     return br.CitedFigure(
         value=value,
         tool_call_id=cid,
+        measure=measure,
         model=model,
         horizon=horizon,
         week=week,
@@ -172,31 +196,35 @@ def fig(value, cid, model=None, horizon=None, week=None, unit=None):
     )
 
 
+# The figures every brief must state, cited after a test's own so its {F1}
+# stays its first: the primary's forecast, its back-test error and the
+# track record.
+OWN = [
+    ("summary", fig(1120.3, "T1", "point", "SA-MA", 1)),
+    ("backtest_error", fig(6.12, "T2", "error", "SA-MA", 1)),
+    ("track_record", fig(29, "T3", "unflagged_busy")),
+]
+
+
 def draft(**fields):
-    """A draft with the given fields. Unless a test writes its own, the
-    back-test error and track record fields state the hospital's own,
-    cited after the test's figures so its {F1} stays its first."""
+    """A draft with the given fields; each of the figures every brief must
+    state is added to its field unless the test writes that field."""
     base = {
         "summary": "Demand is forecast unusually high for the time of year.",
         "expected_range": "The range is wide.",
-        "model_agreement": "The models disagree; trust linear less.",
-        "watch_points": ["Check whether extra shifts are needed."],
+        "model_agreement": "The models disagree; trust the lowest less.",
+        "backtest_error": "The back-test error is in the table.",
+        "track_record": "This hospital has no past flag to judge.",
+        "watch_points": ["Check whether extra shifts are needed this week."],
         "cited_figures": [],
     }
+    written = set(fields)
     fields = {**base, **fields}
     figures = list(fields["cited_figures"])
-    if "backtest_error" not in fields:
-        figures.append(fig(6.12, "T2", "SA-MA", 1, unit="%"))
-        fields["backtest_error"] = (
-            f"SA-MA's own back-test error is {{F{len(figures)}}}%."
-        )
-    if "track_record" not in fields:
-        figures += [fig(29, "T3"), fig(136, "T3")]
-        n = len(figures)
-        fields["track_record"] = (
-            f"This hospital has no past flag to judge; {{F{n - 1}}} of its "
-            f"{{F{n}}} unflagged outlooks turned busy."
-        )
+    for field, own in OWN:
+        if field not in written:
+            figures.append(own)
+            fields[field] = f"{fields[field]} It is {{F{len(figures)}}}."
     return br.BriefDraft(**{**fields, "cited_figures": figures})
 
 
@@ -219,11 +247,14 @@ def reasons(result):
     return " | ".join(f.reason for f in result.failures)
 
 
-def refused(**fields):
-    """The named problems when a brief breaks the placeholder rules."""
-    with pytest.raises(ValidationError) as info:
-        brief(**fields)
-    return " | ".join(br.problems_of(info.value))
+def one(figure, ledger=LEDGER):
+    """The check's verdict on a brief that cites and states one more
+    figure."""
+    b = brief(
+        expected_range="It is {F1}.",
+        cited_figures=[figure],
+    )
+    return check(b, ledger=ledger)
 
 
 # --- the schema --------------------------------------------------------------
@@ -245,9 +276,10 @@ def test_the_agent_cannot_set_a_level_because_its_draft_has_no_field():
         br.BriefDraft.model_validate({**draft().model_dump(), "level": 3})
 
 
-def test_the_brief_copies_the_rules_level_and_prints_its_meaning():
+def test_the_brief_copies_the_rules_level_primary_and_prints_its_meaning():
     b = brief()
     assert b.level == ENTRY.level and b.level_source == "flag"
+    assert b.primary == "SA-MA"
     assert b.level_meaning == tl.LEVEL_MEANING
     assert tl.LEVEL_MEANING in b.text()
     assert b.backend == "local" and b.model.startswith("nemotron")
@@ -294,7 +326,7 @@ def test_a_surge_brief_is_marked_forecasts_untrusted():
     b = brief(entry=surge)
     assert b.drift_alarm and not b.forecasts_trusted
     assert "surge: forecasts untrusted" in b.text()
-    assert "after an upward breach" in b.text()
+    assert "latched since w/e 06 Jun 2021, after an upward breach" in b.text()
     held = surge.model_copy(
         update={
             "kind": "latch",
@@ -307,7 +339,225 @@ def test_a_surge_brief_is_marked_forecasts_untrusted():
     )
 
 
-# --- the text's numbers and dates --------------------------------------------
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", 1e400])
+def test_a_cited_value_must_be_a_finite_number(value):
+    with pytest.raises(ValidationError):
+        br.CitedFigure.model_validate(
+            {
+                "value": value,
+                "tool_call_id": "T1",
+                "measure": "point",
+                "unit": "attendances",
+            }
+        )
+
+
+def test_an_attendance_or_a_count_cannot_be_negative():
+    for measure, unit in (("point", "attendances"), ("flags", "count")):
+        with pytest.raises(ValidationError):
+            fig(-1120, "T1", measure, unit=unit)
+
+
+# --- each cited figure, traced by what it is ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "figure",
+    [
+        fig(1120.3, "T1", "point", "SA-MA", 1),
+        fig(1120, "T1", "point", "SA-MA", week=date(2021, 6, 27)),
+        fig(1150, "T1", "point", "SA-MA", 2, date(2021, 7, 4)),
+        fig(982, "T1", "low_80", "SA-MA", 1),
+        fig(1291, "T1", "high_80", "SA-MA", 1),
+        fig(900.1, "T1", "low_95", "SA-MA", 1),
+        fig(1400.5, "T1", "high_95", "SA-MA", 1),
+        fig(25.5, "T1", "spread", horizon=1),
+        fig(1203, "T5", "history", week=date(2021, 6, 6)),
+        fig(9.9, "T2", "error", "linear", 1),
+        fig(104, "T2", "targets", "SA-MA", 1),
+        fig(9.88, "T8", "error", "linear", 1),
+        fig(0, "T3", "flags"),
+        fig(0, "T3", "borne_out"),
+        fig(136, "T3", "unflagged"),
+        fig(21.3, "T3", "unflagged_busy_pct"),
+        fig(1, "T4", "holidays"),
+        fig(1, "T4", "holidays", horizon=2),
+        fig(0, "T4", "holidays", week=date(2021, 6, 27)),
+        fig(0, "T7", "holidays", horizon=2),
+    ],
+)
+def test_a_figure_its_tool_returned_passes(figure):
+    result = one(figure)
+    assert result.passed, reasons(result)
+
+
+@pytest.mark.parametrize(
+    "figure, why",
+    [
+        # Another model's figure, or another horizon's, at the same value.
+        (fig(898.4, "T1", "point", "SA-MA", 1), "not SA-MA's forecast"),
+        (fig(1120.3, "T1", "point", "linear", 1), "not linear's forecast"),
+        (fig(1150.4, "T1", "point", "SA-MA", 1), "release horizon 1"),
+        # A range end stated as the forecast, and the other way round.
+        (fig(982, "T1", "point", "SA-MA", 1), "forecast"),
+        (fig(1120, "T1", "low_80", "SA-MA", 1), "low end"),
+        (fig(1291, "T1", "high_95", "SA-MA", 1), "95%"),
+        # A forecast that names no model, horizon or week.
+        (fig(1120.3, "T1", "point", horizon=1), "names no model"),
+        (fig(1120.3, "T1", "point", "SA-MA"), "no release horizon or week"),
+        # A week and a horizon that disagree, or a week not ahead.
+        (
+            fig(1120.3, "T1", "point", "SA-MA", 1, date(2021, 7, 18)),
+            "release horizon 4",
+        ),
+        (
+            fig(1120.3, "T1", "point", "SA-MA", week=date(2021, 4, 11)),
+            "not one of the four weeks ahead",
+        ),
+        # The spread is no one model's.
+        (fig(25.5, "T1", "spread", "SA-MA", 1), "no model"),
+        # A history figure must name its week, and only its week.
+        (fig(1203, "T5", "history"), "names no week"),
+        (fig(1203, "T5", "history", week=date(2021, 6, 13)), "w/e"),
+        (
+            fig(1203, "T5", "history", "SA-MA", week=date(2021, 6, 6)),
+            "names a model",
+        ),
+        # A back-test error names its model and horizon, never a week.
+        (fig(6.1, "T2", "error", horizon=1), "names no model"),
+        (fig(6.1, "T8", "error", horizon=1), "names no model"),
+        (fig(9.9, "T8", "error", "SA-MA", 1), "SA-MA"),
+        (fig(6.1, "T2", "error", "SA-MA"), "names no release horizon"),
+        (fig(6.1, "T2", "error", "SA-MA", 2), "release horizon 1"),
+        (
+            fig(6.1, "T2", "error", "SA-MA", 1, date(2021, 6, 27)),
+            "no week",
+        ),
+        # A track-record figure names no model, horizon or week.
+        (fig(136, "T3", "unflagged", week=date(2021, 6, 27)), "no week"),
+        (fig(136, "T3", "unflagged_busy"), "136"),
+        # A holiday count from one week's call names that week.
+        (fig(0, "T7", "holidays"), "one week"),
+        (fig(0, "T7", "holidays", horizon=1), "w/e 04 Jul 2021"),
+        # The measure's tool and unit.
+        (fig(1120.3, "T2", "point", "SA-MA", 1), "get_forecast"),
+        (fig(6.1, "T2", "error", "SA-MA", 1, unit="count"), "a percentage"),
+        # Another hospital's call, or a call that never happened.
+        (fig(1500, "T6", "history", week=date(2021, 6, 13)), "G405H"),
+        (fig(1120.3, "T9", "point", "SA-MA", 1), "T9"),
+    ],
+)
+def test_a_figure_is_refused_unless_it_is_what_its_tool_returned(figure, why):
+    result = one(figure)
+    assert not result.passed
+    assert result.failed_figures == [1]
+    failure = next(f for f in result.failures if f.field == "cited_figures[0]")
+    assert why in failure.reason, failure.reason
+
+
+def test_a_value_is_matched_only_within_its_own_rounding_and_sign():
+    assert fg.within_rounding("1,203", 1202.66)
+    assert not fg.within_rounding("1,200", 1202.66)
+    assert fg.within_rounding("4.3", 4.27)
+    assert not fg.within_rounding("4.2", 4.27)
+    assert not fg.within_rounding("-0.18", 0.18)
+
+
+def test_a_planted_figure_no_tool_returned_is_named_and_shown_marked():
+    b = brief(
+        summary="{PRIMARY} forecasts {F1}.",
+        cited_figures=[fig(1450, "T1", "point", "SA-MA", 1)],
+    )
+    result = check(b)
+    assert not result.passed and result.failed_figures == [1]
+    failure = result.failures[0]
+    assert failure.found == "1450" and "T1" in failure.reason
+    assert "[[NOT VERIFIED: 1,450 attendances (SA-MA forecast" in b.text(
+        result.failed_figures
+    )
+
+
+# --- what every brief must state ---------------------------------------------
+
+
+def test_a_brief_stating_its_forecast_error_and_track_record_passes():
+    result = check(brief())
+    assert result.passed, reasons(result)
+    assert result.figures_checked == 3
+
+
+@pytest.mark.parametrize(
+    "fields, named",
+    [
+        (
+            {"summary": "Demand is forecast unusually high."},
+            "SA-MA's forecast",
+        ),
+        (
+            {
+                "summary": "{PRIMARY} gives {F1}.",
+                "cited_figures": [fig(898.4, "T1", "point", "linear", 1)],
+            },
+            "SA-MA's forecast",
+        ),
+        ({"backtest_error": "None was given."}, "back-test error field"),
+        (
+            # The count of back-test weeks is no error.
+            {
+                "backtest_error": "It covers {F1}.",
+                "cited_figures": [fig(104, "T2", "targets", "SA-MA", 1)],
+            },
+            "back-test error field",
+        ),
+        ({"track_record": "None was given."}, "track record field"),
+    ],
+)
+def test_a_brief_missing_a_figure_every_brief_states_fails(fields, named):
+    result = check(brief(**fields))
+    assert not result.passed
+    assert named in reasons(result)
+
+
+def test_a_failed_figure_does_not_count_as_stated():
+    b = brief(
+        backtest_error="It is {F1}.",
+        cited_figures=[fig(7.7, "T2", "error", "SA-MA", 1)],
+    )
+    assert "back-test error field" in reasons(check(b))
+
+
+def test_the_level_must_equal_the_rules_level():
+    result = check(brief(), rule_level=3)
+    assert not result.passed and "rule's level 3" in reasons(result)
+
+
+def test_a_draft_refused_by_the_text_rules_is_checked_in_full():
+    figures = [fig(1450, "T1", "point", "SA-MA", 1)]
+    fields = br.DraftFields(
+        summary="SA-MA forecasts {F1} next week.",
+        expected_range="See above.",
+        model_agreement="They agree.",
+        backtest_error="None.",
+        track_record="None.",
+        watch_points=["Check cover."],
+        cited_figures=figures,
+    )
+    ctx = br.DemandBrief.assemble(
+        ENTRY,
+        draft(),
+        brief_id="b1",
+        backend="local",
+        model="m",
+        model_digest=None,
+    ).text_context()
+    result = fg.check_draft(fields.texts(), fields.cited_figures, LEDGER, ctx)
+    found = {f.found for f in result.failures}
+    assert {"SA-MA", "next week", "1450"} <= found
+    named = reasons(result)
+    assert "back-test error field" in named and "track record field" in named
+
+
+# --- the literal reader, for code-written text such as the template ---------
 
 
 def kinds(text):
@@ -335,474 +585,6 @@ def test_numbers_dates_levels_and_horizons_are_told_apart():
     ]
 
 
-@pytest.mark.parametrize(
-    "written, target, ok",
-    [
-        ("1,203", 1202.66, True),
-        ("1,200", 1202.66, False),
-        ("4.3", 4.27, True),
-        ("4.27", 4.2749, True),
-        ("4.2", 4.27, False),
-        ("136", 136, True),
-        ("-0.18", 0.18, True),
-    ],
-)
-def test_a_number_matches_only_within_its_own_rounding(written, target, ok):
-    assert fg.within_rounding(written, target) is ok
-
-
-# --- the brief's check -----------------------------------------------------
-
-
-def test_a_brief_whose_every_number_and_date_is_traced_passes():
-    b = brief(
-        summary=(
-            "SA-MA, the primary model, forecasts {F1} attendances for the "
-            "week ending {WEEK1}, with an 80% range of {F2} to {F3}."
-        ),
-        expected_range="At release horizon 2 SA-MA gives {F4}.",
-        model_agreement="The forecasts spread {F5}% of the primary's.",
-        backtest_error="SA-MA's own back-test error is {F6}% at horizon 1.",
-        track_record=(
-            "This hospital has no past flag to judge; {F7} of its {F8} "
-            "unflagged outlooks turned busy ({F9}%)."
-        ),
-        watch_points=["Check extra shifts for w/e {WEEK2}."],
-        cited_figures=[
-            fig(1120.3, "T1", "SA-MA", 1),
-            fig(982.2, "T1", "SA-MA", 1),
-            fig(1291.3, "T1", "SA-MA", 1),
-            fig(1150.42, "T1", "SA-MA", 2),
-            fig(25.5, "T1", horizon=1, unit="%"),
-            fig(6.12, "T2", "SA-MA", 1, unit="%"),
-            fig(29, "T3"),
-            fig(136, "T3"),
-            fig(21.3, "T3", unit="%"),
-        ],
-    )
-    result = check(b)
-    assert result.passed, reasons(result)
-    assert result.numbers_checked == 9 and result.dates_checked == 2
-    assert "forecasts 1,120.3 attendances for the week ending 27 Jun" in (
-        b.text()
-    )
-
-
-def test_a_number_the_agent_writes_itself_is_refused_with_its_problem():
-    problems = refused(summary="Expect about 1,450 attendances.")
-    assert "1,450" in problems and "{F1}" in problems
-
-
-def test_a_planted_figure_that_no_tool_returned_fails():
-    b = brief(
-        summary="SA-MA forecasts {F1} attendances.",
-        cited_figures=[fig(1450, "T1", "SA-MA", 1)],
-    )
-    result = check(b)
-    assert not result.passed
-    assert any(f.field == "cited_figures[0]" for f in result.failures)
-    assert "T1" in reasons(result)
-    assert result.failed_figures == [1]
-    assert "[[NOT VERIFIED: 1,450]]" in b.text(result.failed_figures)
-
-
-def test_a_figure_citing_a_call_that_never_happened_fails():
-    b = brief(
-        summary="SA-MA forecasts {F1} attendances.",
-        cited_figures=[fig(1120.3, "T9", "SA-MA", 1)],
-    )
-    assert "T9" in reasons(check(b))
-
-
-def test_a_right_number_pinned_to_the_wrong_model_or_horizon_fails():
-    wrong_model = brief(
-        summary="Linear forecasts {F1}.",
-        cited_figures=[fig(1120.3, "T1", "linear", 1)],
-    )
-    wrong_horizon = brief(
-        summary="SA-MA forecasts {F1}.",
-        cited_figures=[fig(1120.3, "T1", "SA-MA", 2)],
-    )
-    assert not check(wrong_model).passed
-    assert not check(wrong_horizon).passed
-
-
-def test_a_figure_in_the_wrong_unit_fails():
-    b = brief(
-        summary="The forecasts spread {F1} attendances.",
-        cited_figures=[fig(25.5, "T1", horizon=1, unit="attendances")],
-    )
-    assert "a percentage" in reasons(check(b))
-
-
-def test_a_forecast_figure_must_name_its_model_and_horizon():
-    no_horizon = brief(
-        summary="SA-MA forecasts {F1}.",
-        cited_figures=[fig(1120.3, "T1", "SA-MA")],
-    )
-    no_model = brief(
-        summary="The forecast is {F1}.",
-        cited_figures=[fig(1120.3, "T1", horizon=1, unit="attendances")],
-    )
-    assert "horizon" in reasons(check(no_horizon))
-    assert "model" in reasons(check(no_model))
-
-
-def test_a_history_figure_must_name_its_week():
-    named = brief(
-        summary="The week ending {F1.week} saw {F1} attendances.",
-        cited_figures=[fig(1203, "T5", week=date(2021, 6, 6))],
-    )
-    unnamed = brief(
-        summary="A recent week saw {F1} attendances.",
-        cited_figures=[fig(1203, "T5", unit="attendances")],
-    )
-    assert check(named).passed, reasons(check(named))
-    assert "week ending 06 Jun 2021 saw 1,203" in named.text()
-    assert "week" in reasons(check(unnamed))
-
-
-def test_a_figure_from_another_hospital_fails():
-    b = brief(
-        summary="Last week saw {F1} attendances.",
-        cited_figures=[fig(1500, "T6", week=date(2021, 6, 13))],
-    )
-    result = check(b)
-    assert not result.passed and "G405H" in reasons(result)
-
-
-def test_a_backtest_figure_for_another_model_fails():
-    b = brief(
-        backtest_error="Linear's error is {F1}%.",
-        cited_figures=[fig(6.12, "T2", "linear", 1, unit="%")],
-    )
-    assert not check(b).passed
-
-
-def test_a_backtest_figure_from_a_four_model_call_must_name_its_model():
-    unnamed = brief(
-        backtest_error="The error is {F1}%.",
-        cited_figures=[fig(6.12, "T2", horizon=1, unit="%")],
-    )
-    named = brief(
-        backtest_error="SA-MA's error is {F1}%; linear's is {F2}%.",
-        cited_figures=[
-            fig(6.12, "T2", "SA-MA", 1, unit="%"),
-            fig(9.88, "T2", "linear", unit="%"),
-        ],
-    )
-    assert "names no model" in reasons(check(unnamed))
-    assert check(named).passed, reasons(check(named))
-    other = brief(
-        backtest_error="SA-MA's error is {F1}%.",
-        cited_figures=[fig(9.88, "T2", "SA-MA", 1, unit="%")],
-    )
-    assert not check(other).passed
-
-
-def test_a_backtest_or_track_figure_cannot_carry_a_week():
-    b = brief(
-        backtest_error="SA-MA's error for w/e {F1.week} is {F1}%.",
-        cited_figures=[
-            fig(6.12, "T2", "SA-MA", 1, week=date(2021, 6, 6), unit="%")
-        ],
-    )
-    assert "has no weeks" in reasons(check(b))
-
-
-def test_a_calendar_figure_counts_the_holidays_it_returned():
-    b = brief(
-        summary="The calendar lists {F1} bank holiday.",
-        cited_figures=[fig(1, "T4")],
-    )
-    assert check(b).passed, reasons(check(b))
-    assert not check(
-        brief(summary="It lists {F1}.", cited_figures=[fig(2, "T4")])
-    ).passed
-    ahead = brief(
-        summary="{F1} bank holidays fall in release horizon 1.",
-        cited_figures=[fig(0, "T4", horizon=1)],
-    )
-    assert check(ahead).passed, reasons(check(ahead))
-    beyond = brief(
-        summary="Watch w/e {F1.week}, with {F1} holidays.",
-        cited_figures=[fig(1, "T4", week=date(2021, 12, 26))],
-    )
-    assert "not one of the four weeks ahead" in reasons(check(beyond))
-
-
-def test_a_brief_must_state_its_own_backtest_error_and_track_record():
-    none = brief(
-        backtest_error="The error is moderate.",
-        track_record="It has a record.",
-    )
-    found = reasons(check(none))
-    assert "back-test error field" in found and "get_backtest_error" in found
-    assert "track record field" in found and "get_track_record" in found
-    elsewhere = brief(
-        summary="SA-MA's error is {F1}%.",
-        backtest_error="See the summary.",
-        cited_figures=[fig(6.12, "T2", "SA-MA", 1, unit="%")],
-    )
-    assert "back-test error field" in reasons(check(elsewhere))
-    spread = brief(
-        backtest_error="The models spread {F1}%.",
-        cited_figures=[fig(25.5, "T1", horizon=1, unit="%")],
-    )
-    assert "back-test error field" in reasons(check(spread))
-    assert check(brief()).passed, reasons(check(brief()))
-
-
-def test_a_failed_backtest_figure_does_not_count_as_stated():
-    wrong = brief(
-        backtest_error="SA-MA's error is {F1}%.",
-        cited_figures=[fig(7.5, "T2", "SA-MA", 1, unit="%")],
-    )
-    assert "back-test error field" in reasons(check(wrong))
-
-
-def test_a_date_the_agent_writes_itself_is_refused():
-    assert "31 Mar 2020" in refused(
-        watch_points=["Check staffing before 31 Mar 2020."]
-    )
-
-
-def test_a_cited_week_no_tool_returned_fails():
-    b = brief(
-        summary="The week ending {F1.week} saw {F1}.",
-        cited_figures=[fig(1203, "T5", week=date(2020, 3, 29))],
-    )
-    result = check(b)
-    assert not result.passed and "29 Mar 2020" in reasons(result)
-
-
-def test_the_origin_release_and_target_weeks_render_as_known_dates():
-    b = brief(
-        summary=(
-            "Released {RELEASE} for w/e {ORIGIN}; the weeks to watch are "
-            "{WEEK1} and {WEEK2}."
-        )
-    )
-    assert check(b).passed, reasons(check(b))
-    assert (
-        "Released Tue 22 Jun 2021 for w/e 13 Jun 2021; the weeks to watch "
-        "are 27 Jun 2021 and 04 Jul 2021."
-    ) in b.text()
-
-
-def test_the_level_must_equal_the_rules_level():
-    assert not check(brief(), rule_level=1).passed
-    assert "level 3" in refused(summary="This is demand level 3.")
-    assert check(brief(summary="This is demand level 2.")).passed
-
-
-def test_a_horizon_outside_one_to_four_is_refused():
-    assert "1 to 4" in refused(summary="At release horizon 5 it rises.")
-
-
-def test_failing_figures_and_dates_are_marked():
-    found = [
-        fg.Failure(field="summary", found="1,450", reason="x"),
-        fg.Failure(field="summary", found="31 Mar 2020", reason="y"),
-    ]
-    marked = fg.marked("Expect 1,450 attendances by 31 Mar 2020.", found)
-    assert marked == (
-        "Expect [[NOT VERIFIED: 1,450]] attendances by "
-        "[[NOT VERIFIED: 31 Mar 2020]]."
-    )
-
-
-# --- drafted staff notifications ---------------------------------------------
-
-TARGETS = [
-    date(2021, 6, 27),
-    date(2021, 7, 4),
-    date(2021, 7, 11),
-    date(2021, 7, 18),
-]
-
-
-def code_set():
-    return fg.CodeSet.for_action(
-        level=2, deadline=datetime(2021, 6, 24, 14, 0), weeks=TARGETS
-    )
-
-
-def approved():
-    """The approved brief a notification is drafted from: it states SA-MA's
-    release horizon 1 forecast, its back-test error and track record."""
-    return brief(
-        summary="SA-MA forecasts {F1} attendances for w/e {WEEK1}.",
-        cited_figures=[fig(1120.3, "T1", "SA-MA", 1)],
-    )
-
-
-def notify(message):
-    return fg.check_notification(message, approved(), code_set())
-
-
-def test_a_notification_with_the_briefs_and_codes_values_passes():
-    message = (
-        "Ninewells Hospital, demand level 2: please check whether extra "
-        "shifts or bank staff are needed for the week ending 27 Jun 2021, "
-        "when SA-MA forecasts 1,120 attendances. Reply by 14:00 on Thu 24 "
-        "Jun 2021, for the next 4 weeks, from 27 to 18 Jul 2021."
-    )
-    result = notify(message)
-    assert result.passed, reasons(result)
-
-
-def test_a_planted_wrong_date_in_a_notification_is_caught():
-    message = "Please check extra shifts for the week ending 25 Jul 2021."
-    result = notify(message)
-    assert not result.passed and "25 Jul 2021" in reasons(result)
-
-
-def test_a_planted_wrong_number_or_time_in_a_notification_is_caught():
-    for message in (
-        "SA-MA forecasts 1,450 attendances.",
-        "Reply by 15:00 on Thu 24 Jun 2021.",
-        "This is demand level 3.",
-        "Check whether level 3 actions apply.",
-    ):
-        assert not notify(message).passed, message
-
-
-def test_a_notification_cannot_borrow_another_hospitals_figures():
-    assert not notify("Last week saw 1,500 attendances.").passed
-    assert not notify("Unlike S314H, cover is fine.").passed
-
-
-# The review's probe (P1-2): each passed when the allowed set was every value
-# in the ledger, a history call included. Only the approved brief's stated
-# figures, the level and the action's own dates now pass.
-@pytest.mark.parametrize(
-    "message, found",
-    [
-        (
-            "Hold leave for w/e 22 Nov 2020. Reply by 14:00 on Thu 24 Jun "
-            "2021.",
-            "22 Nov 2020",
-        ),
-        ("Expect 872 attendances at Ninewells next week.", "872"),
-        ("Demand is 12% above normal.", "12"),
-        ("Check cover for the next 3 weeks.", "3 weeks"),
-        ("Last week saw 1,203 attendances, w/e 06 Jun 2021.", "1,203"),
-        ("Last week saw 1,203 attendances, w/e 06 Jun 2021.", "06 Jun 2021"),
-        ("SA-MA's 80% range starts at 982.", "982"),
-    ],
-)
-def test_a_notification_states_only_the_briefs_stated_figures(message, found):
-    result = notify(message)
-    assert not result.passed
-    assert found in {f.found for f in result.failures}, reasons(result)
-
-
-def test_a_figure_the_brief_cites_but_does_not_state_is_refused():
-    quiet = brief(
-        summary="Demand is forecast unusually high.",
-        cited_figures=[fig(1120.3, "T1", "SA-MA", 1)],
-    )
-    result = fg.check_notification("Expect 1,120.", quiet, code_set())
-    assert not result.passed
-
-
-def test_the_four_target_weeks_are_code_set_dates_of_the_brief():
-    b = brief(watch_points=["Check staffing for w/e {WEEK4}."])
-    assert check(b).passed, reasons(check(b))
-    assert "18 Jul 2021" in b.text()
-    assert "{WEEK5}" in refused(watch_points=["Check w/e {WEEK5}."])
-
-
-# --- correct briefs pass (review P1-3) ---------------------------------------
-
-HISTORY_2020 = call(
-    "T7",
-    "get_history",
-    {"hospital": "T101H", "as_of": "2021-06-13", "weeks": 53},
-    {
-        "hospital": "T101H",
-        "as_of": "2021-06-13",
-        "weeks": [{"week_ending": "2020-06-14", "attendances": 812.0}],
-    },
-)
-
-
-def test_a_figure_after_release_horizon_n_and_a_comma_is_read_as_a_figure():
-    assert kinds("At release horizon 1, 1,120 attendances are forecast.") == [
-        ("horizon", "release horizon 1"),
-        ("number", "1,120"),
-    ]
-    assert kinds("At release horizon 1, 2.9% is SA-MA's error.") == [
-        ("horizon", "release horizon 1"),
-        ("number", "2.9"),
-    ]
-    assert [t.value for t in fg.tokens("release horizons 1, 2 and 3")] == [
-        [1, 2, 3]
-    ]
-
-
-def test_a_figure_after_release_horizon_n_passes_when_cited():
-    b = brief(
-        summary="At release horizon 1, {F1} attendances are forecast.",
-        expected_range=(
-            "Release horizon 1, {F1} (SA-MA); release horizon 2, {F2}."
-        ),
-        cited_figures=[
-            fig(1120, "T1", "SA-MA", 1),
-            fig(1150, "T1", "SA-MA", 2),
-        ],
-    )
-    result = check(b)
-    assert result.passed, reasons(result)
-    shown = b.text()
-    assert "At release horizon 1, 1,120 attendances are forecast." in shown
-    assert "Release horizon 1, 1,120 (SA-MA); release horizon 2, 1,150." in (
-        shown
-    )
-
-
-def test_a_bare_year_passes_when_the_outlook_or_a_cited_week_covers_it():
-    ledger = [*LEDGER, HISTORY_2020]
-    b = brief(
-        summary="The week ending {F1.week} saw {F1}, the same week of 2020.",
-        model_agreement="The outlook is in 2021.",
-        cited_figures=[fig(812, "T7", week=date(2020, 6, 14))],
-    )
-    result = check(b, ledger=ledger)
-    assert result.passed, reasons(result)
-    assert "2019" in refused(summary="Demand rose in 2019.")
-
-
-def test_week_counts_up_to_four_and_range_and_model_labels_are_wording():
-    b = brief(
-        summary="Check cover for the next 4 weeks.",
-        expected_range="The 80 per cent and 95 per cent ranges are wide.",
-        model_agreement="Trust the 4-week average less; a 2-week view agrees.",
-        watch_points=["Watch week 26, after the COVID-19 period."],
-    )
-    result = check(b)
-    assert result.passed, reasons(result)
-    assert "6 weeks" in refused(summary="Check the next 6 weeks.")
-    assert "week 30" in refused(summary="Watch week 30.")
-
-
-def test_the_fixed_conditional_level_wording_passes_in_a_level_2_brief():
-    b = brief(
-        summary="Levels 3 and 4 come only from a surge.",
-        watch_points=["Check whether level 3 actions apply."],
-    )
-    result = check(b)
-    assert result.passed, reasons(result)
-
-
-def test_any_other_level_fails_quoting_the_prompts_rule():
-    problems = refused(summary="This is a level 3 week.")
-    assert "never state any level other than the one you are given" in (
-        problems
-    )
-
-
 def test_a_range_of_days_reads_the_first_day_in_its_own_month():
     found = fg.tokens("from 27 to 18 Jul 2021")
     assert [(t.kind, t.value) for t in found] == [
@@ -813,6 +595,3 @@ def test_a_range_of_days_reads_the_first_day_in_its_own_month():
         (2021, 7, 4),
         (2021, 7, 18),
     ]
-    b = brief(watch_points=["Check cover from {WEEK1} to {WEEK4}."])
-    assert check(b).passed, reasons(check(b))
-    assert "from 27 Jun 2021 to 18 Jul 2021" in b.text()

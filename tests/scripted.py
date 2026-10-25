@@ -1,8 +1,9 @@
 """Scripted replies for the agent tests: a stand-in for the language model.
 
 Every figure in a good draft is a true tool value for Ninewells Hospital at
-w/e 13 Jun 2021, cited to the tool call that returns it and written in the
-text as its placeholder; the planted draft adds a figure no tool returned.
+w/e 13 Jun 2021, cited to the tool call that returns it with what it is,
+and written in the text as its placeholder; the planted draft adds a figure
+no tool returned.
 Nothing here is a model's output.
 """
 
@@ -38,6 +39,17 @@ TOOLS = AIMessage(
 )
 
 
+def figure(value, call, measure, **context):
+    """A cited figure as the draft's JSON writes it."""
+    return {
+        "value": value,
+        "tool_call_id": call,
+        "measure": measure,
+        "unit": tl.MEASURES[measure][1],
+        **context,
+    }
+
+
 def good_draft(run, **changes):
     """A draft that states only true tool values, each cited."""
     f = tl.get_forecast(
@@ -53,67 +65,26 @@ def good_draft(run, **changes):
     tr = tl.get_track_record(
         run, tl.TrackRecordRequest(hospital="T101H", as_of=ORIGIN)
     )
+    h1 = {"model": "SA-MA", "horizon": 1}
     draft = {
-        "summary": (
-            "SA-MA, the primary model, forecasts {F1} attendances at release "
-            "horizon 1, the week ending {WEEK1}."
-        ),
-        "expected_range": "Its 80% range is {F2} to {F3}.",
+        "summary": "{PRIMARY} forecasts {F1} for {WEEK1}.",
+        "expected_range": "The likely range runs from {F2} to {F3}.",
         "model_agreement": (
-            "The four forecasts spread {F4}% of the primary's, so trust "
-            "seasonal naive less."
+            "The forecasts spread {F4}, so trust the lowest of them less."
         ),
-        "backtest_error": (
-            "SA-MA's own back-test error at release horizon 1 is {F5}%."
-        ),
-        "track_record": (
-            "This hospital has no past flag to judge; {F6} of its {F7} "
-            "unflagged outlooks turned busy."
-        ),
+        "backtest_error": "Its own back-test error is {F5}.",
+        "track_record": "No past flag to judge yet; {F6} of {F7}.",
         "watch_points": [
-            "Check whether extra shifts or bank staff are needed."
+            "Check whether extra shifts or bank staff are needed this week."
         ],
         "cited_figures": [
-            {
-                "value": round(sama.point),
-                "tool_call_id": "T1",
-                "model": "SA-MA",
-                "horizon": 1,
-                "unit": "attendances",
-            },
-            {
-                "value": round(sama.range_80.low),
-                "tool_call_id": "T1",
-                "model": "SA-MA",
-                "horizon": 1,
-                "unit": "attendances",
-            },
-            {
-                "value": round(sama.range_80.high),
-                "tool_call_id": "T1",
-                "model": "SA-MA",
-                "horizon": 1,
-                "unit": "attendances",
-            },
-            {
-                "value": round(f.spread_pct[1], 1),
-                "tool_call_id": "T1",
-                "horizon": 1,
-                "unit": "%",
-            },
-            {
-                "value": round(e.mape, 1),
-                "tool_call_id": "T2",
-                "model": "SA-MA",
-                "horizon": 1,
-                "unit": "%",
-            },
-            {
-                "value": tr.unflagged_busy,
-                "tool_call_id": "T3",
-                "unit": "count",
-            },
-            {"value": tr.unflagged, "tool_call_id": "T3", "unit": "count"},
+            figure(round(sama.point), "T1", "point", **h1),
+            figure(round(sama.range_80.low), "T1", "low_80", **h1),
+            figure(round(sama.range_80.high), "T1", "high_80", **h1),
+            figure(round(f.spread_pct[1], 1), "T1", "spread", horizon=1),
+            figure(round(e.mape, 1), "T2", "error", **h1),
+            figure(tr.unflagged_busy, "T3", "unflagged_busy"),
+            figure(tr.unflagged, "T3", "unflagged"),
         ],
     }
     draft.update(changes)
@@ -125,16 +96,9 @@ def planted_draft(run):
     same."""
     d = good_draft(run)
     n = len(d["cited_figures"]) + 1
-    d["summary"] += f" Linear forecasts {{F{n}}} attendances at release "
-    d["summary"] += "horizon 2."
+    d["summary"] += f" The highest at a later week is {{F{n}}}."
     d["cited_figures"].append(
-        {
-            "value": 4321,
-            "tool_call_id": "T1",
-            "model": "linear",
-            "horizon": 2,
-            "unit": "attendances",
-        }
+        figure(4321, "T1", "point", model="linear", horizon=2)
     )
     return d
 
@@ -160,60 +124,58 @@ def _tool_results(messages):
 
 
 def _own_figures(messages):
-    """The brief's own back-test error and track record, cited, from the
-    tool results in the conversation."""
+    """The figures every brief states, cited from the tool results in the
+    conversation: the primary's release horizon 1 forecast, its back-test
+    error and the track record."""
     texts = " ".join(str(m.content) for m in messages)
     primary = re.search(r"Primary model: (.+?)\.\n", texts).group(1)
     found = _tool_results(messages)
+    forecast = found["get_forecast"]
     error, record = found["get_backtest_error"], found["get_track_record"]
+    point = next(
+        f["point"]
+        for f in forecast["result"]["forecasts"]
+        if f["model"] == primary and f["release_horizon"] == 1
+    )
     mape = next(
         e["mape"] for e in error["result"]["errors"] if e["model"] == primary
     )
-    figures = [
-        {
-            "value": round(mape, 1),
-            "tool_call_id": error["tool_call_id"],
-            "model": primary,
-            "horizon": 1,
-            "unit": "%",
-        },
-        {
-            "value": record["result"]["unflagged_busy"],
-            "tool_call_id": record["tool_call_id"],
-            "unit": "count",
-        },
-        {
-            "value": record["result"]["unflagged"],
-            "tool_call_id": record["tool_call_id"],
-            "unit": "count",
-        },
+    h1 = {"model": primary, "horizon": 1}
+    return [
+        figure(round(point), forecast["tool_call_id"], "point", **h1),
+        figure(round(mape, 1), error["tool_call_id"], "error", **h1),
+        figure(
+            record["result"]["unflagged_busy"],
+            record["tool_call_id"],
+            "unflagged_busy",
+        ),
+        figure(
+            record["result"]["unflagged"],
+            record["tool_call_id"],
+            "unflagged",
+        ),
     ]
-    return primary, figures
 
 
 def answer(messages):
     """A stand-in that answers every kind of call in the replay set: the
-    two tools every brief needs, a draft that states only its own back-test
-    error and track record, a pass on wording, and notifications that state
-    no figure."""
+    three tools every brief needs, a draft that states only its primary's
+    forecast, its own back-test error and its track record, a pass on
+    wording, and notifications that state no figure."""
     ask = last_human(messages)
     if "Write the demand brief now" in ask:
-        primary, figures = _own_figures(messages)
         return AIMessage(
             content=json.dumps(
                 {
-                    "summary": "The forecasts are described without figures.",
-                    "expected_range": "See the forecasts.",
+                    "summary": "{PRIMARY} forecasts {F1} for {WEEK1}.",
+                    "expected_range": "See the summary.",
                     "model_agreement": "The models broadly agree.",
-                    "backtest_error": (
-                        f"{primary}'s own back-test error at release horizon "
-                        "1 is {F1}%."
-                    ),
-                    "track_record": (
-                        "{F2} of its {F3} unflagged outlooks turned busy."
-                    ),
-                    "watch_points": ["Check whether extra shifts are needed."],
-                    "cited_figures": figures,
+                    "backtest_error": "Its own back-test error is {F2}.",
+                    "track_record": "{F3} of {F4}.",
+                    "watch_points": [
+                        "Check whether extra shifts are needed this week."
+                    ],
+                    "cited_figures": _own_figures(messages),
                 }
             )
         )
@@ -242,6 +204,7 @@ def answer(messages):
     return AIMessage(
         content="",
         tool_calls=[
+            tc("get_forecast", hospital=hospital, as_of=as_of),
             tc(
                 "get_backtest_error",
                 hospital=hospital,

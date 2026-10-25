@@ -22,17 +22,18 @@ from .scripted import DONE, ORIGIN, TOOLS, WORDING_OK, good_draft, reply
 WHEN = datetime(2026, 10, 27, 9, 30, tzinfo=timezone.utc)
 # The replay's clock starts at 10:00 on the release day, Tue 22 Jun 2021,
 # so the level 2 reply deadline, 48 hours on, is 10:00 on Thu 24 Jun 2021.
-# The drafts write every figure, date and time as its placeholder.
+# The drafts write every figure as its placeholder and every date, time,
+# hospital and level as a token.
 GOOD = {
     "check-cover": (
-        "Ninewells Hospital, demand level 2: please check whether extra "
-        "shifts or bank staff are needed for the four weeks from w/e "
-        "{WEEK1}, when SA-MA forecasts {F1} attendances. Please reply by "
-        "{DEADLINE}."
+        "{HOSPITAL}, {LEVEL}: please check whether extra shifts or bank "
+        "staff are needed for the weeks from {WEEK1} to {WEEK4}; {PRIMARY} "
+        "forecasts {F1}. Please reply by {DEADLINE}."
     ),
     "hold-leave": (
-        "Please hold new leave requests for the four weeks from w/e {WEEK1} "
-        "until the duty manager's check is done. Please reply by {DEADLINE}."
+        "Please hold new leave requests for the weeks from {WEEK1} to "
+        "{WEEK4} until the duty manager's check is done. Please reply by "
+        "{DEADLINE}."
     ),
 }
 
@@ -175,11 +176,13 @@ def test_drafts_that_pass_are_written_to_the_outbox_never_sent(
     assert all(r["label"] == co.OUTBOX_LABEL for r in written)
     assert "never sent" in co.OUTBOX_LABEL
     first = written[0]["message"]
-    assert "{" not in first and "when SA-MA forecasts 1,120 attendances" in (
-        first
+    assert first == (
+        "Ninewells Hospital, demand level 2: please check whether extra "
+        "shifts or bank staff are needed for the weeks from w/e 27 Jun 2021 "
+        "to w/e 18 Jul 2021; SA-MA (the primary model) forecasts 1,120 "
+        "attendances (SA-MA forecast, release horizon 1, w/e 27 Jun 2021). "
+        "Please reply by 10:00 UK time on Thu 24 Jun 2021."
     )
-    assert "from w/e 27 Jun 2021" in first
-    assert "reply by 10:00 UK time on Thu 24 Jun 2021" in first
 
 
 def test_a_planted_wrong_date_is_caught_and_nothing_written_until_it_passes(
@@ -200,7 +203,9 @@ def test_a_planted_wrong_date_is_caught_and_nothing_written_until_it_passes(
     ).coordinate(approved)
     first = out.drafts[0]
     assert first.action_code == "check-cover" and not first.check.passed
-    assert "25 Jun 2021" in {f.found for f in first.check.failures}
+    assert {"Fri", "25", "Jun", "2021"} <= {
+        f.found for f in first.check.failures
+    }
     assert seen == [[]]
     assert out.actions[0].notified and out.actions[0].state != "held"
     assert (
@@ -250,8 +255,12 @@ def test_the_coordinator_is_shown_the_briefs_figures_with_placeholders(
         approved
     )
     prompt = model.seen[0][-1].content
-    assert "- {F1}: 1,120 attendances (SA-MA, release horizon 1)" in prompt
-    assert "{WEEK1} to {WEEK4}: 27 Jun 2021" in prompt
+    assert (
+        "- {F1}: 1,120 attendances (SA-MA forecast, release horizon 1, w/e "
+        "27 Jun 2021)" in prompt
+    )
+    assert "- {WEEK1}: w/e 27 Jun 2021" in prompt
+    assert "- {PRIMARY}: SA-MA (the primary model)" in prompt
     assert "Reply deadline: {DEADLINE}" in prompt
 
 

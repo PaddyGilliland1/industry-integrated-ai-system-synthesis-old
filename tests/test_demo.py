@@ -44,13 +44,16 @@ def test_a_brief_planted_twice_is_not_verified_and_refused(shown):
 
 def test_a_failed_edit_comes_back_marked(shown):
     assert shown.failed_edit.startswith("NOT VERIFIED, DO NOT ACT")
-    assert "[[NOT VERIFIED: 1,450]]" in shown.failed_edit
+    assert "[[NOT VERIFIED: 1,450 attendances (SA-MA forecast" in (
+        shown.failed_edit
+    )
 
 
 def test_a_planted_date_in_a_notification_is_caught(shown):
     first = shown.notified.drafts[0]
     assert not first.check.passed
-    assert shown.planted_date in {f.found for f in first.check.failures}
+    found = {f.found for f in first.check.failures}
+    assert set(shown.planted_date.split()) <= found
     assert all(a.notified for a in shown.notified.actions)
 
 

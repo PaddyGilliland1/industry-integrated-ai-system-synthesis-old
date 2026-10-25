@@ -81,9 +81,9 @@ def _ledger(run, holidays, entry):
 
 def true_draft(ledger, entry):
     """A draft that states only true tool values, each written as the
-    placeholder of a figure cited to the call that returned it: the primary
-    model's release horizon 1 forecast and 80% range, the models' spread,
-    its back-test error and the track record."""
+    placeholder of a figure cited to the call that returned it, with what
+    it is: the primary model's release horizon 1 forecast and its 80%
+    range, the models' spread, its back-test error and the track record."""
     forecast, errors, record = (c.result for c in ledger[:3])
     primary = forecast["primary"]
     error = next(e for e in errors["errors"] if e["model"] == primary)
@@ -93,47 +93,45 @@ def true_draft(ledger, entry):
         if x["model"] == primary and x["release_horizon"] == 1
     )
     low, high = f["range_80"]["low"], f["range_80"]["high"]
-    track = (
-        "This hospital has no past flag to judge; "
-        if record["flags"] == 0
-        else "Its past outlook flags were borne out {F8} times in {F9}; "
-    )
 
-    def cite(value, call, unit, **context):
+    def cite(value, call, measure, **context):
         return CitedFigure(
-            value=value, tool_call_id=call, unit=unit, **context
+            value=value,
+            tool_call_id=call,
+            measure=measure,
+            unit=tl.MEASURES[measure][1],
+            **context,
         )
 
+    point = {"model": primary, "horizon": 1}
     figures = [
-        cite(round(f["point"]), "T1", "attendances", model=primary, horizon=1),
-        cite(round(low), "T1", "attendances", model=primary, horizon=1),
-        cite(round(high), "T1", "attendances", model=primary, horizon=1),
-        cite(round(forecast["spread_pct"]["1"], 1), "T1", "%", horizon=1),
-        cite(round(error["mape"], 1), "T2", "%", model=primary, horizon=1),
-        cite(record["unflagged_busy"], "T3", "count"),
-        cite(record["unflagged"], "T3", "count"),
+        cite(round(f["point"]), "T1", "point", **point),
+        cite(round(low), "T1", "low_80", **point),
+        cite(round(high), "T1", "high_80", **point),
+        cite(round(forecast["spread_pct"]["1"], 1), "T1", "spread", horizon=1),
+        cite(round(error["mape"], 1), "T2", "error", **point),
+        cite(record["unflagged_busy"], "T3", "unflagged_busy"),
+        cite(record["unflagged"], "T3", "unflagged"),
     ]
+    track = "No past flag to judge yet; {F6} of {F7}."
     if record["flags"]:
         figures += [
-            cite(record["borne_out"], "T3", "count"),
-            cite(record["flags"], "T3", "count"),
+            cite(record["borne_out"], "T3", "borne_out"),
+            cite(record["flags"], "T3", "flags"),
         ]
+        track = "Of {F9}, {F8}; and {F6} of {F7}."
     return BriefDraft(
-        summary=(
-            f"{primary}, the primary model, forecasts {{F1}} attendances at "
-            "release horizon 1, the week ending {WEEK1}."
-        ),
-        expected_range="Its 80% range is {F2} to {F3}.",
+        summary="{PRIMARY} forecasts {F1} for {WEEK1}.",
+        expected_range="The likely range runs from {F2} to {F3}.",
         model_agreement=(
-            "The four forecasts spread {F4}% of the primary's, so the "
-            "lowest forecast is the one to trust less."
+            "The forecasts spread {F4}, so the lowest is the one to trust "
+            "less."
         ),
-        backtest_error=(
-            f"{primary}'s own back-test error at release horizon 1 is {{F5}}%."
-        ),
-        track_record=f"{track}{{F6}} of its {{F7}} unflagged outlooks turned "
-        "busy.",
-        watch_points=["Check whether extra shifts or bank staff are needed."],
+        backtest_error="Its own back-test error is {F5}.",
+        track_record=track,
+        watch_points=[
+            "Check whether extra shifts or bank staff are needed this week."
+        ],
         cited_figures=figures,
     )
 
@@ -188,6 +186,7 @@ def wrong_edit(brief):
     wrong = CitedFigure(
         value=1450,
         tool_call_id="T1",
+        measure="point",
         model=draft.cited_figures[0].model,
         horizon=1,
         unit="attendances",
@@ -195,7 +194,7 @@ def wrong_edit(brief):
     return BriefDraft.model_validate(
         {
             **draft.model_dump(mode="json"),
-            "summary": f"{draft.summary} Expect {{F{n}}} attendances.",
+            "summary": f"{draft.summary} Expect {{F{n}}}.",
             "cited_figures": [
                 *draft.model_dump(mode="json")["cited_figures"],
                 wrong.model_dump(mode="json"),
@@ -261,10 +260,7 @@ def safeguards(run, holidays, settings):
             if deadline is None
             else f"{deadline:%H:%M} on {deadline:%a %d %b %Y}"
         )
-        return (
-            f"{a.name}, demand level {a.level}: {a.task} Please reply by "
-            f"{when}."
-        )
+        return f"{{HOSPITAL}}, {{LEVEL}}: {a.task} Please reply by {when}."
 
     def notes(pairs):
         return _ai(

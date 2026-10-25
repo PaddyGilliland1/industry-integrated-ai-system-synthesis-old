@@ -34,9 +34,10 @@ from pydantic import (
     model_validator,
 )
 
+from . import placeholders as ph
 from .agents import BriefOutcome, WordingResult, device_words
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief
-from .figures import CheckResult, check_brief, marked, tokens
+from .figures import CheckResult, check_brief
 from .gateway import AuditLog
 from .placeholders import failures_of
 
@@ -200,9 +201,7 @@ class QueueItem(BaseModel):
                 named = "\n".join(f"- {f.field}: {f.reason}" for f in failures)
                 return f"{banner}\nYour edit was refused:\n{named}"
             failed = set(self.last_edit.failed_figures)
-            text = marked(
-                self.edit.text(failed, written_by=written_by), failures
-            )
+            text = self.edit.text(failed, written_by=written_by)
             wording = self.edit_wording
             if self.last_edit.passed and wording and not wording.passed:
                 named = "\n".join(f"- {p}" for p in wording.problems)
@@ -210,7 +209,10 @@ class QueueItem(BaseModel):
                     f"{banner}\nYour edit failed the wording check:\n"
                     f"{named}\n{text}"
                 )
-            return f"{banner}\nYour edit failed the code check.\n{text}"
+            named = "\n".join(f"- {f.field}: {f.reason}" for f in failures)
+            return (
+                f"{banner}\nYour edit failed the code check:\n{named}\n{text}"
+            )
         if self.state == "not verified":
             shown = self.outcome.display(written_by=written_by)
             if self.edit is not None:
@@ -222,28 +224,11 @@ class QueueItem(BaseModel):
         return self.current.text(written_by=written_by)
 
 
-# What a factual edit changes, as the text reads once rendered: a figure,
-# a date, the level or a hospital (build spec, section 2, item 6).
-FACTUAL_KINDS = (
-    "number",
-    "date",
-    "year",
-    "time",
-    "level",
-    "conditional level",
-    "horizon",
-    "weeks",
-    "iso week",
-    "hospital",
-)
-
-
 def _facts(texts):
+    """The figures and tokens a text states, which are its facts: a word
+    cannot name a number, date, hospital or level."""
     return sorted(
-        (t.kind, str(t.value))
-        for text in texts
-        for t in tokens(text)
-        if t.kind in FACTUAL_KINDS
+        m.group(0) for text in texts for m in ph.PLACEHOLDER.finditer(text)
     )
 
 
@@ -254,27 +239,16 @@ def _figure_set(figures):
     )
 
 
-def factual_changes(base, draft, edited):
-    """What an edit changed that makes it factual, found by code (review
-    P3-4): the cited figures, or a figure, date, level or hospital in the
-    text as the manager reads it. A correction of a statement of fact in
-    words is the approver's to declare."""
+def factual_changes(base, draft):
+    """What an edit changed that makes it factual, found by code: the cited
+    figures, or the figures and tokens its text states. A correction of a
+    statement of fact in words is the approver's to declare."""
+    if base is None:
+        return ["the brief had no text to compare, so every fact is new"]
     changes = []
     if _figure_set(base.cited_figures) != _figure_set(draft.cited_figures):
         changes.append("the cited figures changed")
-    after = (
-        edited.rendered().values()
-        if edited is not None
-        else [
-            draft.summary,
-            draft.expected_range,
-            draft.model_agreement,
-            draft.backtest_error,
-            draft.track_record,
-            *draft.watch_points,
-        ]
-    )
-    if _facts(base.rendered().values()) != _facts(after):
+    if _facts(base.texts().values()) != _facts(draft.texts().values()):
         changes.append("a figure, date, level or hospital in the text changed")
     return changes
 
@@ -362,9 +336,21 @@ class ApprovalQueue:
         return item
 
     def _recheck(self, item, draft):
+        """The edited brief and its code check; a brief that had no readable
+        text is built from its screen entry and the edit."""
         base = item.current or item.outcome.brief
         try:
-            edited = base.with_draft(draft)
+            if base is None:
+                edited = DemandBrief.assemble(
+                    item.outcome.entry,
+                    draft,
+                    brief_id=item.brief_id,
+                    backend=item.outcome.backend,
+                    model=item.outcome.model,
+                    model_digest=None,
+                )
+            else:
+                edited = base.with_draft(draft)
         except ValidationError as exc:
             # The edit breaks a placeholder rule for this brief, such as
             # naming another hospital, so it is refused with each problem.
@@ -406,7 +392,7 @@ class ApprovalQueue:
             if wording is not None and not wording.passed:
                 result = result.model_copy(update={"passed": False})
             base = item.current or item.outcome.brief
-            found = factual_changes(base, decision.edited, edited)
+            found = factual_changes(base, decision.edited)
             self._factual_by = (
                 ("both" if found else "approver")
                 if decision.factual_edit

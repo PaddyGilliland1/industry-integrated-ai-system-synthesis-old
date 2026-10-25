@@ -1,26 +1,23 @@
 """The Reviewer's code figure check (D-SAFE-19, as amended).
 
-The brief's text holds no figure or date of the agent's own: each is a
-placeholder that code fills from a cited figure (placeholders.py; review
-P1-1, option A), and Pydantic validators refuse a draft that writes a
-number, a date, another hospital or another level, or puts a figure beside
-another model, release horizon or week. This check then runs before any
-language-model review, and on every edit:
+The brief's text holds no figure of the agent's own: each is a placeholder
+that code writes in with its label, and the words name no number, model,
+release horizon, week, hospital or level (placeholders.py). This check runs
+before any language model reads the brief, and on every edit, and names
+every problem at once:
 
-- each cited figure must equal a value its tool call returned, within
-  rounding and in its declared unit, for the same hospital, origin, model,
-  release horizon and week;
-- the text as the manager reads it, every placeholder filled, may state
-  only cited figures that passed, the brief's own dates (its origin,
-  release, latch date and the four weeks ahead) or a passing cited
-  figure's week, and the rule's level;
-- the level field must equal the rule's.
+- the text rules, as the Pydantic validators apply them;
+- each cited figure must be what its tool call returned: the same value
+  within rounding, the same measure, model, release horizon and week, in
+  the measure's unit, for the same hospital and origin;
+- the brief must state its primary model's forecast, its hospital's own
+  back-test error and its track record, each a cited figure that passed,
+  found by its measure and its tool;
+- the level must equal the rule's.
 
-The same check runs on each drafted staff notification before the outbox,
-as it will be written (review P1-2): a number must be a figure the approved
-brief's text states, or the action's level, and a date one of the action's
-weeks, its reply deadline, the brief's origin or release, or a date the
-brief's text states.
+So each number the reader sees is a tool's value, written with its true
+label. The check does not prove what a sentence says about it: the Reviewer
+and the duty manager judge that.
 
 "Within rounding" means the tool's value, rounded to the places the brief
 writes, gives the brief's number: 1,203 matches 1,202.66 and 4.3 matches
@@ -35,13 +32,13 @@ by the Reviewer before any model reads the brief.
 import re
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from .data import HOSPITAL_NAMES
-from .timing import release_horizon_weeks
+from . import placeholders as ph
+from .placeholders import HOSPITALS, Failure, plain
+from .tools import MEASURES
 
 MONTHS = {
     "jan": 1,
@@ -129,32 +126,7 @@ NUMBER_WORDS = re.compile(
 # figure but is no number the check can trace.
 GLUED = re.compile(r"(?<![\w.,])\d[\d.,]*[A-Za-z]\w*|\b[A-Za-z]+\d\w*")
 HOSPITAL_CODE = re.compile(r"\b[A-Z]\d{3}[A-Z]\b")
-# Shorter names a writer uses for the hospitals, beside the full ones.
-SHORT_NAMES = {
-    "S314H": ("Royal Infirmary of Edinburgh",),
-    "G405H": ("Queen Elizabeth",),
-    "T101H": ("Ninewells",),
-    "C121H": ("Lorn & Islands",),
-    "H202H": ("Raigmore",),
-}
 
-
-def _hospital_patterns():
-    names = []
-    for code, name in HOSPITAL_NAMES.items():
-        forms = {name, *SHORT_NAMES.get(code, ())}
-        bare = re.sub(r"^The\s+|\s+Hospital$", "", name)
-        if len(bare.split()) >= 2:
-            forms.add(bare)
-        names += [(form, code) for form in forms]
-    names.sort(key=lambda pair: -len(pair[0]))
-    return [
-        (re.compile(rf"\b{re.escape(form)}\b", re.IGNORECASE), code)
-        for form, code in names
-    ]
-
-
-HOSPITALS = _hospital_patterns()
 # The two fixed forms in which a brief may name a level other than its own:
 # what the rule can give, and what to check. Any other level fails.
 CONDITIONAL_LEVEL = re.compile(
@@ -238,7 +210,8 @@ def _day_range(m):
 
 def tokens(text):
     """Return every number, date, year, level, release horizon, count of
-    weeks, week label and time in a text, in the order they appear.
+    weeks, week label and time in a code-written text, such as the template
+    brief, in the order they appear.
     Hospital codes, the moving average's name, the 80% and 95% range labels
     and COVID-19 are not figures, and the two fixed forms that name another
     level are read whole."""
@@ -310,70 +283,26 @@ def tokens(text):
     return sorted(found, key=lambda t: t.start)
 
 
-def plain(value):
-    """A number as plain text with no trailing zeros: 1203.0 is 1203."""
-    return format(Decimal(repr(float(value))).normalize(), "f")
-
-
 def within_rounding(written, target):
     """True when target, rounded to the decimal places written has, gives
-    written. Signs are ignored, so a difference stated as -0.18 matches
-    0.18."""
-    text = str(written).replace(",", "").lstrip("+-−")
+    written, sign and all."""
+    text = str(written).replace(",", "").replace("−", "-")
     places = len(text.split(".")[1]) if "." in text else 0
-    return abs(float(text) - abs(float(target))) <= 0.5 * 10**-places + 1e-9
-
-
-class Failure(BaseModel):
-    """One thing the check could not trace: where it is, what it says and
-    why it fails."""
-
-    model_config = ConfigDict(frozen=True)
-
-    field: str
-    found: str
-    reason: str
+    return abs(float(text) - float(target)) <= 0.5 * 10**-places + 1e-9
 
 
 class CheckResult(BaseModel):
-    """The figure check's verdict on one brief, edit or notification."""
+    """The figure check's verdict on one brief, draft, edit or
+    notification."""
 
     model_config = ConfigDict(frozen=True)
 
     passed: bool
     failures: list[Failure]
-    numbers_checked: int = 0
-    dates_checked: int = 0
     figures_checked: int = 0
     # The cited figures that failed, numbered as their placeholders are,
     # so the manager sees each one marked where the text states it.
     failed_figures: list[int] = []
-
-
-class CodeSet(BaseModel):
-    """The values code set for one staff action, which its notification may
-    state without a tool result: the level, the reply deadline and the
-    weeks the action covers."""
-
-    model_config = ConfigDict(frozen=True)
-
-    level: int
-    numbers: frozenset[float]
-    dates: frozenset[date]
-    times: frozenset[str]
-    # How many weeks the action covers, the only count of weeks its
-    # notification may state.
-    week_count: int
-
-    @classmethod
-    def for_action(cls, level, deadline, weeks):
-        return cls(
-            level=level,
-            numbers=frozenset({float(level)}),
-            dates=frozenset({deadline.date(), *weeks}),
-            times=frozenset({deadline.strftime("%H:%M")}),
-            week_count=len(weeks),
-        )
 
 
 # --- what the ledger holds ---------------------------------------------------
@@ -425,136 +354,212 @@ def ledger_numbers(ledger, hospital, origin):
     return out
 
 
-def _date_known(value, known):
-    year, month, day = value
-    return any(
-        (year is None or d.year == year)
-        and (month is None or d.month == month)
-        and (day is None or d.day == day)
-        for d in known
-    )
+# --- one cited figure, by what it is -----------------------------------------
 
-
-# --- one cited figure --------------------------------------------------------
-
-
-def _numbers(item, keys, unit):
-    out = []
-    for key in keys:
-        v = item.get(key)
-        if isinstance(v, dict):
-            out += [(v["low"], unit), (v["high"], unit)]
-        elif v is not None:
-            out.append((v, unit))
-    return out
-
-
-def _forecast_candidates(result, fig):
-    horizon = fig.horizon
-    items = result["forecasts"]
-    if fig.week is not None:
-        weeks = [
-            i["release_horizon"]
-            for i in items
-            if i["week_ending"] == fig.week.isoformat()
-        ]
-        if not weeks or (horizon is not None and horizon not in weeks):
-            return None, f"no forecast in it is for the week {fig.week}"
-        horizon = weeks[0]
-    if horizon is None:
-        return None, "it names no release horizon or week for a forecast"
-    spread = result["spread_pct"].get(str(horizon))
-    spread = [] if spread is None else [(spread, "%")]
-    if fig.model is None:
-        return spread, f"names no model, and is not the spread at {horizon}"
-    mine = [
-        i
-        for i in items
-        if i["model"] == fig.model and i["release_horizon"] == horizon
-    ]
-    keys = ("point", "range_80", "range_95")
-    found = [n for i in mine for n in _numbers(i, keys, "attendances")]
-    return spread + found, f"for {fig.model} at release horizon {horizon}"
-
-
-def _calendar_candidates(result, fig, targets):
-    horizon = fig.horizon
-    if fig.week is not None:
-        if fig.week not in targets:
-            return None, (
-                f"it names w/e {fig.week}, which is not one of the four "
-                "weeks ahead"
-            )
-        if horizon not in (None, targets.index(fig.week) + 1):
-            return None, f"w/e {fig.week} is not release horizon {horizon}"
-        horizon = targets.index(fig.week) + 1
-    holidays = [
-        h
-        for h in result["holidays"]
-        if horizon is None or h["release_horizon"] == horizon
-    ]
-    where = f" at release horizon {horizon}" if horizon else ""
-    return [(float(len(holidays)), "count")], f"in the calendar{where}"
-
-
-def _candidates(call, fig, targets):
-    """The numbers a cited figure may equal in its call's result, each with
-    its unit, and the context named in a failure; None when the figure
-    cannot be placed."""
-    result = call.result
-    if call.name == "get_forecast":
-        return _forecast_candidates(result, fig)
-    if call.name == "get_calendar":
-        return _calendar_candidates(result, fig, targets)
-    if call.name == "get_history":
-        if fig.week is None:
-            return None, "it names no week for a history figure"
-        found = [
-            (w["attendances"], "attendances")
-            for w in result["weeks"]
-            if w["week_ending"] == fig.week.isoformat()
-        ]
-        return found, f"for the week ending {fig.week}"
-    # A back-test error or a track record is for no one week, so a figure
-    # that names one would put a week on the brief no tool gave it.
-    if fig.week is not None:
-        return None, f"it names w/e {fig.week}, but {call.id} has no weeks"
-    if call.name == "get_backtest_error":
-        horizon = result["release_horizon"]
-        if fig.horizon is not None and fig.horizon != horizon:
-            return None, (
-                f"it names release horizon {fig.horizon}, but {call.id} is "
-                f"for release horizon {horizon}"
-            )
-        errors = result["errors"]
-        if fig.model is None and len(errors) > 1:
-            return None, (
-                f"it names no model, and {call.id} holds each model's error"
-            )
-        mine = [e for e in errors if fig.model in (None, e["model"])]
-        if not mine:
-            return None, f"it names {fig.model}, but {call.id} has no error"
-        found = _numbers(mine[0], ("mape",), "%")
-        found += _numbers(mine[0], ("targets",), "count")
-        return found, f"for {mine[0]['model']} at release horizon {horizon}"
-    counts = ("flags", "borne_out", "unflagged", "unflagged_busy")
-    found = _numbers(result, counts, "count")
-    found += _numbers(result, ("unflagged_busy_pct",), "%")
-    return found, "in the track record"
-
-
-OWN_FIGURES = (
-    ("backtest_error", "get_backtest_error", "back-test error"),
-    ("track_record", "get_track_record", "track record"),
-)
 UNIT_NAMES = {
     "attendances": "attendances",
     "%": "a percentage",
     "count": "a count",
 }
+TRACK = (
+    "flags",
+    "borne_out",
+    "unflagged",
+    "unflagged_busy",
+    "unflagged_busy_pct",
+)
+TRACK_WHAT = {
+    "flags": "the count of flagged outlooks",
+    "borne_out": "the count of flagged outlooks borne out",
+    "unflagged": "the count of unflagged outlooks",
+    "unflagged_busy": "the count of unflagged outlooks that turned busy",
+    "unflagged_busy_pct": "the share of unflagged outlooks that turned busy",
+}
 
 
-def _figure_problem(fig, by_id, hospital, origin, targets):
+def _horizon(fig, targets):
+    """The release horizon a forecast, spread or holiday figure is for,
+    from its horizon or its week, as (horizon, why not)."""
+    if fig.week is not None:
+        if fig.week not in targets:
+            return None, (
+                f"{ph.week_text(fig.week)} is not one of the four weeks ahead"
+            )
+        k = targets.index(fig.week) + 1
+        if fig.horizon not in (None, k):
+            return None, (
+                f"{ph.week_text(fig.week)} is release horizon {k}, not "
+                f"release horizon {fig.horizon}"
+            )
+        return k, ""
+    if fig.horizon is None:
+        return None, "it names no release horizon or week"
+    return fig.horizon, ""
+
+
+def _forecast(call, fig, targets):
+    """A forecast's point, a range end or the spread, from get_forecast."""
+    horizon, why = _horizon(fig, targets)
+    if horizon is None:
+        return None, why
+    result = call.result
+    if fig.measure == "spread":
+        if fig.model is not None:
+            return None, (
+                "the spread is the four models' together, so it names no "
+                "model"
+            )
+        value = result["spread_pct"].get(str(horizon))
+        if value is None:
+            return (
+                None,
+                f"{call.id} has no spread at release horizon {horizon}",
+            )
+        return value, f"the spread at release horizon {horizon}"
+    if fig.model is None:
+        return None, "it names no model, and a forecast or its range is one's"
+    item = next(
+        (
+            i
+            for i in result["forecasts"]
+            if i["model"] == fig.model and i["release_horizon"] == horizon
+        ),
+        None,
+    )
+    if item is None:
+        return None, (
+            f"{call.id} has no {fig.model} forecast at release horizon "
+            f"{horizon}"
+        )
+    if fig.measure == "point":
+        return item["point"], (
+            f"{fig.model}'s forecast at release horizon {horizon}"
+        )
+    end, cover = ph.RANGE_END[fig.measure]
+    bounds = item[f"range_{cover}"]
+    if bounds is None:
+        return None, (
+            f"{call.id} has no {cover}% range for {fig.model} at release "
+            f"horizon {horizon}"
+        )
+    return bounds[end], (
+        f"the {end} end of {fig.model}'s {cover}% range at release horizon "
+        f"{horizon}"
+    )
+
+
+def _history(call, fig, targets):
+    """A week's actual attendances, from get_history."""
+    if fig.model is not None or fig.horizon is not None:
+        return None, (
+            "it names a model or a release horizon, but an actual is a "
+            "week's attendances only"
+        )
+    if fig.week is None:
+        return None, "it names no week for a history figure"
+    found = [
+        w["attendances"]
+        for w in call.result["weeks"]
+        if w["week_ending"] == fig.week.isoformat()
+    ]
+    if not found:
+        return None, f"{call.id} has no actual for {ph.week_text(fig.week)}"
+    return found[0], f"the actual for {ph.week_text(fig.week)}"
+
+
+def _backtest(call, fig, targets):
+    """One model's back-test error or its count of weeks, from
+    get_backtest_error."""
+    if fig.week is not None:
+        return None, (
+            "a back-test is for no one week, so it names no week, but it "
+            f"names {ph.week_text(fig.week)}"
+        )
+    if fig.model is None:
+        return None, "it names no model, and a back-test is one model's"
+    if fig.horizon is None:
+        return None, "it names no release horizon, and a back-test is for one"
+    horizon = call.result["release_horizon"]
+    if fig.horizon != horizon:
+        return None, (
+            f"it names release horizon {fig.horizon}, but {call.id} is for "
+            f"release horizon {horizon}"
+        )
+    mine = next(
+        (e for e in call.result["errors"] if e["model"] == fig.model), None
+    )
+    if mine is None:
+        return None, f"{call.id} has no back-test for {fig.model}"
+    key = "mape" if fig.measure == "error" else "targets"
+    if mine[key] is None:
+        return None, f"{call.id} gives no back-test error for {fig.model}"
+    what = "back-test error" if key == "mape" else "count of back-test weeks"
+    return mine[key], f"{fig.model}'s {what} at release horizon {horizon}"
+
+
+def _track(call, fig, targets):
+    """A count or the busy share, from get_track_record."""
+    if fig.model or fig.horizon or fig.week:
+        return None, (
+            "the track record is the hospital's, for no week, release "
+            "horizon or model, so it names none"
+        )
+    value = call.result[fig.measure]
+    if value is None:
+        return None, f"{call.id} gives no {TRACK_WHAT[fig.measure][4:]}"
+    return value, TRACK_WHAT[fig.measure]
+
+
+def _calendar(call, fig, targets):
+    """A count of bank holidays, in the four weeks ahead or in one of
+    them, from get_calendar."""
+    if fig.model is not None:
+        return None, "a count of bank holidays is no model's, so it names none"
+    asked = call.request.get("week")
+    asked = date.fromisoformat(str(asked)) if asked else None
+    holidays = call.result["holidays"]
+    if fig.week is None and fig.horizon is None:
+        if asked is not None:
+            return None, (
+                f"it names no week, but {call.id} is for one week, "
+                f"{ph.week_text(asked)}"
+            )
+        return float(len(holidays)), (
+            "the count of bank holidays in the four weeks ahead"
+        )
+    horizon, why = _horizon(fig, targets)
+    if horizon is None:
+        return None, why
+    week = targets[horizon - 1]
+    if asked is not None and asked != week:
+        return None, (
+            f"it names {ph.week_text(week)}, but {call.id} is for "
+            f"{ph.week_text(asked)}"
+        )
+    count = sum(h["release_horizon"] == horizon for h in holidays)
+    return float(count), (
+        f"the count of bank holidays at release horizon {horizon}"
+    )
+
+
+READERS = {
+    "get_forecast": _forecast,
+    "get_history": _history,
+    "get_backtest_error": _backtest,
+    "get_track_record": _track,
+    "get_calendar": _calendar,
+}
+
+
+def figure_problem(fig, by_id, hospital, origin, targets):
+    """Why a cited figure is not what its tool call returned, or None.
+
+    The call must exist and be for this hospital and origin, the measure
+    must be one its tool returns, in the measure's unit, and the value must
+    be, within rounding, the one the result holds for the figure's measure,
+    model, release horizon and week. A figure that leaves out what its
+    measure needs is refused, never matched against any value that fits.
+    """
     call = by_id.get(fig.tool_call_id)
     if call is None:
         return f"it cites {fig.tool_call_id}, which no tool call returned"
@@ -563,95 +568,130 @@ def _figure_problem(fig, by_id, hospital, origin, targets):
         return f"{call.id} is for {req['hospital']}, not {hospital}"
     if str(req.get("as_of")) != origin.isoformat():
         return f"{call.id} is as of {req.get('as_of')}, not {origin}"
-    found, context = _candidates(call, fig, targets)
-    if found is None:
-        return context
-    written = plain(fig.value)
-    if any(within_rounding(written, v) for v, u in found if u == fig.unit):
-        return None
-    other = [u for v, u in found if within_rounding(written, v)]
-    if other:
+    tool, unit = MEASURES[fig.measure]
+    if call.name != tool:
         return (
-            f"{written} is in {call.id}'s result {context} as "
-            f"{UNIT_NAMES[other[0]]}, not as {UNIT_NAMES[fig.unit]}"
+            f"a figure with measure {fig.measure} comes from {tool}, but "
+            f"{call.id} is a {call.name} call"
         )
-    return f"{written} is not in {call.id}'s result {context}"
+    if fig.unit != unit:
+        return (
+            f"a figure with measure {fig.measure} is {UNIT_NAMES[unit]}, not "
+            f"{UNIT_NAMES[fig.unit]}"
+        )
+    value, where = READERS[tool](call, fig, targets)
+    if value is None:
+        return where
+    written = plain(fig.value)
+    if within_rounding(written, value):
+        return None
+    return f"{written} is not {where} in {call.id}"
 
 
 # --- the checks --------------------------------------------------------------
 
 
-# The Investigator prompt's own rule, quoted when a brief names another
-# level, so the retry says why.
-LEVEL_RULE = (
-    "the Investigator's prompt says \"you never state any level other than "
-    'the one you are given"'
-)
+def _stated(texts, fields, figures, failed):
+    """The passing cited figures the given fields state."""
+    numbers = {
+        n
+        for field in fields
+        for n in ph.figure_numbers(texts.get(field, ""))
+        if n <= len(figures) and n not in failed
+    }
+    return [figures[n - 1] for n in sorted(numbers)]
 
 
-@dataclass(frozen=True)
-class Allowed:
-    """What a text may state beyond its figures.
-
-    dates are the full dates it may state; outlook is the narrower set whose
-    years and ISO weeks a bare year or a "week 26" label may name; weeks are
-    the counts of weeks it may state, as in "the next 4 weeks"."""
-
-    level: int
-    dates: frozenset
-    outlook: frozenset
-    weeks: frozenset = frozenset({1, 2, 3, 4})
-    times: frozenset = frozenset()
-    conditional_levels: bool = False
-    level_rule: str = ""
-
-
-def token_failure(t, allowed):
-    """Why a level, horizon, count of weeks, week label, date, year or time
-    in a text is not one it may state, or None if it may."""
-    level = allowed.level
-    if t.kind == "level" and t.value != level:
-        rule = f"; {allowed.level_rule}" if allowed.level_rule else ""
-        return f"it states {t.text}, but the rule's level is {level}{rule}"
-    if t.kind == "conditional level" and not allowed.conditional_levels:
-        return f"{t.text}: this text may state only its own level, {level}"
-    if t.kind == "horizon" and any(n < 1 or n > 4 for n in t.value):
-        return f"{t.text}: release horizons run from 1 to 4"
-    if t.kind == "weeks" and t.value not in allowed.weeks:
-        counts = " or ".join(str(n) for n in sorted(allowed.weeks)) or "no"
-        return f"{t.text}: it may state {counts} weeks only"
-    if t.kind == "iso week" and t.value not in {
-        d.isocalendar()[1] for d in allowed.outlook
-    }:
-        return f"{t.text}: no week this text covers is week {t.value}"
-    if t.kind == "date" and not _date_known(t.value, allowed.dates):
-        return f"{t.text}: no tool returned this date for this hospital"
-    if t.kind == "year" and t.value not in {d.year for d in allowed.outlook}:
-        return f"{t.text}: no week this text covers falls in {t.value}"
-    if t.kind == "time" and t.value not in allowed.times:
-        return f"{t.text}: no time was set for this action"
-    return None
+def requirement_problems(texts, figures, failed, primary):
+    """What every brief must state and does not: its primary model's
+    forecast, in any field; its hospital's own back-test error, in the
+    back-test error field; its track record, in the track record field.
+    Each is a cited figure that passed, found by its measure, which the
+    figure check has tied to its tool (build spec, section 4)."""
+    out = []
+    every = _stated(texts, texts, figures, failed)
+    if not any(f.measure == "point" and f.model == primary for f in every):
+        out.append(
+            Failure(
+                field="summary",
+                found="",
+                reason=f"the brief must state {primary}'s forecast, the "
+                "primary model's: a cited figure with measure point and "
+                f"model {primary}, from get_forecast",
+            )
+        )
+    errors = _stated(texts, ["backtest_error"], figures, failed)
+    if not any(f.measure == "error" for f in errors):
+        out.append(
+            Failure(
+                field="backtest_error",
+                found="",
+                reason="the back-test error field must state this "
+                "hospital's own back-test error: a cited figure with "
+                "measure error, from get_backtest_error",
+            )
+        )
+    track = _stated(texts, ["track_record"], figures, failed)
+    if not any(f.measure in TRACK for f in track):
+        out.append(
+            Failure(
+                field="track_record",
+                found="",
+                reason="the track record field must state this hospital's "
+                "track record: a cited figure from get_track_record",
+            )
+        )
+    return out
 
 
-def _figure_week(fig, call, targets):
-    """The week a passing cited figure is for, if it names one."""
-    if fig.week is not None:
-        return fig.week
-    if call.name == "get_forecast" and fig.horizon is not None:
-        return targets[fig.horizon - 1]
-    return None
+def check_draft(texts, figures, ledger, ctx):
+    """Check a draft's text and cited figures against the tool calls the
+    Investigator made, naming every problem at once: each text rule broken,
+    each cited figure that is not what its tool returned, and each figure
+    every brief must state and does not.
+
+    Parameters
+    ----------
+    texts : dict of str to str
+        Each text field, watch points one by one, with its placeholders.
+    figures : list of briefs.CitedFigure
+    ledger : list of briefs.ToolCall
+    ctx : placeholders.TextContext
+        The brief's hospital, origin, level, dates and primary model.
+
+    Returns
+    -------
+    CheckResult
+    """
+    failures = ph.problems(texts, figures, ctx)
+    by_id = {c.id: c for c in ledger}
+    failed = []
+    for i, fig in enumerate(figures):
+        problem = figure_problem(
+            fig, by_id, ctx.hospital, ctx.origin, ctx.targets
+        )
+        if problem:
+            failed.append(i + 1)
+            failures.append(
+                Failure(
+                    field=f"cited_figures[{i}]",
+                    found=plain(fig.value),
+                    reason=problem,
+                )
+            )
+    failures += requirement_problems(texts, figures, set(failed), ctx.primary)
+    return CheckResult(
+        passed=not failures,
+        failures=failures,
+        figures_checked=len(figures),
+        failed_figures=failed,
+    )
 
 
 def check_brief(brief, ledger, rule_level):
     """Check a demand brief, or a manager's edit of one, against the tool
-    calls the Investigator made.
-
-    Each cited figure must equal a value its tool call returned, in its
-    declared unit, for the same hospital, origin, model, release horizon
-    and week. The brief's text is then read as the manager sees it, every
-    placeholder filled in by code: each number must be a cited figure that
-    passed, each date one of the brief's own or a cited figure's week, and
-    the level the rule's.
+    calls the Investigator made: the level against the rule's, then every
+    stage of check_draft.
 
     Parameters
     ----------
@@ -664,9 +704,9 @@ def check_brief(brief, ledger, rule_level):
     -------
     CheckResult
     """
-    failures = []
+    level = []
     if brief.level != rule_level:
-        failures.append(
+        level.append(
             Failure(
                 field="level",
                 found=str(brief.level),
@@ -674,178 +714,12 @@ def check_brief(brief, ledger, rule_level):
                 f"level {rule_level}",
             )
         )
-    by_id = {c.id: c for c in ledger}
-    # The brief's code-set dates: its origin, release, latch date and the
-    # four weeks ahead, which the screen tells the Investigator.
-    targets = [w.date() for w in release_horizon_weeks(brief.week)]
-    outlook = {
-        d
-        for d in (brief.week, brief.release_date, brief.latched_since)
-        if d is not None
-    } | set(targets)
-    good, bad, failed = [], [], []
-    for i, fig in enumerate(brief.cited_figures):
-        problem = _figure_problem(
-            fig, by_id, brief.hospital, brief.week, targets
-        )
-        if problem:
-            bad.append(plain(fig.value))
-            failed.append(i + 1)
-            failures.append(
-                Failure(
-                    field=f"cited_figures[{i}]",
-                    found=plain(fig.value),
-                    reason=problem,
-                )
-            )
-            continue
-        good.append(plain(fig.value))
-        week = _figure_week(fig, by_id[fig.tool_call_id], targets)
-        if week is not None:
-            outlook.add(week)
-    # Every brief prints its hospital's own error and track record (build
-    # spec, section 4), so each field must state a figure that passed,
-    # cited to that tool for this hospital.
-    for field, tool, label in OWN_FIGURES:
-        stated = [
-            brief.cited_figures[n - 1].tool_call_id
-            for n in brief.figures_in(field)
-            if n <= len(brief.cited_figures) and n not in failed
-        ]
-        if not any(by_id[c].name == tool for c in stated if c in by_id):
-            failures.append(
-                Failure(
-                    field=field,
-                    found="",
-                    reason=f"the {label} field must state this hospital's "
-                    f"own {label} as a cited figure from {tool}",
-                )
-            )
-    allowed = Allowed(
-        level=rule_level,
-        dates=frozenset(outlook),
-        outlook=frozenset(outlook),
-        conditional_levels=True,
-        level_rule=LEVEL_RULE,
+    result = check_draft(
+        brief.texts(), brief.cited_figures, ledger, brief.text_context()
     )
-    numbers = dates = 0
-    for field, text in brief.rendered().items():
-        for t in tokens(text):
-            if t.kind == "number":
-                numbers += 1
-                # A failed figure is already named where it is cited.
-                if any(within_rounding(t.text, v) for v in good + bad):
-                    continue
-                reason = f"{t.text} is not a cited figure"
-            elif t.kind == "hospital" and t.value != brief.hospital:
-                reason = f"{t.text} is another hospital, not {brief.name}"
-            elif t.kind in ("glued", "number word"):
-                reason = f"{t.text}: a number no check can trace"
-            else:
-                dates += t.kind in ("date", "year")
-                reason = token_failure(t, allowed)
-            if reason:
-                failures.append(
-                    Failure(field=field, found=t.text, reason=reason)
-                )
-    return CheckResult(
-        passed=not failures,
-        failures=failures,
-        numbers_checked=numbers,
-        dates_checked=dates,
-        figures_checked=len(brief.cited_figures),
-        failed_figures=failed,
+    return result.model_copy(
+        update={
+            "passed": result.passed and not level,
+            "failures": level + result.failures,
+        }
     )
-
-
-def _stated_dates(texts):
-    """The full dates a set of texts states."""
-    out = set()
-    for text in texts:
-        for t in tokens(text):
-            if t.kind == "date" and None not in t.value:
-                out.add(date(*t.value))
-    return out
-
-
-def check_notification(message, brief, code):
-    """Check one drafted staff notification, as it will be written, before
-    it may reach the outbox (D-SAFE-19, as amended; review P1-2).
-
-    A number must be the value of a cited figure the approved brief's text
-    states, or the action's level. A date must be one of the action's weeks,
-    its reply deadline, the brief's origin or release, or a date the brief's
-    text states. Nothing else in the brief's tool calls counts, so a history
-    week or a past week's count cannot pass as this week's.
-
-    Parameters
-    ----------
-    message : str
-        The notification with its placeholders filled in.
-    brief : briefs.DemandBrief
-        The approved brief, as the approver left it.
-    code : CodeSet
-
-    Returns
-    -------
-    CheckResult
-    """
-    stated = set()
-    for field in brief.rendered():
-        stated |= brief.figures_in(field)
-    values = {
-        float(brief.cited_figures[n - 1].value)
-        for n in stated
-        if n <= len(brief.cited_figures)
-    } | set(code.numbers)
-    known = frozenset(
-        code.dates
-        | {brief.week, brief.release_date}
-        | _stated_dates(brief.rendered().values())
-    )
-    allowed = Allowed(
-        level=code.level,
-        dates=known,
-        outlook=known,
-        weeks=frozenset({code.week_count}),
-        times=code.times,
-    )
-    failures = []
-    numbers = dates = 0
-    for t in tokens(message):
-        if t.kind == "number":
-            numbers += 1
-            if any(within_rounding(t.text, v) for v in values):
-                continue
-            reason = (
-                f"{t.text}: neither the approved brief's text nor the "
-                "action gives it"
-            )
-        elif t.kind == "hospital" and t.value != brief.hospital:
-            reason = f"{t.text} is another hospital, not {brief.name}"
-        elif t.kind in ("glued", "number word"):
-            reason = f"{t.text}: a number no check can trace"
-        else:
-            dates += t.kind in ("date", "year")
-            reason = token_failure(t, allowed)
-        if reason:
-            failures.append(
-                Failure(field="message", found=t.text, reason=reason)
-            )
-    return CheckResult(
-        passed=not failures,
-        failures=failures,
-        numbers_checked=numbers,
-        dates_checked=dates,
-    )
-
-
-def marked(text, failures):
-    """The text with each failing figure or date marked for the manager."""
-    wanted = {f.found for f in failures}
-    out = text
-    for t in sorted(tokens(text), key=lambda t: -t.start):
-        if t.text in wanted:
-            end = t.start + len(t.text)
-            out = f"{out[:t.start]}[[NOT VERIFIED: {t.text}]]{out[end:]}"
-    return out

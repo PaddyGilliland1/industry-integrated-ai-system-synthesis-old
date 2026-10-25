@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from . import placeholders as ph
 from . import tools as tl
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief, ToolCall
-from .figures import CheckResult, check_brief, marked
+from .figures import CheckResult, check_brief
 from .gateway import (
     BudgetExceeded,
     CallRecord,
@@ -640,8 +640,9 @@ class BriefOutcome(BaseModel):
 
     def display(self, written_by=True):
         """The brief as the manager sees it; a brief that is not verified
-        carries the banner and its failing figures marked. written_by=False
-        is the raters' view, without the author's line."""
+        carries the banner, its failing figures marked with their labels
+        and every problem code found. written_by=False is the raters' view,
+        without the author's line."""
         if self.status != "not verified":
             return self.brief.text(written_by=written_by) if self.brief else ""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
@@ -649,16 +650,20 @@ class BriefOutcome(BaseModel):
             reason = self.attempts[-1].stop_reason if self.attempts else ""
             return f"{banner}\nNo readable brief: {reason}"
         last = self.attempts[-1]
-        failed = set(last.check.failed_figures) if last.check else set()
-        text = marked(
-            self.brief.text(failed, written_by=written_by), self.failures
-        )
-        last = last.wording
-        notes = (
-            ["Wording problems:", *[f"- {p}" for p in last.problems]]
-            if last and not last.passed
-            else []
-        )
+        check = last.check
+        failed = set(check.failed_figures) if check else set()
+        notes = []
+        if check and not check.passed:
+            notes += [
+                "Problems found by code:",
+                *[f"- {f.field}: {f.reason}" for f in check.failures],
+            ]
+        if last.wording and not last.wording.passed:
+            notes += [
+                "Wording problems:",
+                *[f"- {p}" for p in last.wording.problems],
+            ]
+        text = self.brief.text(failed, written_by=written_by)
         return "\n".join([banner, text, *notes])
 
 

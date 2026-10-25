@@ -1,11 +1,12 @@
-"""The placeholder text (review P1-1, option A): the Investigator writes no
-figure. Each figure in its text is a placeholder that indexes its cited
-figures, and code renders the value from the checked figure. Pydantic
-validators refuse any digit or number word outside a placeholder and the
-fixed wording, any other hospital, any other level, and any figure whose
-own clause gives it a different model, release horizon, week or unit."""
+"""The text the agents write (option A: code writes every figure, and what
+that figure is). Each figure in the text is a placeholder that code renders
+as the value with its label, from the cited figure. The words outside the
+placeholders name no number, model, release horizon, week, hospital or
+level; tokens that code renders name those instead. Pydantic validators
+refuse a draft that breaks a rule, naming every problem at once."""
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
@@ -21,51 +22,34 @@ CTX = ph.TextContext(
     release=date(2021, 6, 22),
     primary="SA-MA",
 )
-# The figures of the review's probe: Ninewells at w/e 13 Jun 2021.
+
+
+def cite(value, measure, call="T1", model=None, horizon=None, week=None):
+    unit = {"%": "%", "count": "count"}.get(
+        ph.MEASURE_UNIT[measure], "attendances"
+    )
+    return br.CitedFigure(
+        value=value,
+        tool_call_id=call,
+        measure=measure,
+        model=model,
+        horizon=horizon,
+        week=week,
+        unit=unit,
+    )
+
+
+# True tool values for Ninewells Hospital at w/e 13 Jun 2021.
 FIGURES = [
-    br.CitedFigure(
-        value=1120,
-        tool_call_id="T1",
-        model="SA-MA",
-        horizon=1,
-        unit="attendances",
-    ),
-    br.CitedFigure(
-        value=835,
-        tool_call_id="T1",
-        model="seasonal naive",
-        horizon=1,
-        unit="attendances",
-    ),
-    br.CitedFigure(
-        value=1057,
-        tool_call_id="T1",
-        model="SA-MA",
-        horizon=3,
-        unit="attendances",
-    ),
-    br.CitedFigure(
-        value=11.5, tool_call_id="T2", model="SA-MA", horizon=1, unit="%"
-    ),
-    br.CitedFigure(
-        value=24.5,
-        tool_call_id="T2",
-        model="seasonal naive",
-        horizon=1,
-        unit="%",
-    ),
-    br.CitedFigure(
-        value=812,
-        tool_call_id="T5",
-        week=date(2021, 4, 11),
-        unit="attendances",
-    ),
-    br.CitedFigure(
-        value=790,
-        tool_call_id="T5",
-        week=date(2020, 6, 14),
-        unit="attendances",
-    ),
+    cite(1120, "point", model="SA-MA", horizon=1),  # F1
+    cite(835, "point", model="seasonal naive", horizon=1),  # F2
+    cite(1057, "point", model="SA-MA", horizon=3),  # F3
+    cite(11.5, "error", "T2", model="SA-MA", horizon=1),  # F4
+    cite(24.5, "error", "T2", model="seasonal naive", horizon=1),  # F5
+    cite(982, "low_80", model="SA-MA", horizon=1),  # F6
+    cite(788, "history", "T5", week=date(2020, 6, 14)),  # F7
+    cite(29, "unflagged_busy", "T3"),  # F8
+    cite(136, "unflagged", "T3"),  # F9
 ]
 
 
@@ -73,230 +57,368 @@ def problems(text, figures=FIGURES, ctx=CTX):
     return ph.problems({"summary": text}, figures, ctx)
 
 
+def found(text, **kw):
+    return [p.found for p in problems(text, **kw)]
+
+
 def reasons(text, **kw):
     return " | ".join(p.reason for p in problems(text, **kw))
 
 
-def draft(summary, figures=FIGURES):
-    return {
-        "summary": summary,
-        "expected_range": "See the summary.",
-        "model_agreement": "The models broadly agree.",
-        "backtest_error": "SA-MA's back-test error is {F4}%.",
-        "track_record": "This hospital has no past flag to judge.",
-        "watch_points": ["Check whether extra shifts are needed."],
-        "cited_figures": [f.model_dump(mode="json") for f in figures],
-    }
+# --- code writes each figure with what it is ---------------------------------
 
 
-# --- the review's passing-wrong sentences now fail, each named ---------------
+@pytest.mark.parametrize(
+    "figure, shown",
+    [
+        (
+            cite(1120, "point", model="SA-MA", horizon=1),
+            "1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 "
+            "Jun 2021)",
+        ),
+        (
+            cite(1086, "point", model="SA-MA", week=date(2021, 7, 18)),
+            "1,086 attendances (SA-MA forecast, release horizon 4, w/e 18 "
+            "Jul 2021)",
+        ),
+        (
+            cite(982, "low_80", model="SA-MA", horizon=1),
+            "982 attendances (low end of SA-MA's 80% range, release horizon "
+            "1, w/e 27 Jun 2021)",
+        ),
+        (
+            cite(1291, "high_80", model="SA-MA", horizon=1),
+            "1,291 attendances (high end of SA-MA's 80% range, release "
+            "horizon 1, w/e 27 Jun 2021)",
+        ),
+        (
+            cite(714, "low_95", model="4-week moving average", horizon=2),
+            "714 attendances (low end of the 4-week moving average's 95% "
+            "range, release horizon 2, w/e 04 Jul 2021)",
+        ),
+        (
+            cite(1454, "high_95", model="linear", horizon=3),
+            "1,454 attendances (high end of linear's 95% range, release "
+            "horizon 3, w/e 11 Jul 2021)",
+        ),
+        (
+            cite(25.5, "spread", horizon=1),
+            "25.5% (spread of the four models' forecasts, release horizon 1, "
+            "w/e 27 Jun 2021)",
+        ),
+        (
+            cite(788, "history", "T5", week=date(2020, 6, 14)),
+            "788 attendances (actual, w/e 14 Jun 2020)",
+        ),
+        (
+            cite(24.5, "error", "T2", model="seasonal naive", horizon=1),
+            "24.5% (seasonal naive back-test error, release horizon 1)",
+        ),
+        (
+            cite(104, "targets", "T2", model="SA-MA", horizon=1),
+            "104 weeks (SA-MA back-test, release horizon 1)",
+        ),
+        (cite(12, "flags", "T3"), "12 flagged outlooks (track record)"),
+        (
+            cite(1, "borne_out", "T3"),
+            "1 flagged outlook borne out (track record)",
+        ),
+        (
+            cite(136, "unflagged", "T3"),
+            "136 unflagged outlooks (track record)",
+        ),
+        (
+            cite(29, "unflagged_busy", "T3"),
+            "29 unflagged outlooks that turned busy (track record)",
+        ),
+        (
+            cite(21.3, "unflagged_busy_pct", "T3"),
+            "21.3% of unflagged outlooks turned busy (track record)",
+        ),
+        (
+            cite(0, "holidays", "T4"),
+            "0 bank holidays (in the four weeks ahead)",
+        ),
+        (
+            cite(1, "holidays", "T4", horizon=2),
+            "1 bank holiday (release horizon 2, w/e 04 Jul 2021)",
+        ),
+    ],
+)
+def test_each_figure_is_written_with_its_label(figure, shown):
+    assert ph.render("{F1}", [figure], CTX) == shown
+
+
+def test_a_label_leaves_out_what_the_figure_does_not_name():
+    bare = br.CitedFigure(
+        value=1120, tool_call_id="T1", measure="point", unit="attendances"
+    )
+    assert ph.render("{F1}", [bare], CTX) == "1,120 attendances (forecast)"
+
+
+@pytest.mark.parametrize(
+    "token, shown",
+    [
+        ("{HOSPITAL}", "Ninewells Hospital"),
+        ("{PRIMARY}", "SA-MA (the primary model)"),
+        ("{LEVEL}", "demand level 2"),
+        ("{ORIGIN}", "w/e 13 Jun 2021"),
+        ("{RELEASE}", "Tue 22 Jun 2021"),
+        ("{WEEK1}", "w/e 27 Jun 2021"),
+        ("{WEEK2}", "w/e 04 Jul 2021"),
+        ("{WEEK3}", "w/e 11 Jul 2021"),
+        ("{WEEK4}", "w/e 18 Jul 2021"),
+    ],
+)
+def test_each_token_is_written_by_code(token, shown):
+    assert ph.render(token, FIGURES, CTX) == shown
+
+
+def test_the_latch_date_and_the_deadline_are_written_by_code():
+    ctx = CTX.model_copy(
+        update={
+            "latched_since": date(2020, 3, 22),
+            "deadline": datetime(
+                2021, 6, 24, 10, tzinfo=ZoneInfo("Europe/London")
+            ),
+            "weeks": tuple(CTX.targets),
+            "stated": frozenset({1}),
+        }
+    )
+    assert ph.render("{LATCHED}", FIGURES, ctx) == "w/e 22 Mar 2020"
+    assert ph.render("{DEADLINE}", FIGURES, ctx) == (
+        "10:00 UK time on Thu 24 Jun 2021"
+    )
+
+
+def test_a_failed_figure_is_written_marked_with_its_label():
+    shown = ph.render("{PRIMARY} forecasts {F1}.", FIGURES, CTX, failed={1})
+    assert shown == (
+        "SA-MA (the primary model) forecasts [[NOT VERIFIED: 1,120 "
+        "attendances (SA-MA forecast, release horizon 1, w/e 27 Jun "
+        "2021)]]."
+    )
+
+
+def test_month_and_day_names_do_not_follow_the_locale():
+    assert ph.day_text(date(2021, 6, 4)) == "04 Jun 2021"
+    assert ph.release_text(date(2021, 6, 22)) == "Tue 22 Jun 2021"
+
+
+# --- the words name no number ------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "text, named",
     [
-        # Seasonal naive's figure given to SA-MA.
-        ("SA-MA forecasts {F2} attendances at release horizon 1", "{F2}"),
-        # Release horizon 3's figure at release horizon 1.
-        ("At release horizon 1 SA-MA forecasts {F3}.", "release horizon 3"),
-        # Release horizon 1's figure on release horizon 4's week.
-        ("SA-MA forecasts {F1} for w/e {WEEK4}.", "{F1}"),
-        # Seasonal naive's error given to SA-MA.
-        ("SA-MA's back-test error is {F5}%.", "seasonal naive"),
-        # A history week stated as the forecast's week.
-        ("SA-MA forecasts {F1} for w/e {F6.week}.", "{F1}"),
-        # A percentage written as a count.
-        ("The forecast was out by {F4} attendances.", "percentage"),
-        ("The forecast is {F1}% of last year's.", "not a percentage"),
+        ("Expect 1,120 attendances.", "1,120"),
+        ("Expect about 1.9k more.", "1.9k"),
+        ("Demand is 2x the usual.", "2x"),
+        ("Expect ¹²⁰⁰ more.", "¹²⁰⁰"),
+        ("Demand rose by ¼.", "¼"),
+        ("Expect ①② more.", "①②"),
+        ("Expect ١٢٠٠ more.", "١٢٠٠"),
+        ("Expect １２００ more.", "１２００"),
+        ("At the Ⅳ mark it rises.", "Ⅳ"),
+        ("Expect twelve hundred more.", "twelve hundred"),
+        ("Demand is a third above normal.", "third"),
+        ("Demand could double.", "double"),
+        ("Demand is half the usual.", "half"),
+        ("A dozen extra shifts may be needed.", "dozen"),
+        ("It rose twice.", "twice"),
+        ("Only one of the flags was borne out.", "one"),
+        ("The flags were borne out once.", "once"),
+        ("The flag was right more than once.", "than once"),
+        ("First, check cover.", "First"),
+        ("A single bank holiday falls.", "single"),
+        ("Demand rose by a quarter.", "quarter"),
+        ("A tenfold rise is unlikely.", "tenfold"),
+        ("Expect zero holidays.", "zero"),
     ],
 )
-def test_a_misattached_figure_fails_with_a_named_problem(text, named):
-    found = reasons(text)
-    assert found and named in found, found
-
-
-@pytest.mark.parametrize(
-    "text, found",
-    [
-        ("SA-MA forecasts 835 attendances at release horizon 1", "835"),
-        ("At release horizon 1 SA-MA forecasts 1,057", "1,057"),
-        ("SA-MA forecasts {F1} for w/e 18 Jul 2021", "18 Jul 2021"),
-        ("SA-MA's back-test error is 24.5%", "24.5"),
-        ("At release horizon 1, 2.9% is SA-MA's back-test error", "2.9"),
-        ("Demand should ease by 26 Dec 2021", "26 Dec 2021"),
-        ("SA-MA forecasts {F1} for w/e 11 Apr 2021", "11 Apr 2021"),
-        ("The forecast was out by 11.5 attendances", "11.5"),
-        ("Expect about 1.9k attendances", "1.9k"),
-        ("Demand is 2x the usual", "2x"),
-        ("Expect twelve hundred attendances", "twelve"),
-        ("Demand is a third above normal", "third"),
-        ("This is a level three week", "three"),
-    ],
-)
-def test_a_digit_or_number_word_outside_a_placeholder_fails(text, found):
+def test_a_number_in_any_form_outside_a_placeholder_fails(text, named):
     got = problems(text)
-    assert any(found in p.found for p in got), got
+    assert named in [p.found for p in got], got
+    assert any("{F1}" in p.reason for p in got if p.found == named)
 
 
-def test_another_level_fails_quoting_the_prompts_rule():
-    found = reasons("This is a level 3 week.")
-    assert "never state any level other than the one you are given" in found
-
-
-def test_another_hospitals_name_or_code_fails():
-    for text, name in (
-        ("The Royal Infirmary of Edinburgh is forecast {F1}.", "Edinburgh"),
-        ("Unlike S314H, demand here is steady.", "S314H"),
-        ("Glasgow Royal Infirmary is busier.", "Glasgow Royal Infirmary"),
-    ):
-        got = problems(text)
-        assert any(name in p.found for p in got), (text, got)
-        assert "another hospital" in " ".join(p.reason for p in got)
-
-
-def test_the_briefs_own_hospital_and_level_pass():
-    assert not problems("Ninewells Hospital (T101H) is at demand level 2.")
-
-
-def test_an_unknown_or_out_of_range_placeholder_fails():
-    assert "{F9}" in reasons("SA-MA forecasts {F9}.")
-    assert "{WEEK5}" in reasons("Watch w/e {WEEK5}.")
-    assert "{LATCHED}" in reasons("Latched since {LATCHED}.")
-    assert "{F1}" in reasons("About {F1}k attendances.")
-
-
-# --- correct sentences pass (review P1-3, in placeholder form) ---------------
+# --- the words name no model, release horizon, week, hospital or level -------
 
 
 @pytest.mark.parametrize(
-    "text, shown",
+    "text, named, says",
     [
+        ("SA-MA is the steadier.", "SA-MA", "{PRIMARY}"),
+        ("Seasonal naive is lower.", "Seasonal naive", "{PRIMARY}"),
+        ("The 4-week moving average is flat.", "4-week moving average", ""),
+        ("Linear trends up.", "Linear", "model"),
+        ("The primary model is steadier.", "primary", "{PRIMARY}"),
+        ("The naive model is the lowest.", "naive", "model"),
+        ("Unlike the GRU, it is steady.", "GRU", "model"),
+        ("At every release horizon it rises.", "release horizon", "label"),
+        ("At horizon IV the forecasts part.", "horizon IV", "label"),
+        ("Check cover for w/e {WEEK1}.", "w/e", "{WEEK1}"),
+        ("Plan for the week ending {WEEK1}.", "week ending", "{WEEK1}"),
+        ("Next week is busier.", "Next week", "{WEEK1}"),
+        ("Last week was quiet.", "Last week", "{WEEK1}"),
+        ("Demand peaks the week after next.", "week after next", "{WEEK1}"),
+        ("The final week is the busiest.", "final week", "{WEEK1}"),
+        ("It is above the same week of last year.", "same week", "{WEEK1}"),
+        ("It is above last year.", "last year", "{WEEK1}"),
+        ("A week later it falls.", "A week later", "{WEEK1}"),
+        ("A year ago it was lower.", "A year ago", "{WEEK1}"),
+        ("Demand rose in July.", "July", "{WEEK1}"),
+        ("Reply by Thursday.", "Thursday", "{DEADLINE}"),
+        ("Ninewells is busy.", "Ninewells", "{HOSPITAL}"),
         (
-            "At release horizon 1, {F1} attendances are forecast.",
-            "At release horizon 1, 1,120 attendances are forecast.",
+            "Unlike the Royal Infirmary of Edinburgh, it is steady.",
+            "Royal Infirmary of Edinburgh",
+            "{HOSPITAL}",
         ),
-        (
-            "Release horizon 1, {F1} (SA-MA); release horizon 3, {F3}.",
-            "Release horizon 1, 1,120 (SA-MA); release horizon 3, 1,057.",
-        ),
-        (
-            "SA-MA, the primary model, forecasts {F1} attendances at release "
-            "horizon 1, w/e {WEEK1}, against {F2} from seasonal naive.",
-            "SA-MA, the primary model, forecasts 1,120 attendances at release "
-            "horizon 1, w/e 27 Jun 2021, against 835 from seasonal naive.",
-        ),
-        (
-            "SA-MA forecasts {F1} at release horizon 1 and {F3} at release "
-            "horizon 3.",
-            "SA-MA forecasts 1,120 at release horizon 1 and 1,057 at release "
-            "horizon 3.",
-        ),
-        (
-            "SA-MA's back-test error is {F4}% at release horizon 1; seasonal "
-            "naive's is {F5}%.",
-            "SA-MA's back-test error is 11.5% at release horizon 1; seasonal "
-            "naive's is 24.5%.",
-        ),
-        (
-            "The week ending {F7.week} saw {F7}, the same week of 2020.",
-            "The week ending 14 Jun 2020 saw 790, the same week of 2020.",
-        ),
-        (
-            "Check cover for the next 4 weeks, from {WEEK1} to {WEEK4}.",
-            "Check cover for the next 4 weeks, from 27 Jun 2021 to 18 Jul "
-            "2021.",
-        ),
-        (
-            "Released {RELEASE} for w/e {ORIGIN}.",
-            "Released Tue 22 Jun 2021 for w/e 13 Jun 2021.",
-        ),
+        ("Glasgow Royal Infirmary is busier.", "Glasgow Royal Infirmary", ""),
+        ("Unlike the RIE, it is steady.", "RIE", "{HOSPITAL}"),
+        ("QEUH is busier.", "QEUH", "{HOSPITAL}"),
+        ("Edinburgh is busier.", "Edinburgh", "{HOSPITAL}"),
+        ("The Royal Infirmary is busier.", "Royal Infirmary", "{HOSPITAL}"),
+        ("Scotland as a whole is busier.", "Scotland", "{HOSPITAL}"),
+        ("Unlike S314H, it is steady.", "S314H", "{HOSPITAL}"),
+        ("Unlike s314h, it is steady.", "s314h", "{HOSPITAL}"),
+        ("This is a level IV week.", "level IV", "{LEVEL}"),
+        ("Demand is up by over the usual %.", "%", "label"),
+        ("Demand is up some per cent.", "per cent", "label"),
     ],
 )
-def test_a_correct_sentence_passes_and_renders_its_figures(text, shown):
-    assert not problems(text), problems(text)
-    assert ph.render(text, FIGURES, CTX) == shown
+def test_words_that_name_what_a_label_or_token_names_fail(text, named, says):
+    got = problems(text)
+    mine = [p for p in got if p.found == named]
+    assert mine, got
+    assert says in mine[0].reason
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        "Levels 3 and 4 come only from a surge.",
-        "Check whether level 3 actions apply.",
-        "The 80 per cent range is wide, and so are the 95% ranges.",
-        "Trust the 4-week average less; the four simple models disagree.",
-        "All four models were thrown off in the COVID-19 period.",
-        "Watch week 26, at release horizon 2.",
-        "A 2-week view and the next three weeks agree.",
-        "The lowest forecast is the one to trust less.",
+        "{HOSPITAL} is at {LEVEL}: demand unusually high for the time of "
+        "year, not pressure, need or priority.",
+        "Check whether {LEVEL} actions apply.",
+        "{PRIMARY} forecasts {F1}; the lowest is {F2}.",
+        "Trust that one less; the one with the higher back-test error is the "
+        "weaker.",
+        "Hold new leave requests once the duty manager's check is done.",
+        "Check whether extra shifts or bank staff are needed this week.",
+        "The forecasts fit recent weeks, and the weeks ahead look busy.",
+        "No bank holiday falls between {WEEK1} and {WEEK4}.",
+        "Good Friday falls in {WEEK2}.",
+        "The Early May bank holiday falls in {WEEK3}.",
+        "The bank holiday for the coronation of King Charles III falls in "
+        "{WEEK4}.",
+        "The Scottish bank holidays come from the frozen calendar.",
+        "Demand is above average for the time of year.",
+        "Released {RELEASE} for {ORIGIN}.",
+        "Of {F9}, {F8}.",
     ],
 )
-def test_the_fixed_wording_passes(text):
+def test_plain_words_and_the_fixed_wording_pass(text):
     assert not problems(text), problems(text)
 
 
-def test_a_year_or_week_label_the_outlook_does_not_cover_fails():
-    assert "2019" in reasons("Demand rose in 2019.")
-    assert "week 30" in reasons("Watch week 30.")
-    assert "6 weeks" in reasons("Check the next 6 weeks.")
+# --- the placeholders themselves ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text, named, says",
+    [
+        ("{PRIMARY} forecasts {F12}.", "{F12}", "names no cited figure"),
+        ("It is {F0}.", "{F0}", "not a placeholder"),
+        ("It is {F01}.", "{F01}", "not a placeholder"),
+        ("It is {f1}.", "{f1}", "not a placeholder"),
+        ("It is {F1.week}.", "{F1.week}", "not a placeholder"),
+        ("It is {F1.value}.", "{F1.value}", "not a placeholder"),
+        ("Watch {WEEK5}.", "{WEEK5}", "not a placeholder"),
+        ("It is { F1 }.", "{ F1 }", "not a placeholder"),
+        ("About {F1}k more.", "{F1}k", "joined"),
+        ("It is -{F1}.", "-{F1}", "sign"),
+        ("It is {F1}+ now.", "{F1}+", "sign"),
+        ("It is {F1} {F2}.", "{F1} {F2}", "together"),
+        ("It is {F1}{F4} now.", "{F1}{F4}", "together"),
+        ("It forecasts {F1} attendances.", "{F1} attendances", "unit"),
+        ("Busy in {F8} outlooks.", "{F8} outlooks", "unit"),
+        ("Latched since {LATCHED}.", "{LATCHED}", "latch is not set"),
+        ("Reply by {DEADLINE}.", "{DEADLINE}", "only a notification"),
+    ],
+)
+def test_a_placeholder_misused_fails_with_a_named_problem(text, named, says):
+    got = problems(text)
+    mine = [p for p in got if p.found == named]
+    assert mine and says in mine[0].reason, got
+
+
+def test_every_problem_in_every_field_is_named_at_once():
+    texts = {
+        "summary": "SA-MA forecasts {F2} at release horizon 1 over 2 weeks' "
+        "time, up 5 on last week.",
+        "model_agreement": "Trust {F9} attendances less.",
+    }
+    got = ph.problems(texts, FIGURES, CTX)
+    assert {(p.field, p.found) for p in got} >= {
+        ("summary", "SA-MA"),
+        ("summary", "release horizon"),
+        ("summary", "2"),
+        ("summary", "5"),
+        ("summary", "last week"),
+        ("model_agreement", "{F9} attendances"),
+    }
+
+
+def test_a_problem_is_marked_where_it_stands_and_tokens_still_render():
+    text = "Next week {PRIMARY} forecasts {F1}."
+    got = problems(text)
+    shown = ph.render(text, FIGURES, CTX, marks=got)
+    assert shown.startswith("[[NOT VERIFIED: Next week]] SA-MA (the primary")
+    assert "1,120 attendances (SA-MA forecast" in shown
 
 
 # --- through Pydantic --------------------------------------------------------
 
 
-def test_the_draft_refuses_a_misattached_figure_through_its_validator():
+def draft(summary, figures=FIGURES, **fields):
+    return {
+        "summary": summary,
+        "expected_range": fields.get("expected_range", "From {F6} up."),
+        "model_agreement": "The lowest is {F2}; trust it less.",
+        "backtest_error": "{F4}, against {F5}.",
+        "track_record": "{F8} of {F9}.",
+        "watch_points": ["Check whether extra shifts are needed this week."],
+        "cited_figures": [f.model_dump(mode="json") for f in figures],
+    }
+
+
+def test_the_draft_refuses_words_that_name_a_model_through_its_validator():
     with pytest.raises(ValidationError) as info:
         br.BriefDraft.model_validate(
-            draft("SA-MA forecasts {F2} attendances at release horizon 1."),
-            context={"text": CTX},
+            draft("SA-MA forecasts {F1}."), context={"text": CTX}
         )
     named = br.problems_of(info.value)
-    assert any("{F2}" in p and "seasonal naive" in p for p in named), named
+    assert any(p.startswith("summary: SA-MA") for p in named), named
 
 
 def test_the_draft_refuses_a_figure_written_out_even_with_no_context():
     with pytest.raises(ValidationError) as info:
-        br.BriefDraft.model_validate(draft("Expect 1,120 attendances."))
+        br.BriefDraft.model_validate(draft("Expect 1,120 more."))
     assert any("1,120" in p for p in br.problems_of(info.value))
 
 
-def test_a_good_draft_passes_and_the_brief_renders_it():
+def test_a_good_draft_passes_and_reads_with_its_labels():
     good = br.BriefDraft.model_validate(
-        draft("SA-MA forecasts {F1} attendances at release horizon 1."),
-        context={"text": CTX},
+        draft("{PRIMARY} forecasts {F1} for {WEEK1}."), context={"text": CTX}
     )
-    assert good.summary.endswith("{F1} attendances at release horizon 1.")
-    rendered = ph.render(good.summary, good.cited_figures, CTX)
-    assert "forecasts 1,120 attendances" in rendered
-
-
-def test_a_failed_figure_is_rendered_marked():
-    shown = ph.render("SA-MA forecasts {F1}.", FIGURES, CTX, failed={1})
-    assert shown == "SA-MA forecasts [[NOT VERIFIED: 1,120]]."
-
-
-# --- notifications -----------------------------------------------------------
-
-
-def test_a_notification_may_state_only_figures_the_brief_states():
-    from datetime import datetime, timezone
-
-    ctx = CTX.model_copy(
-        update={
-            "deadline": datetime(2021, 6, 24, 10, tzinfo=timezone.utc),
-            "week_count": 4,
-            "stated": frozenset({1}),
-        }
-    )
-    assert not problems("SA-MA forecasts {F1}. Reply by {DEADLINE}.", ctx=ctx)
-    assert "does not state F3" in reasons("SA-MA forecasts {F3}.", ctx=ctx)
-    assert "3 weeks" in reasons("Check the next 3 weeks.", ctx=ctx)
-    assert "level 3" in reasons(
-        "Check whether level 3 actions apply.", ctx=ctx
-    )
-    assert ph.render("Reply by {DEADLINE}.", FIGURES, ctx) == (
-        "Reply by 10:00 UTC on Thu 24 Jun 2021."
+    assert ph.render(good.summary, good.cited_figures, CTX) == (
+        "SA-MA (the primary model) forecasts 1,120 attendances (SA-MA "
+        "forecast, release horizon 1, w/e 27 Jun 2021) for w/e 27 Jun 2021."
     )
 
 
-def test_a_brief_has_no_deadline_placeholder():
-    assert "{DEADLINE}" in reasons("Reply by {DEADLINE}.")
+def test_a_cited_figure_must_say_what_it_is():
+    with pytest.raises(ValidationError) as info:
+        br.CitedFigure(value=1120, tool_call_id="T1", unit="attendances")
+    assert "measure" in str(info.value)

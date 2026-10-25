@@ -34,6 +34,28 @@ LEVEL_MEANING = (
     "It is not pressure, need or priority."
 )
 ERROR_WINDOW = 104
+# What a cited figure can be: each field a tool returns that a brief may
+# state, with the tool that returns it and the unit it is stated in. Code
+# writes the measure into the figure's label, so the reader sees what each
+# number is.
+MEASURES = {
+    "point": ("get_forecast", "attendances"),
+    "low_80": ("get_forecast", "attendances"),
+    "high_80": ("get_forecast", "attendances"),
+    "low_95": ("get_forecast", "attendances"),
+    "high_95": ("get_forecast", "attendances"),
+    "spread": ("get_forecast", "%"),
+    "history": ("get_history", "attendances"),
+    "error": ("get_backtest_error", "%"),
+    "targets": ("get_backtest_error", "count"),
+    "flags": ("get_track_record", "count"),
+    "borne_out": ("get_track_record", "count"),
+    "unflagged": ("get_track_record", "count"),
+    "unflagged_busy": ("get_track_record", "count"),
+    "unflagged_busy_pct": ("get_track_record", "%"),
+    "holidays": ("get_calendar", "count"),
+}
+Measure = Literal[tuple(MEASURES)]
 
 
 class Request(BaseModel):

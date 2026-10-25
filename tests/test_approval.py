@@ -149,7 +149,7 @@ def test_a_failed_edit_returns_to_the_manager_marked(verified, good, tmp_path):
     assert item.state == "edit failed"
     shown = item.display()
     assert shown.startswith("NOT VERIFIED, DO NOT ACT")
-    assert "[[NOT VERIFIED: 1,450]]" in shown
+    assert "[[NOT VERIFIED: 1,450 attendances (SA-MA forecast" in shown
     with pytest.raises(ap.NotApprovable):
         q.decide(decide("nw", "approve"))
     again = q.decide(decide("nw", "edit", edited=good))
@@ -165,21 +165,17 @@ def test_an_edit_with_a_figure_written_out_is_refused_with_its_problem(
     assert any("1,450" in p for p in br.problems_of(info.value))
 
 
-def test_an_edit_naming_another_hospital_is_refused_marked(
-    verified, good, tmp_path
-):
-    other = br.BriefDraft.model_validate(
-        {
-            **good.model_dump(mode="json"),
-            "summary": "Unlike the Royal Infirmary of Edinburgh, demand here "
-            "is steady.",
-        }
-    )
-    item = queue(tmp_path, verified).decide(decide("nw", "edit", edited=other))
-    assert item.state == "edit failed"
-    shown = item.display()
-    assert shown.startswith("NOT VERIFIED, DO NOT ACT")
-    assert "another hospital" in shown
+def test_an_edit_naming_another_hospital_is_refused_with_its_problem(good):
+    with pytest.raises(ValidationError) as info:
+        br.BriefDraft.model_validate(
+            {
+                **good.model_dump(mode="json"),
+                "summary": "Unlike the Royal Infirmary of Edinburgh, demand "
+                "here is steady.",
+            }
+        )
+    named = br.problems_of(info.value)
+    assert any("name no other hospital" in p for p in named), named
 
 
 def test_the_queue_never_sends_an_edit_back_to_the_investigator(
@@ -419,11 +415,9 @@ def test_code_marks_a_changed_cited_figure_set_as_factual(
         good,
         expected_range="The range is wide.",
         cited_figures=[figures[0], *figures[3:]],
-        model_agreement="The four forecasts spread {F2}% of the primary's.",
-        backtest_error="SA-MA's own back-test error at release horizon 1 is "
-        "{F3}%.",
-        track_record="This hospital has no past flag to judge; {F4} of its "
-        "{F5} unflagged outlooks turned busy.",
+        model_agreement="The forecasts spread {F2}, so trust the lowest less.",
+        backtest_error="Its own back-test error is {F3}.",
+        track_record="No past flag to judge yet; {F4} of {F5}.",
     )
     item = queue(tmp_path, verified).decide(decide("nw", "edit", edited=fewer))
     assert item.decisions[-1].factual_edit

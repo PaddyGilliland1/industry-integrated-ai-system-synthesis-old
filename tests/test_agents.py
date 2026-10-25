@@ -22,6 +22,7 @@ from .scripted import (
     TOOLS,
     WORDING_BAD,
     WORDING_OK,
+    figure,
     good_draft,
     planted_draft,
     reply,
@@ -136,7 +137,7 @@ def test_two_failures_end_not_verified_and_never_approvable(
     assert not out.can_approve
     shown = out.display()
     assert shown.startswith("NOT VERIFIED, DO NOT ACT")
-    assert "[[NOT VERIFIED: 4,321]]" in shown
+    assert "[[NOT VERIFIED: 4,321 attendances (linear forecast" in shown
 
 
 def test_a_draft_that_sets_a_level_is_refused_by_the_schema(
@@ -217,42 +218,38 @@ def test_a_latch_brief_copies_the_held_level(
     ask = AIMessage(
         content="",
         tool_calls=[
+            tc("get_forecast", hospital="T101H", as_of=held, horizon=1),
             tc("get_backtest_error", hospital="T101H", as_of=held, horizon=1),
             tc("get_track_record", hospital="T101H", as_of=held),
         ],
     )
+    forecast = tl.get_forecast(
+        run, tl.ForecastRequest(hospital="T101H", as_of=held, horizon=1)
+    )
+    point = next(f.point for f in forecast.forecasts if f.model == "linear")
     (error,) = tl.get_backtest_error(
         run,
         tl.BacktestErrorRequest(
-            hospital="T101H", as_of=held, horizon=1, model="SA-MA"
+            hospital="T101H", as_of=held, horizon=1, model="linear"
         ),
     ).errors
     record = tl.get_track_record(
         run, tl.TrackRecordRequest(hospital="T101H", as_of=held)
     )
+    h1 = {"model": "linear", "horizon": 1}
     draft = {
         "summary": "The forecasts are untrusted while the drift latch is set "
-        "since {LATCHED}.",
+        "since {LATCHED}; {PRIMARY} gives {F1}, for the record only.",
         "expected_range": "No range is trusted this week.",
-        "model_agreement": "All four models are untrusted.",
-        "backtest_error": "SA-MA's back-test error before the alarm was "
-        "{F1}% at release horizon 1.",
-        "track_record": "{F2} of its {F3} unflagged outlooks turned busy.",
+        "model_agreement": "The simple models are all untrusted.",
+        "backtest_error": "Its back-test error before the alarm was {F2}.",
+        "track_record": "{F3} of {F4}.",
         "watch_points": ["Check each released week before changing staffing."],
         "cited_figures": [
-            {
-                "value": round(error.mape, 1),
-                "tool_call_id": "T1",
-                "model": "SA-MA",
-                "horizon": 1,
-                "unit": "%",
-            },
-            {
-                "value": record.unflagged_busy,
-                "tool_call_id": "T2",
-                "unit": "count",
-            },
-            {"value": record.unflagged, "tool_call_id": "T2", "unit": "count"},
+            figure(round(point), "T1", "point", **h1),
+            figure(round(error.mape, 1), "T2", "error", **h1),
+            figure(record.unflagged_busy, "T3", "unflagged_busy"),
+            figure(record.unflagged, "T3", "unflagged"),
         ],
     }
     script = [ask, DONE, reply(draft), WORDING_OK]
@@ -417,22 +414,7 @@ def test_the_designed_failure_is_planted_by_code_and_caught(
     run, holidays, settings, tmp_path
 ):
     def plant(draft, ledger):
-        n = len(draft.cited_figures) + 1
-        return draft.model_copy(
-            update={
-                "summary": draft.summary + f" Expect {{F{n}}} attendances.",
-                "cited_figures": [
-                    *draft.cited_figures,
-                    br.CitedFigure(
-                        value=9876,
-                        tool_call_id="T1",
-                        model="SA-MA",
-                        horizon=1,
-                        unit="attendances",
-                    ),
-                ],
-            }
-        )
+        return plant_value(9876)(draft, ledger)
 
     log = gw.AuditLog()
     script = [
@@ -584,7 +566,7 @@ def written_out(draft):
     [
         (extra_key, "level: Extra inputs are not permitted"),
         (horizon_5, "less than or equal to 4"),
-        (written_out, "1,120: write every"),
+        (written_out, "1,120: write each figure as its placeholder"),
     ],
 )
 def test_the_retry_carries_the_problems_and_the_raw_reply(
@@ -667,12 +649,13 @@ def plant_value(value):
         n = len(draft.cited_figures) + 1
         return draft.model_copy(
             update={
-                "summary": draft.summary + f" Expect {{F{n}}} attendances.",
+                "summary": f"{draft.summary}\nExpect {{F{n}}}.",
                 "cited_figures": [
                     *draft.cited_figures,
                     br.CitedFigure(
                         value=value,
                         tool_call_id="T1",
+                        measure="point",
                         model="SA-MA",
                         horizon=1,
                         unit="attendances",

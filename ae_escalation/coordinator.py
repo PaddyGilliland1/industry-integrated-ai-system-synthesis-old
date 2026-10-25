@@ -42,13 +42,7 @@ from pydantic import (
 
 from . import placeholders as ph
 from .agents import fill, load_prompts
-from .figures import (
-    CheckResult,
-    CodeSet,
-    Failure,
-    check_notification,
-    marked,
-)
+from .figures import CheckResult, Failure
 from .gateway import BudgetExceeded, ReplayMiss, parse_structured
 from .timing import release_horizon_weeks
 
@@ -85,19 +79,19 @@ class ActionSpec(BaseModel):
 
 CHECK_COVER = ActionSpec(
     code="check-cover",
-    task="Check whether extra shifts or bank staff are needed for the four "
+    task="Check whether extra shifts or bank staff are needed for the "
     "weeks ahead.",
     owner="duty manager",
 )
 HOLD_LEAVE = ActionSpec(
     code="hold-leave",
-    task="Hold new leave requests for the four weeks ahead until the duty "
+    task="Hold new leave requests for the weeks ahead until the duty "
     "manager's check is done.",
     owner="rota coordinator",
 )
 REQUEST_BANK = ActionSpec(
     code="request-bank",
-    task="Ask the staff bank for cover for the four weeks ahead.",
+    task="Ask the staff bank for cover for the weeks ahead.",
     owner="staff bank office",
 )
 INFORM_LEAD = ActionSpec(
@@ -139,11 +133,8 @@ class Action(BaseModel):
 
     @property
     def escalate_to(self):
+        """The role told when the owner has not acknowledged in time."""
         return ESCALATE_TO[self.owner]
-
-    def code_set(self):
-        """The values its notification may state without a tool result."""
-        return CodeSet.for_action(self.level, self.deadline, self.weeks)
 
 
 UK = ZoneInfo("Europe/London")
@@ -267,17 +258,14 @@ def stated_figures(brief):
 
 
 def notification_context(brief, action):
-    """What code knows for one action's notification."""
-    return ph.TextContext(
-        hospital=brief.hospital,
-        name=brief.name,
-        level=brief.level,
-        origin=brief.week,
-        release=brief.release_date,
-        latched_since=brief.latched_since,
-        deadline=action.deadline,
-        week_count=len(action.weeks),
-        stated=stated_figures(brief),
+    """What code knows for one action's notification: the brief's context,
+    the action's deadline and weeks, and the figures the brief states."""
+    return brief.text_context().model_copy(
+        update={
+            "deadline": action.deadline,
+            "weeks": tuple(action.weeks),
+            "stated": stated_figures(brief),
+        }
     )
 
 
@@ -353,32 +341,33 @@ def _action_lines(actions):
 
 
 def _figure_lines(brief):
-    lines = []
-    for n in sorted(stated_figures(brief)):
-        fig = brief.cited_figures[n - 1]
-        about = [
-            fig.model,
-            f"release horizon {fig.horizon}" if fig.horizon else None,
-            f"w/e {fig.week:%d %b %Y}" if fig.week else None,
-        ]
-        about = ", ".join(x for x in about if x)
-        unit = "%" if fig.unit == "%" else f" {fig.unit}"
-        shown = f"{ph.figure_text(fig.value)}{unit}"
-        lines.append(f"- {{F{n}}}: {shown}" + (f" ({about})" if about else ""))
+    """Each figure the brief states, with its placeholder and the text code
+    writes for it."""
+    ctx = brief.text_context()
+    lines = [
+        f"- {{F{n}}}: {ph.shown(brief.cited_figures[n - 1], ctx)}"
+        for n in sorted(stated_figures(brief))
+    ]
     return "\n".join(lines) or "- none: the brief's text states no figure"
 
 
 def _date_lines(brief):
-    weeks = [f"{w:%d %b %Y}" for w in release_horizon_weeks(brief.week)]
+    """Each token a notification may write, with the text code writes for
+    it."""
+    ctx = brief.text_context()
+    weeks = [ph.week_text(w) for w in ctx.targets]
     lines = [
-        f"- {{ORIGIN}}: {brief.week:%d %b %Y}, the origin",
-        f"- {{RELEASE}}: {brief.release_date:%a %d %b %Y}, the release",
-        "- {WEEK1} to {WEEK4}: " + ", ".join(weeks[:3]) + f" and {weeks[3]}",
+        f"- {{HOSPITAL}}: {ctx.name}",
+        f"- {{LEVEL}}: demand level {ctx.level}",
+        f"- {{PRIMARY}}: {ph.render('{PRIMARY}', [], ctx)}",
+        f"- {{ORIGIN}}: {ph.week_text(ctx.origin)}, the origin",
+        f"- {{RELEASE}}: {ph.release_text(ctx.release)}, the release",
+        *[f"- {{WEEK{k}}}: {w}" for k, w in enumerate(weeks, 1)],
     ]
     if brief.latched_since:
         lines.append(
-            f"- {{LATCHED}}: {brief.latched_since:%d %b %Y}, when the drift "
-            "latch was set"
+            f"- {{LATCHED}}: {ph.week_text(brief.latched_since)}, when the "
+            "drift latch was set"
         )
     lines.append("- {DEADLINE}: each action's reply deadline, given with it")
     return "\n".join(lines)
@@ -424,6 +413,8 @@ class Coordinator:
         return reply, found, ""
 
     def _check(self, item, action, message, attempt, error=""):
+        """One draft's check: the placeholder and word rules for its
+        action, through the Notification model, and what it would write."""
         brief = item.current
         rendered = ""
         if not message:
@@ -447,7 +438,7 @@ class Coordinator:
                 )
             else:
                 rendered = ph.render(message, brief.cited_figures, ctx)
-                result = check_notification(rendered, brief, action.code_set())
+                result = CheckResult(passed=True, failures=[])
         self.log.write(
             kind="notification check",
             action_id=action.action_id,
@@ -534,7 +525,6 @@ class Coordinator:
         outcomes = []
         for a in actions:
             d = final[a.code]
-            shown = d.rendered or d.message
             if not d.check.passed:
                 held = Step(state="held", at=start)
                 self.log.write(
@@ -546,16 +536,18 @@ class Coordinator:
                     simulated=False,
                 )
                 why = "; ".join(f.reason for f in d.check.failures)
+                shown = ph.render(
+                    d.message,
+                    item.current.cited_figures,
+                    notification_context(item.current, a),
+                    marks=d.check.failures,
+                )
                 outcomes.append(
                     ActionOutcome(
                         action=a,
-                        message=shown,
+                        message=d.message,
                         history=[held],
-                        shown=(
-                            marked(shown, d.check.failures)
-                            if shown
-                            else f"no draft: {why}"
-                        ),
+                        shown=shown if d.message else f"no draft: {why}",
                     )
                 )
                 continue

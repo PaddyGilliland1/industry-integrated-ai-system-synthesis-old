@@ -1,93 +1,83 @@
-"""The placeholder text the agents write, and the values code renders into it
-(review P1-1, option A, ruled by Paddy on 25 Oct 2026).
+"""The text the agents write, and the figures and dates code writes into it.
 
-The Investigator writes no figure and no date. Where a figure goes, its text
-carries a placeholder that indexes its cited figures, {F1} for the first, and
-code writes in the value from that cited figure once the figure check has
-traced it to its tool result. Dates are placeholders too: {ORIGIN},
-{RELEASE}, {WEEK1} to {WEEK4} for the four weeks ahead, {LATCHED} for the
-date the drift latch was set and {F2.week} for a cited figure's week. A
-notification may also write {DEADLINE}.
+Code writes every figure, and what that figure is (option A, enforced by
+Pydantic). Where a figure goes, the text carries a placeholder that indexes
+its cited figures, {F1} for the first, and code writes in the value with its
+label from that cited figure once the code check has traced it to its tool
+result: "1,120 attendances (SA-MA forecast, release horizon 1, w/e 27 Jun
+2021)". Everything else the text names is a token code renders: {HOSPITAL},
+{PRIMARY}, {LEVEL}, {ORIGIN}, {RELEASE}, {WEEK1} to {WEEK4}, {LATCHED} and,
+in a notification, {DEADLINE}.
 
-The rules, which the Pydantic models in briefs.py and coordinator.py enforce
-through their validators:
+The words outside the placeholders name no number in any form, no model,
+release horizon or week, no hospital or place and no level. So no word can
+give a figure to the wrong model, horizon or week: every number the reader
+sees stands beside its own label. Whether a sentence describes its labelled
+figures truly, such as calling an actual a forecast, is meaning, which the
+Reviewer and the duty manager judge.
 
-- every placeholder names a cited figure or a date code knows;
-- no digit or number word stands outside a placeholder, except the fixed
-  wording: release horizons 1 to 4, a count of 1 to 4 weeks, the 4-week
-  moving average's name, the 80% and 95% range labels, COVID-19, a week
-  label or a bare year the outlook or a cited week covers, the brief's own
-  level and hospital code, and the two fixed forms that name another level;
-- no other hospital is named;
-- each figure sits beside its own model, release horizon and week: a
-  placeholder takes the model, horizon or week named in its own clause, so
-  "SA-MA forecasts {F2}" fails when F2 is seasonal naive's figure;
-- a percentage is written {F4}% and no other figure carries a %.
-
-Bare years are kept because a brief may need to say "the same week of 2020"
-beside a cited 2020 week; a year the outlook and the cited weeks do not cover
-fails. The rules are code of my own design, not a published pattern.
+The Pydantic models in briefs.py and coordinator.py apply these rules in
+their validators, and name every problem at once. The rules are code of my
+own design, not a published pattern.
 """
 
 import re
+import unicodedata
 from datetime import date, datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from .figures import (
-    LEVEL_RULE,
-    Allowed,
-    Failure,
-    plain,
-    token_failure,
-    tokens,
-)
+from .data import HOSPITAL_NAMES
 from .timing import release_horizon_weeks
+from .tools import MEASURES
+
+MEASURE_UNIT = {measure: unit for measure, (_, unit) in MEASURES.items()}
+# Pinned here so the month and day names never follow the process's locale.
+MONTH_NAMES = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+)
+DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 PLACEHOLDER = re.compile(
-    r"\{(?P<name>F(?P<n>\d+)(?P<week>\.week)?|ORIGIN|RELEASE"
-    r"|WEEK(?P<k>[1-4])|LATCHED|DEADLINE)\}"
+    r"\{(?P<name>F(?P<n>[1-9]\d{0,2})|WEEK(?P<k>[1-4])|HOSPITAL|PRIMARY"
+    r"|LEVEL|ORIGIN|RELEASE|LATCHED|DEADLINE)\}"
 )
-BRACED = re.compile(r"\{[^{}\s]*\}|[{}]")
-PERCENT_AFTER = re.compile(r"\s?%|\s+per\s?cent\b", re.IGNORECASE)
-DATES_HELP = (
-    "write dates as placeholders: {ORIGIN}, {RELEASE}, {WEEK1} to {WEEK4}, "
-    "{LATCHED} or {F1.week}"
+BRACED = re.compile(r"\{[^{}]*\}|[{}]")
+TOKEN_LIST = (
+    "{HOSPITAL}, {PRIMARY}, {LEVEL}, {ORIGIN}, {RELEASE}, {WEEK1} to "
+    "{WEEK4}, {LATCHED} or {DEADLINE}"
 )
-# A clause ends at these, so a figure after one does not take the model or
-# week named before it in the same sentence.
-SEPARATOR = re.compile(
-    r"[,;:]|\b(?:and|but|while|whereas|against|versus|vs|or|than)\b"
-    r"|\bcompared\s+with\b",
-    re.IGNORECASE,
-)
-SENTENCE = re.compile(r"[^.;?!\n]+")
-PRIMARY = "the primary"
-MODEL_MENTIONS = [
-    (re.compile(r"\bseasonal\s+naive\b", re.IGNORECASE), "seasonal naive"),
-    (
-        re.compile(
-            r"\b(?:4[- ]week\s+)?moving\s+average\b|\b4[- ]week\s+average\b",
-            re.IGNORECASE,
-        ),
-        "4-week moving average",
-    ),
-    (re.compile(r"\blinear\b", re.IGNORECASE), "linear"),
-    (re.compile(r"\bSA-MA\b", re.IGNORECASE), "SA-MA"),
-    (re.compile(r"\bprimary\b", re.IGNORECASE), PRIMARY),
-]
-HORIZON_MENTION = re.compile(
-    r"\b(?:release\s+)?horizons?\s+(?P<n>[1-4](?:\s*(?:,|and|to|or|-)\s*"
-    r"[1-4])*)\b",
-    re.IGNORECASE,
-)
+
+
+class Failure(BaseModel):
+    """One thing a check could not trace or a rule refused: the field, what
+    it found and why it fails, with where it stands in the field's text
+    when the problem is in the words."""
+
+    model_config = ConfigDict(frozen=True)
+
+    field: str
+    found: str
+    reason: str
+    at: int | None = None
 
 
 class TextContext(BaseModel):
-    """What code knows about the text's brief: its hospital, level and
-    dates, and the primary model. A notification adds its reply deadline,
-    how many weeks its action covers and which of the brief's figures it
-    may state."""
+    """What code knows about a text's brief: its hospital, level, dates and
+    primary model. A notification adds its reply deadline, the weeks its
+    action covers and which of the brief's figures it may state."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -99,11 +89,12 @@ class TextContext(BaseModel):
     latched_since: date | None = None
     primary: str | None = None
     deadline: datetime | None = None
-    week_count: int | None = None
+    weeks: tuple[date, ...] | None = None
     stated: frozenset[int] | None = None
 
     @property
     def notification(self):
+        """True for a staff notification's text, which has a deadline."""
         return self.deadline is not None
 
     @property
@@ -123,6 +114,14 @@ class TextProblems(ValueError):
         )
 
 
+# --- how code writes values, dates and labels --------------------------------
+
+
+def plain(value):
+    """A number as plain text with no trailing zeros: 1203.0 is 1203."""
+    return format(Decimal(repr(float(value))).normalize(), "f")
+
+
 def figure_text(value):
     """A cited value as the reader sees it: 1120.0 is 1,120 and 11.5 stays
     11.5."""
@@ -132,27 +131,19 @@ def figure_text(value):
     return f"{sign}{int(whole):,}" + (f".{fraction}" if fraction else "")
 
 
-def figure_numbers(text):
-    """The cited figures a text states, by number: {F2} is 2. A week
-    placeholder, {F2.week}, states a date, not the figure."""
-    return {
-        int(m.group("n"))
-        for m in PLACEHOLDER.finditer(text)
-        if m.group("n") and not m.group("week")
-    }
+def day_text(day):
+    """A date as 04 Jul 2021."""
+    return f"{day.day:02d} {MONTH_NAMES[day.month - 1]} {day.year}"
 
 
-def _week_of(fig, ctx):
-    """The week a cited figure is for, if it names one."""
-    if fig.week is not None:
-        return fig.week
-    if fig.horizon is not None and ctx is not None:
-        return ctx.targets[fig.horizon - 1]
-    return None
+def week_text(day):
+    """A week by its week ending, as w/e 04 Jul 2021."""
+    return f"w/e {day_text(day)}"
 
 
-def _date_text(day):
-    return f"{day:%d %b %Y}"
+def release_text(day):
+    """A day with its weekday, as Tue 22 Jun 2021."""
+    return f"{DAY_NAMES[day.weekday()]} {day_text(day)}"
 
 
 def deadline_text(deadline):
@@ -160,299 +151,535 @@ def deadline_text(deadline):
     zone."""
     key = getattr(deadline.tzinfo, "key", None)
     zone = "UK time" if key == "Europe/London" else deadline.tzname()
-    return f"{deadline:%H:%M} {zone} on {deadline:%a %d %b %Y}"
+    return f"{deadline:%H:%M} {zone} on {release_text(deadline.date())}"
 
 
-def render(text, figures, ctx, failed=frozenset()):
-    """The text with every placeholder replaced by its value; a figure whose
-    number is in failed is shown marked for the manager."""
+RANGE_END = {
+    "low_80": ("low", "80"),
+    "high_80": ("high", "80"),
+    "low_95": ("low", "95"),
+    "high_95": ("high", "95"),
+}
+# The noun a count is of, singular and plural.
+COUNT_NOUNS = {
+    "targets": ("week", "weeks"),
+    "flags": ("flagged outlook", "flagged outlooks"),
+    "borne_out": ("flagged outlook borne out", "flagged outlooks borne out"),
+    "unflagged": ("unflagged outlook", "unflagged outlooks"),
+    "unflagged_busy": (
+        "unflagged outlook that turned busy",
+        "unflagged outlooks that turned busy",
+    ),
+    "holidays": ("bank holiday", "bank holidays"),
+}
+NO_WEEK = ("history", "error", "targets")
+
+
+def resolved(fig, ctx):
+    """The release horizon and week a cited figure is for, each found from
+    the other when the figure names only one, as (horizon, week)."""
+    horizon, week = fig.horizon, fig.week
+    if ctx is None or fig.measure in NO_WEEK:
+        return horizon, week
+    targets = ctx.targets
+    if week is None and horizon is not None:
+        week = targets[horizon - 1]
+    if horizon is None and week in targets:
+        horizon = targets.index(week) + 1
+    return horizon, week
+
+
+def _joined(*parts):
+    return ", ".join(p for p in parts if p)
+
+
+def _owner(model):
+    """A model's name as an owner: SA-MA's, the 4-week moving average's."""
+    article = "the " if model == "4-week moving average" else ""
+    return f"{article}{model}'s"
+
+
+def label(fig, ctx=None):
+    """What a cited figure is, as code writes it in brackets after the
+    value: its measure, model, release horizon and week, leaving out any
+    the figure does not name."""
+    measure, model = fig.measure, fig.model
+    horizon, week = resolved(fig, ctx)
+    at = f"release horizon {horizon}" if horizon else ""
+    on = week_text(week) if week else ""
+    if measure == "point":
+        return _joined(f"{model} forecast" if model else "forecast", at, on)
+    if measure in RANGE_END:
+        end, cover = RANGE_END[measure]
+        owner = _owner(model) if model else "the"
+        return _joined(f"{end} end of {owner} {cover}% range", at, on)
+    if measure == "spread":
+        return _joined("spread of the four models' forecasts", at, on)
+    if measure == "history":
+        return _joined("actual", on)
+    if measure == "error":
+        what = f"{model} back-test error" if model else "back-test error"
+        return _joined(what, at)
+    if measure == "targets":
+        return _joined(f"{model} back-test" if model else "back-test", at)
+    if measure == "holidays":
+        return _joined(at, on) or "in the four weeks ahead"
+    return "track record"
+
+
+def shown(fig, ctx=None):
+    """A cited figure as the reader sees it: its value, its unit and, in
+    brackets, what it is."""
+    value = figure_text(fig.value)
+    one = fig.value == 1
+    if fig.measure in COUNT_NOUNS:
+        single, many = COUNT_NOUNS[fig.measure]
+        value = f"{value} {single if one else many}"
+    elif fig.measure == "unflagged_busy_pct":
+        value = f"{value}% of unflagged outlooks turned busy"
+    elif MEASURE_UNIT[fig.measure] == "%":
+        value = f"{value}%"
+    else:
+        value = f"{value} {'attendance' if one else 'attendances'}"
+    return f"{value} ({label(fig, ctx)})"
+
+
+def _mark(text, marks):
+    """The text with each problem in its words wrapped where it stands."""
+    spans = sorted(
+        (
+            (m.at, m.at + len(m.found))
+            for m in marks
+            if m.at is not None
+            and m.found
+            and text[m.at : m.at + len(m.found)] == m.found
+        ),
+        reverse=True,
+    )
+    out, edge = text, len(text)
+    for start, end in spans:
+        if end > edge:
+            continue
+        out = f"{out[:start]}[[NOT VERIFIED: {out[start:end]}]]{out[end:]}"
+        edge = start
+    return out
+
+
+def render(text, figures, ctx, failed=frozenset(), marks=()):
+    """The text as the reader sees it: every placeholder replaced by code,
+    a figure whose number is in failed marked, and each problem in marks
+    marked where it stands. A placeholder code cannot fill is left as
+    written."""
 
     def value(m):
         name = m.group("name")
         if m.group("n"):
             n = int(m.group("n"))
-            fig = figures[n - 1]
-            if m.group("week"):
-                return _date_text(_week_of(fig, ctx))
-            shown = figure_text(fig.value)
-            return f"[[NOT VERIFIED: {shown}]]" if n in failed else shown
+            if n > len(figures):
+                return m.group(0)
+            out = shown(figures[n - 1], ctx)
+            return f"[[NOT VERIFIED: {out}]]" if n in failed else out
+        if ctx is None:
+            return m.group(0)
         if m.group("k"):
-            return _date_text(ctx.targets[int(m.group("k")) - 1])
+            return week_text(ctx.targets[int(m.group("k")) - 1])
+        if name == "LATCHED":
+            return week_text(ctx.latched_since) if ctx.latched_since else name
+        if name == "DEADLINE":
+            return deadline_text(ctx.deadline) if ctx.deadline else name
+        # Brackets, not commas, so the name reads whole in any place in a
+        # sentence: "SA-MA (the primary model) forecasts".
+        primary = (
+            f"{ctx.primary} (the primary model)"
+            if ctx.primary
+            else "the primary model"
+        )
         return {
-            "ORIGIN": lambda: _date_text(ctx.origin),
-            "RELEASE": lambda: f"{ctx.release:%a %d %b %Y}",
-            "LATCHED": lambda: _date_text(ctx.latched_since),
-            "DEADLINE": lambda: deadline_text(ctx.deadline),
-        }[name]()
+            "HOSPITAL": ctx.name,
+            "PRIMARY": primary,
+            "LEVEL": f"demand level {ctx.level}",
+            "ORIGIN": week_text(ctx.origin),
+            "RELEASE": release_text(ctx.release),
+        }[name]
 
-    return PLACEHOLDER.sub(value, text)
+    return PLACEHOLDER.sub(value, _mark(text, marks))
+
+
+def figure_numbers(text):
+    """The cited figures a text states, by number: {F2} is 2."""
+    return {
+        int(m.group("n")) for m in PLACEHOLDER.finditer(text) if m.group("n")
+    }
+
+
+# --- what the words may not name ---------------------------------------------
+
+NUMBER_REASON = (
+    "write each figure as its placeholder, such as {F1}; code writes the "
+    "number and what it is"
+)
+# The fixed wording a text may use although a rule below would refuse it,
+# because no token can say it: "one" as a pronoun, and the bank holidays
+# whose titles in the frozen GOV.UK file hold a month, a day of the week, a
+# Roman numeral or a hospital's name.
+FIXED_WORDING = [
+    re.compile(
+        r"\b(?:the|this|that|which|each|every|any|no|another)\s+one\b"
+        r"|\bone\s+another\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bGood\s+Friday\b"
+        r"|\bEarly\s+May\s+bank\s+holiday(?:\s+\(VE\s+day\))?"
+        r"|\bbank\s+holiday\s+for\s+the\s+coronation\s+of\s+King\s+Charles"
+        r"\s+III\b"
+        r"|\bbank\s+holiday\s+for\s+the\s+State\s+Funeral\s+of\s+Queen\s+"
+        r"Elizabeth\s+II\b",
+        re.IGNORECASE,
+    ),
+]
+# Shorter names a writer uses for a hospital, beside the full ones.
+SHORT_NAMES = {
+    "S314H": ("Royal Infirmary of Edinburgh", "Little France"),
+    "G405H": ("Queen Elizabeth",),
+    "T101H": ("Ninewells",),
+    "C121H": ("Lorn & Islands", "Lorn and Islands"),
+    "H202H": ("Raigmore",),
+}
+# Names for hospitals and places that are no hospital's own: a generic name,
+# the acronyms staff use and the towns the hospitals serve. Capitalised
+# only, so a word such as "wick" in lower case is left alone.
+OTHER_PLACES = (
+    "RIE",
+    "QEUH",
+    "GRI",
+    "ARI",
+    "PRI",
+    "VHK",
+    "FVRH",
+    "DGRI",
+    "Scotland",
+    "Edinburgh",
+    "Glasgow",
+    "Dundee",
+    "Aberdeen",
+    "Inverness",
+    "Oban",
+    "Perth",
+    "Paisley",
+    "Kilmarnock",
+    "Ayr",
+    "Kirkcaldy",
+    "Dumfries",
+    "Livingston",
+    "Larbert",
+    "Elgin",
+    "Lerwick",
+    "Stornoway",
+    "Kirkwall",
+    "Wick",
+    "Greenock",
+    "Airdrie",
+    "Wishaw",
+    "Stranraer",
+    "Fort William",
+)
+
+
+def _hospital_patterns():
+    """Every hospital's name, its shorter forms and its code, longest
+    first, each with the code it names."""
+    names = []
+    for code, name in HOSPITAL_NAMES.items():
+        forms = {name, *SHORT_NAMES.get(code, ())}
+        bare = re.sub(r"^The\s+|\s+Hospital$", "", name)
+        if len(bare.split()) >= 2:
+            forms.add(bare)
+        names += [(form, code) for form in forms]
+    names.append(("Royal Infirmary", None))
+    names.sort(key=lambda pair: -len(pair[0]))
+    return [
+        (re.compile(rf"\b{re.escape(form)}\b", re.IGNORECASE), code)
+        for form, code in names
+    ]
+
+
+HOSPITALS = _hospital_patterns()
+HOSPITAL_CODE = re.compile(r"\b[A-Za-z]\d{3}[A-Za-z]\b")
+PLACES = re.compile(
+    r"\b(?:" + "|".join(re.escape(p) for p in OTHER_PLACES) + r")\b"
+)
+HOSPITAL_REASON = (
+    "write {HOSPITAL} for this hospital, and name no other hospital or "
+    "place"
+)
+MODEL_WORDS = [
+    re.compile(
+        r"\b(?:(?:\d|four)[\s-]*week[\s-]+)?moving[\s-]+averages?\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bseasonal(?:ly)?[\s-]+(?:na[iï]ve|adjusted)\b"
+        r"|\bna[iï]ve\b|\blinear\b|\bSA[\s-]?MA\b|\bprimary\b|\bGRU\b"
+        r"|\bS?ARIMA\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:MA|SN)\b"),
+]
+MODEL_REASON = (
+    "each figure's label names its model; write {PRIMARY} for the primary "
+    "model, and name no model yourself"
+)
+HORIZON_WORDS = [
+    re.compile(
+        r"\b(?:release[\s-]+)?horizons?\s+[IVX]+\b"
+        r"|\brelease[\s-]+horizons?\b",
+        re.IGNORECASE,
+    )
+]
+HORIZON_REASON = (
+    "each figure's label names its release horizon and week; write {WEEK1} "
+    "to {WEEK4} for a week"
+)
+TIME_WORDS = [
+    re.compile(
+        r"\bw\s*/\s*e\b|\bw\.\s?e\.|\bweek[\s-]*ending\b"
+        r"|\b(?:next|last|previous|prior|following|coming|final|penultimate)"
+        r"\s+weeks?\b"
+        r"|\bweeks?\s+after\s+next\b|\bweeks?\s+before\s+last\b"
+        r"|\ba\s+week\s+(?:ahead|away|out|later|earlier|on|before|after|ago)"
+        r"\b"
+        r"|\bsame\s+weeks?\b"
+        r"|\b(?:next|last|this|previous|prior|following)\s+year\b"
+        r"|\ba\s+year\s+(?:ago|earlier|before|on|later)\b|\byears?\s+ago\b"
+        r"|\bweeks?\s+[IVX]+\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:January|February|March|April|May|June|July|August|September"
+        r"|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct"
+        r"|Nov|Dec)\b"
+    ),
+    re.compile(
+        r"\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon"
+        r"|Tues?|Wed|Thu(?:rs?)?|Fri|Sat|Sun)\b"
+    ),
+]
+TIME_REASON = (
+    "write a week as {WEEK1} to {WEEK4}, {ORIGIN} or {LATCHED}, and a day "
+    "as {RELEASE} or {DEADLINE}; each figure's label names its own week"
+)
+LEVEL_WORDS = [re.compile(r"\blevels?\s+[IVX]+\b", re.IGNORECASE)]
+LEVEL_REASON = "write {LEVEL}; code writes the level the rule set"
+PERCENT_WORDS = [re.compile(r"%|\bper\s?cent\b", re.IGNORECASE)]
+PERCENT_REASON = (
+    "each figure's label writes its own unit; write no % in the words"
+)
+NUMBER_WORD = (
+    r"(?:zero|nil|nought|naught|one|two|three|four|five|six|seven|eight"
+    r"|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen"
+    r"|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty"
+    r"|ninety|hundreds?|thousands?|millions?|billions?|dozens?|couple"
+    r"|single|twice|thrice|double[ds]?|doubling|triple[ds]?|tripling"
+    r"|treble[ds]?|half|halves|halved|halving|quarters?|thirds?|fourths?"
+    r"|fifths?|sixths?|sevenths?|eighths?|ninths?|tenths?|first(?:ly)?"
+    r"|second(?:ly)?|third(?:ly)?|eleventh|twelfth|\w+teenth|\w+ieth"
+    r"|hundredth|thousandth|(?:two|three|four|five|six|seven|eight|nine"
+    r"|ten)fold)"
+)
+NUMBER_WORDS = [
+    re.compile(rf"\b{NUMBER_WORD}(?:[\s-]+{NUMBER_WORD})*\b", re.IGNORECASE),
+    # "once" as a count, not the conjunction of "once the check is done".
+    re.compile(
+        r"\b(?:only|just|least|most|than|exactly)\s+once\b"
+        r"|\bonce(?=\s*(?:[.,;:!?)]|$)"
+        r"|\s+(?:in|a|an|per|every|each|more|again|or|out|over)\b)",
+        re.IGNORECASE,
+    ),
+]
+# Each rule in the order it reads the words: a match is blanked before the
+# next rule, so one phrase is named once.
+WORD_RULES = (
+    (HOSPITALS, HOSPITAL_REASON),
+    ([HOSPITAL_CODE, PLACES], HOSPITAL_REASON),
+    (MODEL_WORDS, MODEL_REASON),
+    (HORIZON_WORDS, HORIZON_REASON),
+    (TIME_WORDS, TIME_REASON),
+    (LEVEL_WORDS, LEVEL_REASON),
+    (PERCENT_WORDS, PERCENT_REASON),
+    (NUMBER_WORDS, NUMBER_REASON),
+)
+
+
+def _blank(text, start, end):
+    return text[:start] + " " * (end - start) + text[end:]
+
+
+def _numeral(ch):
+    """True for a numeral in any script: a digit, a superscript, a
+    fraction, a circled number or a Roman numeral sign."""
+    return unicodedata.category(ch).startswith("N")
+
+
+def _numerals(text):
+    """Each run of numerals in a text, with any letters joined after it, as
+    (start, run)."""
+    out, i = [], 0
+    while i < len(text):
+        if not _numeral(text[i]):
+            i += 1
+            continue
+        j = i + 1
+        while j < len(text) and (
+            _numeral(text[j])
+            or (
+                text[j] in ",." and j + 1 < len(text) and _numeral(text[j + 1])
+            )
+        ):
+            j += 1
+        while j < len(text) and text[j].isalpha():
+            j += 1
+        out.append((i, text[i:j]))
+        i = j
+    return out
+
+
+def _word_problems(field, text):
+    """What the words outside the placeholders name that they may not."""
+    work = PLACEHOLDER.sub(lambda m: " " * len(m.group(0)), text)
+    work = BRACED.sub(lambda m: " " * len(m.group(0)), work)
+    for pattern in FIXED_WORDING:
+        work = pattern.sub(lambda m: " " * len(m.group(0)), work)
+    out = []
+    for patterns, reason in WORD_RULES:
+        for pattern in patterns:
+            pattern = pattern[0] if isinstance(pattern, tuple) else pattern
+            for m in pattern.finditer(work):
+                found = text[m.start() : m.end()]
+                out.append(
+                    Failure(
+                        field=field,
+                        found=found,
+                        reason=f"{found}: {reason}",
+                        at=m.start(),
+                    )
+                )
+                work = _blank(work, m.start(), m.end())
+    for start, run in _numerals(work):
+        out.append(
+            Failure(
+                field=field,
+                found=run,
+                reason=f"{run}: {NUMBER_REASON}",
+                at=start,
+            )
+        )
+    return out
 
 
 # --- the placeholders themselves ---------------------------------------------
 
+SIGNS = "+-−±~≈<>"
+UNIT_AFTER = re.compile(
+    r"\s*(?:(?:attendances?|outlooks?|(?:un)?flagged|flags?|weeks?"
+    r"|(?:bank\s+)?holidays?|patients?)\b|%|per\s?cent\b)",
+    re.IGNORECASE,
+)
+
+
+def _figure_problems(text, m, figures, ctx, fail):
+    """The rules for one figure placeholder, {Fn}."""
+    whole, start, end = m.group(0), m.start(), m.end()
+    before = text[start - 1 : start] if start else ""
+    after = text[end : end + 1]
+    if (before and before in SIGNS) or (after and after in SIGNS):
+        a = start - 1 if before and before in SIGNS else start
+        b = end + 1 if after and after in SIGNS else end
+        fail(
+            a,
+            text[a:b],
+            f"{text[a:b]}: code writes each figure with its own sign and "
+            f"label; write no sign beside {whole}",
+        )
+    unit = UNIT_AFTER.match(text, end)
+    if unit:
+        found = text[start : unit.end()]
+        fail(
+            start,
+            found,
+            f"{found}: code writes each figure's unit and label; write "
+            f"{whole} alone",
+        )
+    n = int(m.group("n"))
+    if n > len(figures):
+        fail(
+            start,
+            whole,
+            f"{whole} names no cited figure; there are {len(figures)}, F1 "
+            f"to F{len(figures)}",
+        )
+        return
+    if ctx is not None and ctx.stated is not None and n not in ctx.stated:
+        fail(
+            start,
+            whole,
+            f"{whole}: the approved brief's text does not state F{n}, so the "
+            "notification may not",
+        )
+
 
 def _placeholder_problems(field, text, figures, ctx):
+    """Every placeholder that names nothing code knows, or that sits where
+    its value cannot be read as written."""
     out = []
 
-    def fail(found, reason):
-        out.append(Failure(field=field, found=found, reason=reason))
+    def fail(at, found, reason):
+        out.append(Failure(field=field, found=found, reason=reason, at=at))
 
+    last = None
     for m in PLACEHOLDER.finditer(text):
         whole, name = m.group(0), m.group("name")
-        before = text[m.start() - 1 : m.start()]
-        after = text[m.end() : m.end() + 1]
+        start, end = m.span()
+        before = text[start - 1 : start] if start else ""
+        after = text[end : end + 1]
         if before.isalnum() or after.isalnum():
+            a = start - 1 if before.isalnum() else start
+            b = end + 1 if after.isalnum() else end
             fail(
-                text[max(0, m.start() - 1) : m.end() + 1],
-                f"{whole} is joined to letters or digits; put a space "
-                "beside it",
+                a,
+                text[a:b],
+                f"{text[a:b]}: {whole} is joined to letters or digits; put a "
+                "space beside it",
             )
         if m.group("n"):
-            n = int(m.group("n"))
-            if not 1 <= n <= len(figures):
+            if last is not None and not text[last[1] : start].strip():
+                found = text[last[0] : end]
                 fail(
-                    whole,
-                    f"{whole} names no cited figure; there are "
-                    f"{len(figures)}, F1 to F{len(figures)}",
+                    last[0],
+                    found,
+                    f"{found}: two figures together read as one number; put "
+                    "words between them",
                 )
-                continue
-            fig = figures[n - 1]
-            if m.group("week") and fig.week is None and fig.horizon is None:
-                fail(whole, f"{whole}: F{n} names no week or release horizon")
-            if ctx is not None and ctx.stated is not None:
-                if n not in ctx.stated:
-                    fail(
-                        whole,
-                        f"{whole}: the approved brief's text does not state "
-                        f"F{n}, so the notification may not",
-                    )
+            last = (start, end)
+            _figure_problems(text, m, figures, ctx, fail)
         elif name == "LATCHED" and ctx is not None and not ctx.latched_since:
-            fail(whole, f"{whole}: this brief's drift latch is not set")
+            fail(start, whole, f"{whole}: this brief's drift latch is not set")
         elif name == "DEADLINE" and (ctx is None or not ctx.notification):
-            fail(whole, f"{whole}: only a notification has a reply deadline")
-    rest = PLACEHOLDER.sub(" ", text)
+            fail(start, whole, f"{whole}: only a notification has a deadline")
+    rest = PLACEHOLDER.sub(lambda m: " " * len(m.group(0)), text)
     for m in BRACED.finditer(rest):
         fail(
+            m.start(),
             m.group(0),
-            f"{m.group(0)} is not a placeholder; use {{F1}}, {{F1.week}}, "
-            "{ORIGIN}, {RELEASE}, {WEEK1} to {WEEK4} or {LATCHED}",
+            f"{m.group(0)} is not a placeholder; use {{F1}} for a cited "
+            f"figure, or {TOKEN_LIST}",
         )
     return out
-
-
-# --- what the words outside the placeholders say -----------------------------
-
-
-def _outlook(figures, ctx):
-    days = {ctx.origin, ctx.release, *ctx.targets}
-    if ctx.latched_since:
-        days.add(ctx.latched_since)
-    for fig in figures:
-        week = _week_of(fig, ctx)
-        if week is not None:
-            days.add(week)
-    return frozenset(days)
-
-
-def _allowed(figures, ctx):
-    if ctx is None:
-        return None
-    if ctx.notification:
-        weeks = frozenset({ctx.week_count}) if ctx.week_count else frozenset()
-    else:
-        weeks = frozenset({1, 2, 3, 4})
-    return Allowed(
-        level=ctx.level,
-        dates=frozenset(),
-        outlook=_outlook(figures, ctx),
-        weeks=weeks,
-        conditional_levels=not ctx.notification,
-        level_rule="" if ctx.notification else LEVEL_RULE,
-    )
-
-
-def _word_problems(field, text, figures, ctx):
-    allowed = _allowed(figures, ctx)
-    out = []
-    for t in tokens(PLACEHOLDER.sub(" ", text)):
-        reason = None
-        if t.kind == "number":
-            reason = (
-                f"{t.text}: write every figure as the placeholder of its "
-                "cited figure, such as {F1}; code writes in the number"
-            )
-        elif t.kind == "date":
-            reason = f"{t.text}: {DATES_HELP}"
-        elif t.kind == "time":
-            reason = f"{t.text}: write the reply deadline as {{DEADLINE}}"
-        elif t.kind in ("glued", "number word"):
-            reason = (
-                f"{t.text}: a number in words or joined to letters cannot "
-                "be checked; cite the figure and write its placeholder"
-            )
-        elif t.kind == "hospital":
-            if ctx is not None and t.value != ctx.hospital:
-                reason = (
-                    f"{t.text} is another hospital; this text is for "
-                    f"{ctx.name} only"
-                )
-        elif t.kind in ("horizon", "weeks") and allowed is None:
-            if t.kind == "horizon" and any(n < 1 or n > 4 for n in t.value):
-                reason = f"{t.text}: release horizons run from 1 to 4"
-            if t.kind == "weeks" and not 1 <= t.value <= 4:
-                reason = f"{t.text}: it may state 1 to 4 weeks only"
-        elif allowed is not None:
-            reason = token_failure(t, allowed)
-        if reason:
-            out.append(Failure(field=field, found=t.text, reason=reason))
-    return out
-
-
-# --- each figure beside its own model, release horizon and week --------------
-
-
-def _mentions(clause, figures, ctx):
-    """Each model, release horizon or week the clause names, as (start, end,
-    kind, value, text)."""
-    found = []
-    for pattern, model in MODEL_MENTIONS:
-        if model == PRIMARY:
-            model = ctx.primary if ctx is not None else None
-        if model is None:
-            continue
-        for m in pattern.finditer(clause):
-            found.append((m.start(), m.end(), "model", model, m.group(0)))
-    for m in HORIZON_MENTION.finditer(clause):
-        numbers = [int(n) for n in re.findall(r"\d", m.group("n"))]
-        if re.search(r"\bto\b|-", m.group("n")):
-            numbers = list(range(numbers[0], numbers[-1] + 1))
-        found.append((m.start(), m.end(), "horizon", set(numbers), m.group(0)))
-    if ctx is not None:
-        for m in PLACEHOLDER.finditer(clause):
-            day = None
-            if m.group("k"):
-                day = ctx.targets[int(m.group("k")) - 1]
-            elif m.group("name") == "ORIGIN":
-                day = ctx.origin
-            elif m.group("week") and int(m.group("n")) <= len(figures):
-                day = _week_of(figures[int(m.group("n")) - 1], ctx)
-            if day is not None:
-                found.append((m.start(), m.end(), "week", day, m.group(0)))
-    return found
-
-
-def _owner(mention, values, clause):
-    """The placeholder a mention belongs to: the one before it, unless a
-    clause separator lies between them, else the one after it."""
-    start = mention[0]
-    before = [v for v in values if v.end() <= start]
-    after = [v for v in values if v.start() >= mention[1]]
-    if not before:
-        return after[0] if after else None
-    prev = before[-1]
-    if after and SEPARATOR.search(clause[prev.end() : start]):
-        return after[0]
-    return prev
-
-
-def _describe(fig, ctx):
-    week = _week_of(fig, ctx)
-    if fig.horizon is not None:
-        when = f" (w/e {_date_text(week)})" if week else ""
-        return f"release horizon {fig.horizon}{when}"
-    return f"w/e {_date_text(week)}"
-
-
-def _binding_problems(field, text, figures, ctx):
-    out = []
-    # Sentences are found on a copy with the placeholders masked, so the dot
-    # in {F2.week} does not end one.
-    masked = PLACEHOLDER.sub(lambda m: "_" * len(m.group(0)), text)
-    for sentence in SENTENCE.finditer(masked):
-        clause = text[sentence.start() : sentence.end()]
-        values = [
-            m
-            for m in PLACEHOLDER.finditer(clause)
-            if m.group("n")
-            and not m.group("week")
-            and 1 <= int(m.group("n")) <= len(figures)
-        ]
-        if not values:
-            continue
-        own = {id(v): {} for v in values}
-        for mention in _mentions(clause, figures, ctx):
-            owner = _owner(mention, values, clause)
-            if owner is None:
-                continue
-            kind = mention[2]
-            have = own[id(owner)].get(kind)
-            gap = min(
-                abs(mention[0] - owner.end()), abs(owner.start() - mention[1])
-            )
-            if have is None or gap < have[0]:
-                own[id(owner)][kind] = (gap, mention)
-        carried = {}
-        for v in values:
-            for kind, (_, mention) in own[id(v)].items():
-                carried[kind] = mention
-            n = int(v.group("n"))
-            fig = figures[n - 1]
-            whole = v.group(0)
-            for problem in _conflicts(whole, fig, carried, ctx):
-                out.append(Failure(field=field, found=whole, reason=problem))
-    for m in PLACEHOLDER.finditer(text):
-        if not m.group("n") or m.group("week"):
-            continue
-        n = int(m.group("n"))
-        if not 1 <= n <= len(figures):
-            continue
-        whole, unit = m.group(0), figures[n - 1].unit
-        percent = PERCENT_AFTER.match(text, m.end()) is not None
-        if unit == "%" and not percent:
-            out.append(
-                Failure(
-                    field=field,
-                    found=whole,
-                    reason=f"{whole} is a percentage: write {whole}%",
-                )
-            )
-        elif unit != "%" and percent:
-            out.append(
-                Failure(
-                    field=field,
-                    found=whole,
-                    reason=f"{whole} is not a percentage ({unit}), so write "
-                    "no % after it",
-                )
-            )
-    return out
-
-
-def _conflicts(whole, fig, carried, ctx):
-    model = carried.get("model")
-    if fig.model is not None and model is not None and model[3] != fig.model:
-        yield (
-            f"{whole} is {fig.model}'s figure, but its clause gives it to "
-            f"{model[4]}: write each figure beside its own model"
-        )
-    horizon = carried.get("horizon")
-    if fig.horizon is not None and horizon is not None:
-        if fig.horizon not in horizon[3]:
-            yield (
-                f"{whole} is for {_describe(fig, ctx)}, but its clause "
-                f"names {horizon[4]}"
-            )
-    week = carried.get("week")
-    mine = _week_of(fig, ctx)
-    if week is not None and mine is not None and week[3] != mine:
-        yield (
-            f"{whole} is for {_describe(fig, ctx)}, but its clause names "
-            f"{week[4]}, w/e {_date_text(week[3])}"
-        )
 
 
 def problems(texts, figures, ctx=None):
-    """Every rule broken in a text's fields, as Failures.
+    """Every rule broken in a text's fields, all at once, as Failures in
+    the order they stand.
 
     Parameters
     ----------
@@ -460,20 +687,19 @@ def problems(texts, figures, ctx=None):
         Each field's text, with its placeholders.
     figures : list of briefs.CitedFigure
     ctx : TextContext, optional
-        Without it, the rules that need the brief's hospital, level and
-        dates are left to the brief's own validator.
+        Without it, the rules that need the brief's latch or a
+        notification's deadline and figures are left to the caller that
+        has them.
 
     Returns
     -------
-    list of figures.Failure
+    list of Failure
     """
     out = []
     for field, text in texts.items():
         found = _placeholder_problems(field, text, figures, ctx)
-        found += _word_problems(field, text, figures, ctx)
-        if not found:
-            found = _binding_problems(field, text, figures, ctx)
-        out += found
+        found += _word_problems(field, text)
+        out += sorted(found, key=lambda f: f.at or 0)
     return out
 
 
