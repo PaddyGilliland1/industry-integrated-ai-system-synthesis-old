@@ -143,40 +143,44 @@ def planted_entry(entries):
 
 
 def plant_figure(draft, ledger):
-    """The designed failure: add to the first draft a figure no tool
-    returned. With a forecast in the ledger, it is cited to that call as
-    the primary model's release horizon 1 forecast, at 1.37 times the true
-    one; without one, it is stated uncited. Either way the code check must
-    reject it."""
+    """The designed failure: add to the first readable draft a figure no
+    tool returned. With a forecast in the ledger, it is cited to that call
+    as the primary model's release horizon 1 forecast, at 1.37 times the
+    true one; without one, it is cited to a call that never happened.
+    Either way the code check must reject it."""
     forecast = next((c for c in ledger if c.name == "get_forecast"), None)
+    n = len(draft.cited_figures) + 1
     if forecast is None:
-        return draft.model_copy(
-            update={"summary": draft.summary + " Expect 7,777 attendances."}
+        figure = CitedFigure(value=7777, tool_call_id="T0", unit="attendances")
+        text = f" Expect {{F{n}}} attendances."
+    else:
+        result = forecast.result
+        primary = result["primary"]
+        true = next(
+            f["point"]
+            for f in result["forecasts"]
+            if f["model"] == primary and f["release_horizon"] == 1
         )
-    result = forecast.result
-    primary = result["primary"]
-    true = next(
-        f["point"]
-        for f in result["forecasts"]
-        if f["model"] == primary and f["release_horizon"] == 1
-    )
-    hospital = forecast.request["hospital"]
-    origin = pd.Timestamp(forecast.request["as_of"]).date()
-    numbers = ledger_numbers(ledger, hospital, origin)
-    value = round(true * 1.37)
-    while any(within_rounding(plain(value), v) for v in numbers):
-        value += 1
-    figure = CitedFigure(
-        value=value,
-        tool_call_id=forecast.id,
-        model=primary,
-        horizon=1,
-    )
+        hospital = forecast.request["hospital"]
+        origin = pd.Timestamp(forecast.request["as_of"]).date()
+        numbers = ledger_numbers(ledger, hospital, origin)
+        value = round(true * 1.37)
+        while any(within_rounding(plain(value), v) for v in numbers):
+            value += 1
+        figure = CitedFigure(
+            value=value,
+            tool_call_id=forecast.id,
+            model=primary,
+            horizon=1,
+            unit="attendances",
+        )
+        text = (
+            f" The {primary} forecast for release horizon 1 is {{F{n}}} "
+            "attendances."
+        )
     return draft.model_copy(
         update={
-            "summary": draft.summary
-            + f" The {primary} forecast for release horizon 1 is "
-            f"{value:,} attendances.",
+            "summary": draft.summary + text,
             "cited_figures": [*draft.cited_figures, figure],
         }
     )

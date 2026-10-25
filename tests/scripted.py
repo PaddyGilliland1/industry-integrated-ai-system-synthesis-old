@@ -1,8 +1,9 @@
 """Scripted replies for the agent tests: a stand-in for the language model.
 
 Every figure in a good draft is a true tool value for Ninewells Hospital at
-w/e 13 Jun 2021, cited to the tool call that returns it; the planted draft
-adds a figure no tool returned. Nothing here is a model's output.
+w/e 13 Jun 2021, cited to the tool call that returns it and written in the
+text as its placeholder; the planted draft adds a figure no tool returned.
+Nothing here is a model's output.
 """
 
 import json
@@ -53,26 +54,20 @@ def good_draft(run, **changes):
     )
     draft = {
         "summary": (
-            f"SA-MA, the primary model, forecasts {sama.point:,.0f} "
-            "attendances at release horizon 1, the week ending "
-            f"{sama.week_ending:%d %b %Y}."
+            "SA-MA, the primary model, forecasts {F1} attendances at release "
+            "horizon 1, the week ending {WEEK1}."
         ),
-        "expected_range": (
-            f"Its 80% range is {sama.range_80.low:,.0f} to "
-            f"{sama.range_80.high:,.0f}."
-        ),
+        "expected_range": "Its 80% range is {F2} to {F3}.",
         "model_agreement": (
-            f"The four forecasts spread {f.spread_pct[1]:.1f}% of the "
-            "primary's, so trust seasonal naive less."
+            "The four forecasts spread {F4}% of the primary's, so trust "
+            "seasonal naive less."
         ),
         "backtest_error": (
-            f"SA-MA's own back-test error at release horizon 1 is "
-            f"{e.mape:.1f}%."
+            "SA-MA's own back-test error at release horizon 1 is {F5}%."
         ),
         "track_record": (
-            "This hospital has no past flag to judge; "
-            f"{tr.unflagged_busy} of its {tr.unflagged} unflagged outlooks "
-            "turned busy."
+            "This hospital has no past flag to judge; {F6} of its {F7} "
+            "unflagged outlooks turned busy."
         ),
         "watch_points": [
             "Check whether extra shifts or bank staff are needed."
@@ -83,32 +78,41 @@ def good_draft(run, **changes):
                 "tool_call_id": "T1",
                 "model": "SA-MA",
                 "horizon": 1,
+                "unit": "attendances",
             },
             {
                 "value": round(sama.range_80.low),
                 "tool_call_id": "T1",
                 "model": "SA-MA",
                 "horizon": 1,
+                "unit": "attendances",
             },
             {
                 "value": round(sama.range_80.high),
                 "tool_call_id": "T1",
                 "model": "SA-MA",
                 "horizon": 1,
+                "unit": "attendances",
             },
             {
                 "value": round(f.spread_pct[1], 1),
                 "tool_call_id": "T1",
                 "horizon": 1,
+                "unit": "%",
             },
             {
                 "value": round(e.mape, 1),
                 "tool_call_id": "T2",
                 "model": "SA-MA",
                 "horizon": 1,
+                "unit": "%",
             },
-            {"value": tr.unflagged_busy, "tool_call_id": "T3"},
-            {"value": tr.unflagged, "tool_call_id": "T3"},
+            {
+                "value": tr.unflagged_busy,
+                "tool_call_id": "T3",
+                "unit": "count",
+            },
+            {"value": tr.unflagged, "tool_call_id": "T3", "unit": "count"},
         ],
     }
     draft.update(changes)
@@ -119,13 +123,16 @@ def planted_draft(run):
     """The designed failure: a figure no tool returned, cited all the
     same."""
     d = good_draft(run)
-    d["summary"] += " Linear forecasts 4,321 attendances at release horizon 2."
+    n = len(d["cited_figures"]) + 1
+    d["summary"] += f" Linear forecasts {{F{n}}} attendances at release "
+    d["summary"] += "horizon 2."
     d["cited_figures"].append(
         {
             "value": 4321,
             "tool_call_id": "T1",
             "model": "linear",
             "horizon": 2,
+            "unit": "attendances",
         }
     )
     return d

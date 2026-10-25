@@ -383,9 +383,10 @@ def test_the_designed_failure_is_planted_by_code_and_caught(
     run, holidays, settings, tmp_path
 ):
     def plant(draft, ledger):
+        n = len(draft.cited_figures) + 1
         return draft.model_copy(
             update={
-                "summary": draft.summary + " Expect 9,876 attendances.",
+                "summary": draft.summary + f" Expect {{F{n}}} attendances.",
                 "cited_figures": [
                     *draft.cited_figures,
                     br.CitedFigure(
@@ -393,6 +394,7 @@ def test_the_designed_failure_is_planted_by_code_and_caught(
                         tool_call_id="T1",
                         model="SA-MA",
                         horizon=1,
+                        unit="attendances",
                     ),
                 ],
             }

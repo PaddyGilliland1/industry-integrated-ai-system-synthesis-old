@@ -23,12 +23,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_validator,
+)
 
 from .agents import BriefOutcome
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief
 from .figures import CheckResult, check_brief, marked
 from .gateway import AuditLog
+from .placeholders import failures_of
 
 
 class Criterion(BaseModel):
@@ -157,7 +164,12 @@ class QueueItem(BaseModel):
         """The brief as the manager sees it now."""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
         if self.state == "edit failed":
-            text = marked(self.edit.text(), self.last_edit.failures)
+            failures = self.last_edit.failures
+            if self.edit is None:
+                named = "\n".join(f"- {f.field}: {f.reason}" for f in failures)
+                return f"{banner}\nYour edit was refused:\n{named}"
+            failed = set(self.last_edit.failed_figures)
+            text = marked(self.edit.text(failed), failures)
             return f"{banner}\nYour edit failed the code check.\n{text}"
         if self.state == "not verified":
             shown = self.outcome.display()
@@ -239,7 +251,12 @@ class ApprovalQueue:
 
     def _recheck(self, item, draft):
         base = item.current or item.outcome.brief
-        edited = base.with_draft(draft)
+        try:
+            edited = base.with_draft(draft)
+        except ValidationError as exc:
+            # The edit breaks a placeholder rule for this brief, such as
+            # naming another hospital, so it is refused with each problem.
+            return None, CheckResult(passed=False, failures=failures_of(exc))
         result = check_brief(
             edited, item.outcome.ledger, item.outcome.rule_level
         )

@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from ae_escalation import agents as ag
 from ae_escalation import approval as ap
 from ae_escalation import briefs as br
+from ae_escalation import demo as dm
 from ae_escalation import gateway as gw
 
 from .scripted import (
@@ -139,7 +140,7 @@ def test_an_edit_is_rechecked_and_a_passing_edit_is_approved(
 
 def test_a_failed_edit_returns_to_the_manager_marked(verified, good, tmp_path):
     q = queue(tmp_path, verified)
-    bad = good.model_copy(update={"summary": good.summary + " Expect 1,450."})
+    bad = dm.wrong_edit(verified.brief)
     item = q.decide(decide("nw", "edit", edited=bad, factual=True))
     assert item.state == "edit failed"
     shown = item.display()
@@ -151,11 +152,37 @@ def test_a_failed_edit_returns_to_the_manager_marked(verified, good, tmp_path):
     assert again.state == "approved with edit"
 
 
+def test_an_edit_with_a_figure_written_out_is_refused_with_its_problem(
+    good,
+):
+    raw = {**good.model_dump(mode="json"), "summary": "Expect 1,450."}
+    with pytest.raises(ValidationError) as info:
+        br.BriefDraft.model_validate(raw)
+    assert any("1,450" in p for p in br.problems_of(info.value))
+
+
+def test_an_edit_naming_another_hospital_is_refused_marked(
+    verified, good, tmp_path
+):
+    other = br.BriefDraft.model_validate(
+        {
+            **good.model_dump(mode="json"),
+            "summary": "Unlike the Royal Infirmary of Edinburgh, demand here "
+            "is steady.",
+        }
+    )
+    item = queue(tmp_path, verified).decide(decide("nw", "edit", edited=other))
+    assert item.state == "edit failed"
+    shown = item.display()
+    assert shown.startswith("NOT VERIFIED, DO NOT ACT")
+    assert "another hospital" in shown
+
+
 def test_the_queue_never_sends_an_edit_back_to_the_investigator(
     verified, good, tmp_path
 ):
     calls = len(verified.calls)
-    bad = good.model_copy(update={"summary": "Expect 1,450."})
+    bad = dm.wrong_edit(verified.brief)
     item = queue(tmp_path, verified).decide(decide("nw", "edit", edited=bad))
     assert len(item.outcome.calls) == calls
     assert not hasattr(ap.ApprovalQueue(tmp_path / "q.jsonl"), "gateway")

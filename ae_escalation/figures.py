@@ -1,14 +1,20 @@
 """The Reviewer's code figure check (D-SAFE-19, as amended).
 
-It runs before any language-model review, and on every edit:
+The brief's text holds no figure or date of the agent's own: each is a
+placeholder that code fills from a cited figure (placeholders.py; review
+P1-1, option A), and Pydantic validators refuse a draft that writes a
+number, a date, another hospital or another level, or puts a figure beside
+another model, release horizon or week. This check then runs before any
+language-model review, and on every edit:
 
-- every number in the brief's text must map to a cited figure;
-- each cited figure must equal a tool result within rounding, for the same
-  hospital, week, model and horizon;
-- every date in the text must be a date a tool returned for that hospital
-  and week, or one of the brief's own code-set dates: its origin, release,
-  latch date and the four weeks ahead;
-- the level must equal the rule's, in the brief's field and in its text.
+- each cited figure must equal a value its tool call returned, within
+  rounding and in its declared unit, for the same hospital, origin, model,
+  release horizon and week;
+- the text as the manager reads it, every placeholder filled, may state
+  only cited figures that passed, the brief's own dates (its origin,
+  release, latch date and the four weeks ahead) or a passing cited
+  figure's week, and the rule's level;
+- the level field must equal the rule's.
 
 The same check runs on each drafted staff notification before the outbox:
 any number or date in it must match a tool result for the same hospital and
@@ -33,6 +39,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from .data import HOSPITAL_NAMES
 from .timing import release_horizon_weeks
 
 MONTHS = {
@@ -96,8 +103,57 @@ VOCABULARY = [
     re.compile(rf"\((?:80|95){PER_CENT}\)", re.IGNORECASE),
     re.compile(rf"\b(?:80|95){PER_CENT}(?=\s*:)", re.IGNORECASE),
     re.compile(r"\bCOVID-19\b", re.IGNORECASE),
-    re.compile(r"\b[A-Z]\d{3}[A-Z]\b"),
+    # "the four simple models", "all four": the count of the models, the
+    # forecasts or the weeks ahead, which is always four.
+    re.compile(r"\b(?:the|all)\s+four\b", re.IGNORECASE),
 ]
+SMALL = {"one": 1, "two": 2, "three": 3, "four": 4}
+SMALL_WORD = r"\d+|one|two|three|four"
+# Numbers in words, which no check can trace, so every one fails: "twelve
+# hundred", "a third above", "twice the usual". "one" is left alone, as the
+# pronoun in "the one to trust less" is far commoner than the count.
+NUMBER_WORD = (
+    r"(?:zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
+    r"|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen"
+    r"|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
+    r"|hundreds?|thousands?|millions?|billions?|dozens?"
+    r"|half|halves|halved|thirds?|quarters?|fourths?|fifths?|tenths?"
+    r"|double[ds]?|doubling|twice|triple[ds]?|tripling|treble[ds]?"
+    r"|(?:two|three|four|five|ten)fold)"
+)
+NUMBER_WORDS = re.compile(
+    rf"\b{NUMBER_WORD}(?:[\s-]+{NUMBER_WORD})*\b", re.IGNORECASE
+)
+# A digit joined to letters, such as "1.9k", "2x" or "3rd", which reads as a
+# figure but is no number the check can trace.
+GLUED = re.compile(r"(?<![\w.,])\d[\d.,]*[A-Za-z]\w*|\b[A-Za-z]+\d\w*")
+HOSPITAL_CODE = re.compile(r"\b[A-Z]\d{3}[A-Z]\b")
+# Shorter names a writer uses for the hospitals, beside the full ones.
+SHORT_NAMES = {
+    "S314H": ("Royal Infirmary of Edinburgh",),
+    "G405H": ("Queen Elizabeth",),
+    "T101H": ("Ninewells",),
+    "C121H": ("Lorn & Islands",),
+    "H202H": ("Raigmore",),
+}
+
+
+def _hospital_patterns():
+    names = []
+    for code, name in HOSPITAL_NAMES.items():
+        forms = {name, *SHORT_NAMES.get(code, ())}
+        bare = re.sub(r"^The\s+|\s+Hospital$", "", name)
+        if len(bare.split()) >= 2:
+            forms.add(bare)
+        names += [(form, code) for form in forms]
+    names.sort(key=lambda pair: -len(pair[0]))
+    return [
+        (re.compile(rf"\b{re.escape(form)}\b", re.IGNORECASE), code)
+        for form, code in names
+    ]
+
+
+HOSPITALS = _hospital_patterns()
 # The two fixed forms in which a brief may name a level other than its own:
 # what the rule can give, and what to check. Any other level fails.
 CONDITIONAL_LEVEL = re.compile(
@@ -107,10 +163,12 @@ CONDITIONAL_LEVEL = re.compile(
 )
 # "4 weeks", "a 2-week view": a count of weeks, which a brief's outlook
 # bounds at four.
-WEEKS = re.compile(r"\b(?P<n>\d+)(?:-week\b|\s+weeks?\b)", re.IGNORECASE)
+WEEKS = re.compile(
+    rf"\b(?P<n>{SMALL_WORD})(?:-week\b|\s+weeks?\b)", re.IGNORECASE
+)
 # "week 26": an ISO week of the year, as a label.
 ISO_WEEK = re.compile(r"\bweek\s+(?P<n>\d{1,2})\b(?![.,]?\d)", re.IGNORECASE)
-LEVEL = re.compile(r"\blevels?\s+(?P<n>\d+)\b", re.IGNORECASE)
+LEVEL = re.compile(rf"\blevels?\s+(?P<n>{SMALL_WORD})\b", re.IGNORECASE)
 # A release horizon is one digit, never followed by another digit, a
 # decimal point or a thousands group: in "release horizon 1, 1,120" the
 # 1,120 is a figure, not a second horizon.
@@ -149,6 +207,11 @@ def _date_value(m):
     day = int(groups["d"]) if groups.get("d") else None
     year = int(groups["y"]) if groups.get("y") else None
     return year, month, day
+
+
+def _small(m):
+    n = m.group("n").lower()
+    return SMALL[n] if n in SMALL else int(n)
 
 
 def _day_range(m):
@@ -203,22 +266,36 @@ def tokens(text):
                 continue
             found.append(Token("date", m.group(0), m.start(), value))
             work = _blank(work, m.start(), m.end())
+    for m in HOSPITAL_CODE.finditer(work):
+        found.append(Token("hospital", m.group(0), m.start(), m.group(0)))
+        work = _blank(work, m.start(), m.end())
+    for pattern, code in HOSPITALS:
+        for m in pattern.finditer(work):
+            found.append(Token("hospital", m.group(0), m.start(), code))
+            work = _blank(work, m.start(), m.end())
     for pattern in VOCABULARY:
         for m in pattern.finditer(work):
             work = _blank(work, m.start(), m.end())
     for m in CONDITIONAL_LEVEL.finditer(work):
         found.append(Token("conditional level", m.group(0), m.start(), None))
         work = _blank(work, m.start(), m.end())
-    for kind, pattern in (("level", LEVEL), ("horizon", HORIZON)):
-        for m in pattern.finditer(work):
-            numbers = [int(n) for n in re.findall(r"\d+", m.group("n"))]
-            value = numbers[0] if kind == "level" else numbers
-            found.append(Token(kind, m.group(0), m.start(), value))
-            work = _blank(work, m.start(), m.end())
+    for m in LEVEL.finditer(work):
+        found.append(Token("level", m.group(0), m.start(), _small(m)))
+        work = _blank(work, m.start(), m.end())
+    for m in HORIZON.finditer(work):
+        numbers = [int(n) for n in re.findall(r"\d+", m.group("n"))]
+        found.append(Token("horizon", m.group(0), m.start(), numbers))
+        work = _blank(work, m.start(), m.end())
     for kind, pattern in (("weeks", WEEKS), ("iso week", ISO_WEEK)):
         for m in pattern.finditer(work):
-            found.append(Token(kind, m.group(0), m.start(), int(m.group("n"))))
+            found.append(Token(kind, m.group(0), m.start(), _small(m)))
             work = _blank(work, m.start(), m.end())
+    for m in NUMBER_WORDS.finditer(work):
+        found.append(Token("number word", m.group(0), m.start(), None))
+        work = _blank(work, m.start(), m.end())
+    for m in GLUED.finditer(work):
+        found.append(Token("glued", m.group(0), m.start(), None))
+        work = _blank(work, m.start(), m.end())
     for m in TIME.finditer(work):
         value = f"{int(m.group('h')):02d}:{m.group('m')}"
         found.append(Token("time", m.group(0), m.start(), value))
@@ -267,6 +344,9 @@ class CheckResult(BaseModel):
     numbers_checked: int = 0
     dates_checked: int = 0
     figures_checked: int = 0
+    # The cited figures that failed, numbered as their placeholders are,
+    # so the manager sees each one marked where the text states it.
+    failed_figures: list[int] = []
 
 
 class CodeSet(BaseModel):
@@ -357,14 +437,14 @@ def _date_known(value, known):
 # --- one cited figure --------------------------------------------------------
 
 
-def _numbers(item, keys):
+def _numbers(item, keys, unit):
     out = []
     for key in keys:
         v = item.get(key)
         if isinstance(v, dict):
-            out += [v["low"], v["high"]]
+            out += [(v["low"], unit), (v["high"], unit)]
         elif v is not None:
-            out.append(v)
+            out.append((v, unit))
     return out
 
 
@@ -383,7 +463,7 @@ def _forecast_candidates(result, fig):
     if horizon is None:
         return None, "it names no release horizon or week for a forecast"
     spread = result["spread_pct"].get(str(horizon))
-    spread = [] if spread is None else [spread]
+    spread = [] if spread is None else [(spread, "%")]
     if fig.model is None:
         return spread, f"names no model, and is not the spread at {horizon}"
     mine = [
@@ -392,16 +472,52 @@ def _forecast_candidates(result, fig):
         if i["model"] == fig.model and i["release_horizon"] == horizon
     ]
     keys = ("point", "range_80", "range_95")
-    found = [n for i in mine for n in _numbers(i, keys)]
+    found = [n for i in mine for n in _numbers(i, keys, "attendances")]
     return spread + found, f"for {fig.model} at release horizon {horizon}"
 
 
-def _candidates(call, fig):
-    """The numbers a cited figure may equal in its call's result, and the
-    context named in a failure; None when the figure cannot be placed."""
+def _calendar_candidates(result, fig, targets):
+    horizon = fig.horizon
+    if fig.week is not None:
+        if fig.week not in targets:
+            return None, (
+                f"it names w/e {fig.week}, which is not one of the four "
+                "weeks ahead"
+            )
+        if horizon not in (None, targets.index(fig.week) + 1):
+            return None, f"w/e {fig.week} is not release horizon {horizon}"
+        horizon = targets.index(fig.week) + 1
+    holidays = [
+        h
+        for h in result["holidays"]
+        if horizon is None or h["release_horizon"] == horizon
+    ]
+    where = f" at release horizon {horizon}" if horizon else ""
+    return [(float(len(holidays)), "count")], f"in the calendar{where}"
+
+
+def _candidates(call, fig, targets):
+    """The numbers a cited figure may equal in its call's result, each with
+    its unit, and the context named in a failure; None when the figure
+    cannot be placed."""
     result = call.result
     if call.name == "get_forecast":
         return _forecast_candidates(result, fig)
+    if call.name == "get_calendar":
+        return _calendar_candidates(result, fig, targets)
+    if call.name == "get_history":
+        if fig.week is None:
+            return None, "it names no week for a history figure"
+        found = [
+            (w["attendances"], "attendances")
+            for w in result["weeks"]
+            if w["week_ending"] == fig.week.isoformat()
+        ]
+        return found, f"for the week ending {fig.week}"
+    # A back-test error or a track record is for no one week, so a figure
+    # that names one would put a week on the brief no tool gave it.
+    if fig.week is not None:
+        return None, f"it names w/e {fig.week}, but {call.id} has no weeks"
     if call.name == "get_backtest_error":
         horizon = result["release_horizon"]
         if fig.horizon is not None and fig.horizon != horizon:
@@ -417,32 +533,23 @@ def _candidates(call, fig):
         mine = [e for e in errors if fig.model in (None, e["model"])]
         if not mine:
             return None, f"it names {fig.model}, but {call.id} has no error"
-        keys = ("mape", "targets")
-        return _numbers(mine[0], keys), (
-            f"for {mine[0]['model']} at release horizon {horizon}"
-        )
-    if call.name == "get_track_record":
-        keys = (
-            "flags",
-            "borne_out",
-            "unflagged",
-            "unflagged_busy",
-            "unflagged_busy_pct",
-        )
-        return _numbers(result, keys), "in the track record"
-    if call.name == "get_history":
-        if fig.week is None:
-            return None, "it names no week for a history figure"
-        found = [
-            w["attendances"]
-            for w in result["weeks"]
-            if w["week_ending"] == fig.week.isoformat()
-        ]
-        return found, f"for the week ending {fig.week}"
-    return [float(len(result["holidays"]))], "in the calendar"
+        found = _numbers(mine[0], ("mape",), "%")
+        found += _numbers(mine[0], ("targets",), "count")
+        return found, f"for {mine[0]['model']} at release horizon {horizon}"
+    counts = ("flags", "borne_out", "unflagged", "unflagged_busy")
+    found = _numbers(result, counts, "count")
+    found += _numbers(result, ("unflagged_busy_pct",), "%")
+    return found, "in the track record"
 
 
-def _figure_problem(fig, by_id, hospital, origin):
+UNIT_NAMES = {
+    "attendances": "attendances",
+    "%": "a percentage",
+    "count": "a count",
+}
+
+
+def _figure_problem(fig, by_id, hospital, origin, targets):
     call = by_id.get(fig.tool_call_id)
     if call is None:
         return f"it cites {fig.tool_call_id}, which no tool call returned"
@@ -451,29 +558,22 @@ def _figure_problem(fig, by_id, hospital, origin):
         return f"{call.id} is for {req['hospital']}, not {hospital}"
     if str(req.get("as_of")) != origin.isoformat():
         return f"{call.id} is as of {req.get('as_of')}, not {origin}"
-    found, context = _candidates(call, fig)
+    found, context = _candidates(call, fig, targets)
     if found is None:
         return context
     written = plain(fig.value)
-    if not any(within_rounding(written, v) for v in found):
-        return f"{written} is not in {call.id}'s result {context}"
-    return None
+    if any(within_rounding(written, v) for v, u in found if u == fig.unit):
+        return None
+    other = [u for v, u in found if within_rounding(written, v)]
+    if other:
+        return (
+            f"{written} is in {call.id}'s result {context} as "
+            f"{UNIT_NAMES[other[0]]}, not as {UNIT_NAMES[fig.unit]}"
+        )
+    return f"{written} is not in {call.id}'s result {context}"
 
 
 # --- the checks --------------------------------------------------------------
-
-
-def _texts(item):
-    for name in (
-        "summary",
-        "expected_range",
-        "model_agreement",
-        "backtest_error",
-        "track_record",
-    ):
-        yield name, getattr(item, name)
-    for i, point in enumerate(item.watch_points):
-        yield f"watch_points[{i}]", point
 
 
 # The Investigator prompt's own rule, quoted when a brief names another
@@ -501,7 +601,9 @@ class Allowed:
     level_rule: str = ""
 
 
-def _token_failure(t, allowed):
+def token_failure(t, allowed):
+    """Why a level, horizon, count of weeks, week label, date, year or time
+    in a text is not one it may state, or None if it may."""
     level = allowed.level
     if t.kind == "level" and t.value != level:
         rule = f"; {allowed.level_rule}" if allowed.level_rule else ""
@@ -539,6 +641,13 @@ def check_brief(brief, ledger, rule_level):
     """Check a demand brief, or a manager's edit of one, against the tool
     calls the Investigator made.
 
+    Each cited figure must equal a value its tool call returned, in its
+    declared unit, for the same hospital, origin, model, release horizon
+    and week. The brief's text is then read as the manager sees it, every
+    placeholder filled in by code: each number must be a cited figure that
+    passed, each date one of the brief's own or a cited figure's week, and
+    the level the rule's.
+
     Parameters
     ----------
     brief : briefs.DemandBrief
@@ -569,11 +678,14 @@ def check_brief(brief, ledger, rule_level):
         for d in (brief.week, brief.release_date, brief.latched_since)
         if d is not None
     } | set(targets)
-    good, bad = [], []
+    good, bad, failed = [], [], []
     for i, fig in enumerate(brief.cited_figures):
-        problem = _figure_problem(fig, by_id, brief.hospital, brief.week)
+        problem = _figure_problem(
+            fig, by_id, brief.hospital, brief.week, targets
+        )
         if problem:
             bad.append(plain(fig.value))
+            failed.append(i + 1)
             failures.append(
                 Failure(
                     field=f"cited_figures[{i}]",
@@ -586,32 +698,29 @@ def check_brief(brief, ledger, rule_level):
         week = _figure_week(fig, by_id[fig.tool_call_id], targets)
         if week is not None:
             outlook.add(week)
-    known = ledger_dates(ledger, brief.hospital, brief.week) | outlook
     allowed = Allowed(
         level=rule_level,
-        dates=frozenset(known),
+        dates=frozenset(outlook),
         outlook=frozenset(outlook),
         conditional_levels=True,
         level_rule=LEVEL_RULE,
     )
     numbers = dates = 0
-    for field, text in _texts(brief):
+    for field, text in brief.rendered().items():
         for t in tokens(text):
             if t.kind == "number":
                 numbers += 1
-                if any(within_rounding(t.text, v) for v in good):
+                # A failed figure is already named where it is cited.
+                if any(within_rounding(t.text, v) for v in good + bad):
                     continue
-                reason = (
-                    f"{t.text} cites a figure that failed the check"
-                    if any(within_rounding(t.text, v) for v in bad)
-                    else f"{t.text} is not a cited figure"
-                )
-                failures.append(
-                    Failure(field=field, found=t.text, reason=reason)
-                )
-                continue
-            dates += t.kind in ("date", "year")
-            reason = _token_failure(t, allowed)
+                reason = f"{t.text} is not a cited figure"
+            elif t.kind == "hospital" and t.value != brief.hospital:
+                reason = f"{t.text} is another hospital, not {brief.name}"
+            elif t.kind in ("glued", "number word"):
+                reason = f"{t.text}: a number no check can trace"
+            else:
+                dates += t.kind in ("date", "year")
+                reason = token_failure(t, allowed)
             if reason:
                 failures.append(
                     Failure(field=field, found=t.text, reason=reason)
@@ -622,6 +731,7 @@ def check_brief(brief, ledger, rule_level):
         numbers_checked=numbers,
         dates_checked=dates,
         figures_checked=len(brief.cited_figures),
+        failed_figures=failed,
     )
 
 
@@ -668,7 +778,7 @@ def check_notification(message, ledger, hospital, origin, code):
                 )
             continue
         dates += t.kind in ("date", "year")
-        reason = _token_failure(t, allowed)
+        reason = token_failure(t, allowed)
         if reason:
             failures.append(
                 Failure(field="message", found=t.text, reason=reason)

@@ -2,12 +2,17 @@
 
 The Investigator writes a BriefDraft: plain-English text fields and the
 figures it cites, each with the id of the tool call that produced it. The
-draft has no field for the level, the hospital or the week, so the agent can
-never set them (G5, enforced by schema). Code assembles the DemandBrief from
-the screen's entry and the draft: the level, its source and its meaning are
-copied from the rule, and the backend and model that wrote the text are
-recorded. No schema here has a field for the flag's stated chance, which
-runs about twice what happens; the brief quotes the track record instead.
+text holds no figure and no date of the agent's own: each is a placeholder,
+{F1} for the first cited figure, and code writes in the value
+(placeholders.py; review P1-1, option A). The validators here refuse a
+draft that breaks the placeholder rules, and their problems are named in
+the Investigator's retry. The draft has no field for the level, the
+hospital or the week, so the agent can never set them (G5, enforced by
+schema). Code assembles the DemandBrief from the screen's entry and the
+draft: the level, its source and its meaning are copied from the rule, and
+the backend and model that wrote the text are recorded. No schema here has
+a field for the flag's stated chance, which runs about twice what happens;
+the brief quotes the track record instead.
 
 I follow Agentic AI Systems' case file (agentic_system.py, CaseFileDraft and
 CaseFile with its evidence items, each citing the tool that returned it):
@@ -17,8 +22,9 @@ the agent explains tool results and never supplies a figure of its own.
 from datetime import date
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from . import placeholders as ph
 from .tools import LEVEL_MEANING, ModelName
 
 TOOL_NAMES = (
@@ -76,6 +82,19 @@ class CitedFigure(BaseModel):
     week: date | None = Field(
         default=None, description="The week ending, for a history figure."
     )
+    unit: Literal["attendances", "%", "count"] = Field(
+        description="attendances for a forecast, a range or a week's "
+        "attendances; % for a back-test error, the models' spread or a "
+        "busy share; count for flags, outlooks, targets or holidays."
+    )
+
+
+def _field_texts(item):
+    """Each text field a reader sees, with watch points one by one."""
+    out = {f: getattr(item, f) for f in TEXT_FIELDS if f != "watch_points"}
+    for i, point in enumerate(item.watch_points):
+        out[f"watch_points[{i}]"] = point
+    return out
 
 
 class BriefDraft(BaseModel):
@@ -109,8 +128,20 @@ class BriefDraft(BaseModel):
         description="Things a manager can check or do this week.",
     )
     cited_figures: list[CitedFigure] = Field(
-        description="Every figure in the text, each with its tool call."
+        description="Every figure in the text, each with its tool call; "
+        "the text writes the first as {F1}, the second as {F2}."
     )
+
+    @model_validator(mode="after")
+    def placeholders_only(self, info):
+        """No figure, date, other hospital or other level of the agent's
+        own; the rules that need the brief's hospital, level and dates run
+        when the caller gives them as context["text"]."""
+        ctx = (info.context or {}).get("text")
+        found = ph.problems(_field_texts(self), self.cited_figures, ctx)
+        if found:
+            raise ph.TextProblems(found)
+        return self
 
 
 class DemandBrief(BaseModel):
@@ -142,6 +173,37 @@ class DemandBrief(BaseModel):
     backend: Literal["local", "frontier"]
     model: str
     model_digest: str | None
+
+    @model_validator(mode="after")
+    def placeholders_hold(self):
+        """Every placeholder rule, with this brief's own hospital, level and
+        dates, so an edit is held to them too."""
+        found = ph.problems(
+            _field_texts(self), self.cited_figures, self.text_context()
+        )
+        if found:
+            raise ph.TextProblems(found)
+        return self
+
+    def text_context(self):
+        """What code knows about this brief, for its placeholders."""
+        return ph.TextContext(
+            hospital=self.hospital,
+            name=self.name,
+            level=self.level,
+            origin=self.week,
+            release=self.release_date,
+            latched_since=self.latched_since,
+            primary=None,
+        )
+
+    def rendered(self, failed=frozenset()):
+        """Each text field as the reader sees it, placeholders filled."""
+        ctx = self.text_context()
+        return {
+            field: ph.render(text, self.cited_figures, ctx, failed)
+            for field, text in _field_texts(self).items()
+        }
 
     @classmethod
     def assemble(cls, entry, draft, *, brief_id, backend, model, model_digest):
@@ -193,8 +255,11 @@ class DemandBrief(BaseModel):
             return "held: forecasts untrusted"
         return ""
 
-    def text(self):
-        """The brief as the manager reads it."""
+    def text(self, failed=frozenset()):
+        """The brief as the manager reads it, with every placeholder filled
+        in by code; the cited figures numbered in failed are marked."""
+        shown = self.rendered(failed)
+        points = [v for k, v in shown.items() if k.startswith("watch_points")]
         lines = [
             f"Demand brief: {self.name}, week ending "
             f"{self.week:%d %b %Y}, released {self.release_date:%a %d %b %Y}",
@@ -212,13 +277,16 @@ class DemandBrief(BaseModel):
         else:
             lines.append("Drift alarm: none.")
         lines += [
-            f"Summary: {self.summary}",
-            f"Expected range: {self.expected_range}",
-            f"Model agreement: {self.model_agreement}",
-            f"Back-test error: {self.backtest_error}",
-            f"Track record: {self.track_record}",
+            f"Summary: {shown['summary']}",
+            f"Expected range: {shown['expected_range']}",
+            f"Model agreement: {shown['model_agreement']}",
+            f"Back-test error: {shown['backtest_error']}",
+            f"Track record: {shown['track_record']}",
             "Watch points:",
-            *[f"- {w}" for w in self.watch_points],
+            *[f"- {w}" for w in points],
             f"Written by: the {self.backend} backend, {self.model}.",
         ]
         return "\n".join(lines)
+
+
+problems_of = ph.problems_of

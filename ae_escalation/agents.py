@@ -27,6 +27,7 @@ from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from . import placeholders as ph
 from . import tools as tl
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief, ToolCall
 from .figures import CheckResult, check_brief, marked
@@ -258,6 +259,19 @@ def entry_text(entry):
     return "\n".join(lines)
 
 
+def entry_context(entry):
+    """What code knows about the screened brief, for its placeholders."""
+    return ph.TextContext(
+        hospital=entry.hospital,
+        name=entry.name,
+        level=entry.level,
+        origin=entry.as_of,
+        release=entry.release_date,
+        latched_since=entry.latched_since,
+        primary=entry.primary,
+    )
+
+
 def _tool_loop(messages, *, gateway, toolbox, cap, run_id, first_call, calls):
     """The bounded tool loop: the model asks for tools and code runs them,
     until it stops asking or asks past the cap. A call past the cap is
@@ -371,7 +385,9 @@ def investigator_pass(
             schema=BriefDraft,
         )
         calls.append(record)
-        draft = parse_structured(reply, BriefDraft)
+        draft = parse_structured(
+            reply, BriefDraft, context={"text": entry_context(entry)}
+        )
         if draft is None:
             raise _Stop("could not read the brief")
     except ReplayMiss:
@@ -428,15 +444,7 @@ def device_words(text):
 
 
 def _agent_text(brief):
-    parts = [
-        brief.summary,
-        brief.expected_range,
-        brief.model_agreement,
-        brief.backtest_error,
-        brief.track_record,
-        *brief.watch_points,
-    ]
-    return "\n".join(parts)
+    return "\n".join(brief.rendered().values())
 
 
 def wording_check(brief, *, gateway, prompts, run_id, call_number):
@@ -531,8 +539,10 @@ class BriefOutcome(BaseModel):
         if self.brief is None:
             reason = self.attempts[-1].stop_reason if self.attempts else ""
             return f"{banner}\nNo readable brief: {reason}"
-        text = marked(self.brief.text(), self.failures)
-        last = self.attempts[-1].wording
+        last = self.attempts[-1]
+        failed = set(last.check.failed_figures) if last.check else set()
+        text = marked(self.brief.text(failed), self.failures)
+        last = last.wording
         notes = (
             ["Wording problems:", *[f"- {p}" for p in last.problems]]
             if last and not last.passed
@@ -642,14 +652,19 @@ class BriefGraph:
                 f"the Investigator gave no readable brief: {out.stop_reason}"
             ]
             return update
-        brief = DemandBrief.assemble(
-            entry,
-            draft,
-            brief_id=state["run_id"],
-            backend=self.gateway.backend,
-            model=self.gateway.model_name,
-            model_digest=self.gateway.digest,
-        )
+        try:
+            brief = DemandBrief.assemble(
+                entry,
+                draft,
+                brief_id=state["run_id"],
+                backend=self.gateway.backend,
+                model=self.gateway.model_name,
+                model_digest=self.gateway.digest,
+            )
+        except ValidationError as exc:
+            update["brief"] = None
+            update["problems"] = ph.problems_of(exc)
+            return update
         update["draft"] = draft.model_dump(mode="json")
         update["brief"] = brief.model_dump(mode="json")
         return update

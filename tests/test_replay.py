@@ -107,10 +107,12 @@ def test_a_planted_figure_is_one_no_tool_returned(replay_run):
     assert not any(
         fg.within_rounding(fg.plain(added.value), v) for v in numbers
     )
-    assert f"{added.value:,.0f}" in planted.summary
+    n = len(planted.cited_figures)
+    assert f"{{F{n}}} attendances" in planted.summary
+    assert added.unit == "attendances" and added.tool_call_id == "T1"
     bare = rp.plant_figure(draft, [])
-    assert bare.cited_figures == draft.cited_figures
-    assert bare.summary != draft.summary
+    assert bare.cited_figures[-1].tool_call_id == "T0"
+    assert "{F8} attendances" in bare.summary
 
 
 # --- live with the stand-in, then replay -------------------------------------

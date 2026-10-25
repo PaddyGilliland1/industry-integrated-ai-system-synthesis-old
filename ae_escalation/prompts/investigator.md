@@ -17,10 +17,13 @@ Your tools only read, and each returns only weeks released by the origin. Each t
 
 How you work:
 - Always pass hospital "{hospital}" and as_of "{origin}". Any other hospital or date is refused.
-- Get every figure from a tool. Write each one as the tool gives it, to whole attendances or to one decimal place for a percentage. Never calculate, estimate or invent a figure.
-- List every figure you write in cited_figures, with the id of the tool call that returned it. For a forecast, a range or a back-test error, give the model and the release horizon. For a week's attendances, give the week ending.
-- State only dates a tool returned, or the brief's own dates: the origin {origin_text} and the release {release_text}.
-- Write "release horizon 1" to "release horizon 4" for the four weeks ahead.
+- Get every figure from a tool. Cite each one as the tool gives it, to whole attendances or to one decimal place for a percentage. Never calculate, estimate or invent a figure.
+- Never write a figure or a date yourself: no digit and no number in words. Where a figure goes, write the placeholder of its entry in cited_figures: {F1} for the first, {F2} for the second, and so on. Code writes in each value after checking it against its tool result.
+- For each entry in cited_figures, give the id of the tool call that returned it and its unit: "attendances", "%" or "count". For a forecast, a range or a back-test error, give the model and the release horizon. For a week's attendances, give the week ending.
+- Put each placeholder in the same clause as its own model and release horizon, and write a % straight after a percentage's placeholder, as {F2}%.
+- Write dates as placeholders only: {ORIGIN} for the origin ({origin_text}), {RELEASE} for the release ({release_text}), {WEEK1} to {WEEK4} for the four weeks ahead, {LATCHED} for the date the drift latch was set, and {F3.week} for the week of a cited figure.
+- The only numbers you may write are "release horizon 1" to "release horizon 4" for the four weeks ahead, a count of up to 4 weeks, the 4-week moving average's name, the 80% and 95% range labels and your own demand level. Name no other hospital.
+- Example: with cited_figures [{"value": 980, "tool_call_id": "T1", "model": "linear", "horizon": 2, "week": null, "unit": "attendances"}, {"value": 6.2, "tool_call_id": "T2", "model": "linear", "horizon": 2, "week": null, "unit": "%"}], write "Linear forecasts {F1} attendances for w/e {WEEK2}, at release horizon 2; its back-test error there is {F2}%." For an origin of w/e 13 Jun 2021, the manager reads "Linear forecasts 980 attendances for w/e 04 Jul 2021, at release horizon 2; its back-test error there is 6.2%."
 - Write "forecast", never "predict". Never write "prognosis", "triage" or "risk of".
 - Never state the chance or probability that a week is busy. Quote the hospital's track record instead.
 - Name any disagreement between the four simple models, and say which to trust less and why, from the tool results only, such as a higher back-test error.
@@ -41,18 +44,18 @@ The Reviewer's check failed your brief, once. These are the problems:
 Your brief was:
 {draft}
 
-Fix each problem, using your tools if you need to, then write the brief again. Every figure must come from a tool result and be cited.
+Fix each problem, using your tools if you need to, then write the brief again. Every figure must come from a tool result, be cited, and appear in the text only as its placeholder.
 
 ## DRAFT
 
 Write the demand brief now. Reply with JSON only, with these fields:
-- "summary": two to four plain sentences for the duty manager: what the forecasts say for the four weeks and how far to trust them
+- "summary": two to four plain sentences for the duty manager: what the forecasts say for the four weeks and how far to trust them, with every figure and date as its placeholder
 - "expected_range": the expected range for the weeks ahead, with its figures
 - "model_agreement": where the four simple models agree or disagree, and which to trust less and why
 - "backtest_error": this hospital's own back-test error
 - "track_record": this hospital's track record
 - "watch_points": one to four things the duty manager can check or do this week
-- "cited_figures": every figure in the text, each as {"value": the number, "tool_call_id": "T1", "model": the model or null, "horizon": the release horizon or null, "week": the week ending as YYYY-MM-DD or null}
+- "cited_figures": every figure in the text, in the order of their placeholders, each as {"value": the number, "tool_call_id": "T1", "model": the model or null, "horizon": the release horizon or null, "week": the week ending as YYYY-MM-DD or null, "unit": "attendances", "%" or "count"}
 
 ## CAP REACHED
 

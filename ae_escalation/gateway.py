@@ -381,13 +381,13 @@ class ModelGateway:
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
-def parse_structured(message, schema):
+def parse_structured(message, schema, context=None):
     """The schema's object from a reply: from a tool call's arguments, or
     from JSON in the text with or without a code fence; None if there is
-    no valid one."""
+    no valid one. context goes to the schema's validators."""
     for tool_call in message.tool_calls:
         try:
-            return schema.model_validate(tool_call["args"])
+            return schema.model_validate(tool_call["args"], context=context)
         except ValidationError:
             continue
     content = message.content
@@ -403,7 +403,7 @@ def parse_structured(message, schema):
         for start in (i for i, ch in enumerate(text) if ch == "{"):
             try:
                 found, _ = decoder.raw_decode(text, start)
-                return schema.model_validate(found)
+                return schema.model_validate(found, context=context)
             except (json.JSONDecodeError, ValidationError, TypeError):
                 continue
     return None
