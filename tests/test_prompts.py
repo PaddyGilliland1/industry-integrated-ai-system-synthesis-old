@@ -333,6 +333,20 @@ def test_the_reviewer_is_told_code_wrote_the_meaning_and_band_lines():
     )
 
 
+def test_the_reviewer_judges_only_the_writers_sentences():
+    # A problem found in a code-written line goes back to the Investigator,
+    # which cannot change it, so the brief would end "not verified".
+    system = PROMPTS["reviewer"]["SYSTEM"]
+    assert (
+        "Judge only the writer's sentences: the Summary, Expected range, "
+        "Model agreement and the watch points. The lines code wrote are "
+        "outside your three checks." in system
+    )
+    for heading in ("Summary:", "Expected range:", "Model agreement:"):
+        assert f"\n{heading} " in EXAMPLE_TEXT
+    assert "\nWatch points:\n- " in EXAMPLE_TEXT
+
+
 def test_the_screen_tells_the_investigator_what_each_token_writes(raigmore):
     entry, _, _ = raigmore
     text = ag.entry_text(entry)
