@@ -20,3 +20,5 @@ ae_escalation/forecasts.py
 tests/test_forecasts.py
 ae_escalation/backtest.py
 tests/test_backtest.py
+ae_escalation/gru.py
+tests/test_gru.py
