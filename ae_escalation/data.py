@@ -8,6 +8,7 @@ stays in the flagged frame, and a row left out of the series says why.
 import csv
 import hashlib
 import io
+import json
 from datetime import date
 from pathlib import Path
 
@@ -180,6 +181,33 @@ def load_weekly(path, sha256):
         df["WeekEndingDate"], format="%Y%m%d"
     )
     return df
+
+
+def load_bank_holidays(path, sha256, division="scotland"):
+    """Return one division's bank holidays from the frozen GOV.UK file.
+
+    The file is checked against its SHA-256 before it is read, as
+    load_weekly checks the PHS file. It is never fetched again, because
+    nothing guarantees the live file keeps 2019.
+
+    Returns
+    -------
+    list of tuple of datetime.date and str
+        Each holiday's date and title, in date order.
+
+    Raises
+    ------
+    ValueError
+        If the file's SHA-256 is not sha256.
+    """
+    payload = Path(path).read_bytes()
+    found = hashlib.sha256(payload).hexdigest()
+    if found != sha256:
+        raise ValueError(
+            f"{Path(path).name}: SHA-256 is {found}, expected {sha256}"
+        )
+    events = json.loads(payload.decode("utf-8"))[division]["events"]
+    return sorted((date.fromisoformat(e["date"]), e["title"]) for e in events)
 
 
 def to_wide(df, unit_col, category=CATEGORY, value_col=ATTENDANCES):
