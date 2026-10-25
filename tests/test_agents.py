@@ -212,16 +212,49 @@ def test_a_hospital_the_screen_did_not_send_gets_no_brief(
 def test_a_latch_brief_copies_the_held_level(
     run, holidays, settings, tmp_path
 ):
+    held = "2020-03-22"
+    ask = AIMessage(
+        content="",
+        tool_calls=[
+            tc("get_backtest_error", hospital="T101H", as_of=held, horizon=1),
+            tc("get_track_record", hospital="T101H", as_of=held),
+        ],
+    )
+    (error,) = tl.get_backtest_error(
+        run,
+        tl.BacktestErrorRequest(
+            hospital="T101H", as_of=held, horizon=1, model="SA-MA"
+        ),
+    ).errors
+    record = tl.get_track_record(
+        run, tl.TrackRecordRequest(hospital="T101H", as_of=held)
+    )
     draft = {
-        "summary": "The forecasts are untrusted while the drift latch is set.",
+        "summary": "The forecasts are untrusted while the drift latch is set "
+        "since {LATCHED}.",
         "expected_range": "No range is trusted this week.",
         "model_agreement": "All four models are untrusted.",
-        "backtest_error": "The back-test error no longer applies.",
-        "track_record": "The track record is shown for context only.",
+        "backtest_error": "SA-MA's back-test error before the alarm was "
+        "{F1}% at release horizon 1.",
+        "track_record": "{F2} of its {F3} unflagged outlooks turned busy.",
         "watch_points": ["Check each released week before changing staffing."],
-        "cited_figures": [],
+        "cited_figures": [
+            {
+                "value": round(error.mape, 1),
+                "tool_call_id": "T1",
+                "model": "SA-MA",
+                "horizon": 1,
+                "unit": "%",
+            },
+            {
+                "value": record.unflagged_busy,
+                "tool_call_id": "T2",
+                "unit": "count",
+            },
+            {"value": record.unflagged, "tool_call_id": "T2", "unit": "count"},
+        ],
     }
-    script = [DONE, reply(draft), WORDING_OK]
+    script = [ask, DONE, reply(draft), WORDING_OK]
     out = graph(run, holidays, settings, script, tmp_path).run(
         "2020-03-22", "T101H", "latch"
     )

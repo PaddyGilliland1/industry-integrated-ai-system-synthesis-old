@@ -173,16 +173,31 @@ def fig(value, cid, model=None, horizon=None, week=None, unit=None):
 
 
 def draft(**fields):
+    """A draft with the given fields. Unless a test writes its own, the
+    back-test error and track record fields state the hospital's own,
+    cited after the test's figures so its {F1} stays its first."""
     base = {
         "summary": "Demand is forecast unusually high for the time of year.",
         "expected_range": "The range is wide.",
         "model_agreement": "The models disagree; trust linear less.",
-        "backtest_error": "The hospital's own error is moderate.",
-        "track_record": "This hospital has no past flag to judge.",
         "watch_points": ["Check whether extra shifts are needed."],
         "cited_figures": [],
     }
-    return br.BriefDraft(**{**base, **fields})
+    fields = {**base, **fields}
+    figures = list(fields["cited_figures"])
+    if "backtest_error" not in fields:
+        figures.append(fig(6.12, "T2", "SA-MA", 1, unit="%"))
+        fields["backtest_error"] = (
+            f"SA-MA's own back-test error is {{F{len(figures)}}}%."
+        )
+    if "track_record" not in fields:
+        figures += [fig(29, "T3"), fig(136, "T3")]
+        n = len(figures)
+        fields["track_record"] = (
+            f"This hospital has no past flag to judge; {{F{n - 1}}} of its "
+            f"{{F{n}}} unflagged outlooks turned busy."
+        )
+    return br.BriefDraft(**{**fields, "cited_figures": figures})
 
 
 def brief(entry=ENTRY, **fields):
@@ -514,6 +529,36 @@ def test_a_calendar_figure_counts_the_holidays_it_returned():
         cited_figures=[fig(1, "T4", week=date(2021, 12, 26))],
     )
     assert "not one of the four weeks ahead" in reasons(check(beyond))
+
+
+def test_a_brief_must_state_its_own_backtest_error_and_track_record():
+    none = brief(
+        backtest_error="The error is moderate.",
+        track_record="It has a record.",
+    )
+    found = reasons(check(none))
+    assert "back-test error field" in found and "get_backtest_error" in found
+    assert "track record field" in found and "get_track_record" in found
+    elsewhere = brief(
+        summary="SA-MA's error is {F1}%.",
+        backtest_error="See the summary.",
+        cited_figures=[fig(6.12, "T2", "SA-MA", 1, unit="%")],
+    )
+    assert "back-test error field" in reasons(check(elsewhere))
+    spread = brief(
+        backtest_error="The models spread {F1}%.",
+        cited_figures=[fig(25.5, "T1", horizon=1, unit="%")],
+    )
+    assert "back-test error field" in reasons(check(spread))
+    assert check(brief()).passed, reasons(check(brief()))
+
+
+def test_a_failed_backtest_figure_does_not_count_as_stated():
+    wrong = brief(
+        backtest_error="SA-MA's error is {F1}%.",
+        cited_figures=[fig(7.5, "T2", "SA-MA", 1, unit="%")],
+    )
+    assert "back-test error field" in reasons(check(wrong))
 
 
 def test_a_date_the_agent_writes_itself_is_refused():

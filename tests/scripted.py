@@ -7,6 +7,7 @@ Nothing here is a model's output.
 """
 
 import json
+import re
 
 from langchain_core.messages import AIMessage
 
@@ -146,22 +147,73 @@ def last_human(messages):
     return next(m.content for m in reversed(messages) if m.type == "human")
 
 
+PASS = re.compile(r'Always pass hospital "([^"]+)" and as_of "([^"]+)"')
+
+
+def _tool_results(messages):
+    """Each tool's id and result, from the tool messages sent so far."""
+    return {
+        m.name: json.loads(m.content)
+        for m in messages
+        if m.type == "tool" and m.content.startswith("{")
+    }
+
+
+def _own_figures(messages):
+    """The brief's own back-test error and track record, cited, from the
+    tool results in the conversation."""
+    texts = " ".join(str(m.content) for m in messages)
+    primary = re.search(r"Primary model: (.+?)\.\n", texts).group(1)
+    found = _tool_results(messages)
+    error, record = found["get_backtest_error"], found["get_track_record"]
+    mape = next(
+        e["mape"] for e in error["result"]["errors"] if e["model"] == primary
+    )
+    figures = [
+        {
+            "value": round(mape, 1),
+            "tool_call_id": error["tool_call_id"],
+            "model": primary,
+            "horizon": 1,
+            "unit": "%",
+        },
+        {
+            "value": record["result"]["unflagged_busy"],
+            "tool_call_id": record["tool_call_id"],
+            "unit": "count",
+        },
+        {
+            "value": record["result"]["unflagged"],
+            "tool_call_id": record["tool_call_id"],
+            "unit": "count",
+        },
+    ]
+    return primary, figures
+
+
 def answer(messages):
-    """A stand-in that answers every kind of call in the replay set: no
-    tools, a draft with no figures, a pass on wording, and notifications
-    that state only the deadline it was given."""
+    """A stand-in that answers every kind of call in the replay set: the
+    two tools every brief needs, a draft that states only its own back-test
+    error and track record, a pass on wording, and notifications that state
+    no figure."""
     ask = last_human(messages)
     if "Write the demand brief now" in ask:
+        primary, figures = _own_figures(messages)
         return AIMessage(
             content=json.dumps(
                 {
                     "summary": "The forecasts are described without figures.",
                     "expected_range": "See the forecasts.",
                     "model_agreement": "The models broadly agree.",
-                    "backtest_error": "The hospital's own error is shown.",
-                    "track_record": "The track record is shown.",
+                    "backtest_error": (
+                        f"{primary}'s own back-test error at release horizon "
+                        "1 is {F1}%."
+                    ),
+                    "track_record": (
+                        "{F2} of its {F3} unflagged outlooks turned busy."
+                    ),
                     "watch_points": ["Check whether extra shifts are needed."],
-                    "cited_figures": [],
+                    "cited_figures": figures,
                 }
             )
         )
@@ -183,7 +235,21 @@ def answer(messages):
                 }
             )
         )
-    return AIMessage(content="I have what I need.")
+    if messages[-1].type == "tool":
+        return DONE
+    hospital, as_of = PASS.search(str(messages[0].content)).groups()
+    return AIMessage(
+        content="",
+        tool_calls=[
+            tc(
+                "get_backtest_error",
+                hospital=hospital,
+                as_of=as_of,
+                horizon=1,
+            ),
+            tc("get_track_record", hospital=hospital, as_of=as_of),
+        ],
+    )
 
 
 def stand_in():

@@ -197,6 +197,10 @@ class DemandBrief(BaseModel):
             primary=None,
         )
 
+    def figures_in(self, field):
+        """The cited figures a text field states, by number."""
+        return ph.figure_numbers(_field_texts(self).get(field, ""))
+
     def rendered(self, failed=frozenset()):
         """Each text field as the reader sees it, placeholders filled."""
         ctx = self.text_context()

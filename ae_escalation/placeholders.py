@@ -132,6 +132,16 @@ def figure_text(value):
     return f"{sign}{int(whole):,}" + (f".{fraction}" if fraction else "")
 
 
+def figure_numbers(text):
+    """The cited figures a text states, by number: {F2} is 2. A week
+    placeholder, {F2.week}, states a date, not the figure."""
+    return {
+        int(m.group("n"))
+        for m in PLACEHOLDER.finditer(text)
+        if m.group("n") and not m.group("week")
+    }
+
+
 def _week_of(fig, ctx):
     """The week a cited figure is for, if it names one."""
     if fig.week is not None:

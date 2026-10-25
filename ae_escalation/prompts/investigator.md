@@ -52,8 +52,8 @@ Write the demand brief now. Reply with JSON only, with these fields:
 - "summary": two to four plain sentences for the duty manager: what the forecasts say for the four weeks and how far to trust them, with every figure and date as its placeholder
 - "expected_range": the expected range for the weeks ahead, with its figures
 - "model_agreement": where the four simple models agree or disagree, and which to trust less and why
-- "backtest_error": this hospital's own back-test error
-- "track_record": this hospital's track record
+- "backtest_error": this hospital's own back-test error, stating at least one figure cited from get_backtest_error
+- "track_record": this hospital's track record, stating at least one figure cited from get_track_record
 - "watch_points": one to four things the duty manager can check or do this week
 - "cited_figures": every figure in the text, in the order of their placeholders, each as {"value": the number, "tool_call_id": "T1", "model": the model or null, "horizon": the release horizon or null, "week": the week ending as YYYY-MM-DD or null, "unit": "attendances", "%" or "count"}
 

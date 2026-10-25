@@ -542,6 +542,10 @@ def _candidates(call, fig, targets):
     return found, "in the track record"
 
 
+OWN_FIGURES = (
+    ("backtest_error", "get_backtest_error", "back-test error"),
+    ("track_record", "get_track_record", "track record"),
+)
 UNIT_NAMES = {
     "attendances": "attendances",
     "%": "a percentage",
@@ -698,6 +702,24 @@ def check_brief(brief, ledger, rule_level):
         week = _figure_week(fig, by_id[fig.tool_call_id], targets)
         if week is not None:
             outlook.add(week)
+    # Every brief prints its hospital's own error and track record (build
+    # spec, section 4), so each field must state a figure that passed,
+    # cited to that tool for this hospital.
+    for field, tool, label in OWN_FIGURES:
+        stated = [
+            brief.cited_figures[n - 1].tool_call_id
+            for n in brief.figures_in(field)
+            if n <= len(brief.cited_figures) and n not in failed
+        ]
+        if not any(by_id[c].name == tool for c in stated if c in by_id):
+            failures.append(
+                Failure(
+                    field=field,
+                    found="",
+                    reason=f"the {label} field must state this hospital's "
+                    f"own {label} as a cited figure from {tool}",
+                )
+            )
     allowed = Allowed(
         level=rule_level,
         dates=frozenset(outlook),
