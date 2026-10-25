@@ -19,9 +19,12 @@ prompt-tuning round, and there is no third.
 approvals/decisions_<backend>_<label>.csv: the coordinator drafts the
 notifications for the approved briefs, live, and writes them to the outbox,
 which is never sent. Each run is held to its time budget, checked before
-every model call; a run that stops writes what it completed, and the same
-command with --resume replays the calls already recorded, then carries on
-live.
+every model call, and a run that stops writes what it completed. A run that
+stopped before its budget was spent, such as on an error, is taken up by the
+same command with --resume, which replays the calls already recorded, then
+carries on live in the budget left. The budget holds across a resume, so a
+run stopped at its budget has none left, and the set runs again under a new
+label.
 
 Before any model call it checks the backend: for local, that Ollama on this
 machine holds the model at its pinned digest, and it prints nvidia-smi; for
@@ -120,15 +123,18 @@ def preflight(settings, fetch, env_file):
     ], None
 
 
-def _stopped(exc, paths, step):
-    """What a budget stop completed, and how to take it up again."""
+def _stopped(exc, paths):
+    """What a budget stop completed, and what to run next. A resume carries
+    the time spent, so it would stop again before its first live call; every
+    new label starts with the briefs."""
     last = progress(paths)[-1]
     print(f"stopped: {exc}")
     print(f"completed: {', '.join(last['completed']) or 'none'}")
     print(f"in progress: {last['in_progress']}")
     print(
-        f"resume with: python -m ae_escalation.live {step} --label "
-        f"{paths.label} --resume"
+        "the budget holds across a resume, so this run has none left: run "
+        "the set again under a new label, python -m ae_escalation.live "
+        "briefs --label <new label>"
     )
     return 3
 
@@ -148,7 +154,7 @@ def _briefs(settings, paths, model, digest, resume):
             resume=resume,
         )
     except BudgetExceeded as exc:
-        return _stopped(exc, paths, "briefs")
+        return _stopped(exc, paths)
     write_form(result, paths)
     caught = result.planted.planted_caught
     print(
@@ -360,7 +366,7 @@ def _notify(settings, paths, model, digest, resume):
             resume=resume,
         )
     except BudgetExceeded as exc:
-        return _stopped(exc, paths, "notify")
+        return _stopped(exc, paths)
     for d in done:
         print(f"{d.brief_id}:")
         print(d.summary())
@@ -389,7 +395,9 @@ def main(
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="take up a run that stopped at its time budget",
+        help="take up a run that stopped before its time budget was spent, "
+        "such as on an error; the budget holds across a resume, so a run "
+        "stopped at its budget needs a new --label",
     )
     parser.add_argument(
         "--set",
@@ -420,7 +428,7 @@ def main(
     if not args.resume and (recorded.exists() or started):
         print(
             f"{recorded} is already recorded; use a new --label, or "
-            "--resume if it stopped"
+            "--resume if it stopped before its budget was spent"
         )
         return 2
     try:

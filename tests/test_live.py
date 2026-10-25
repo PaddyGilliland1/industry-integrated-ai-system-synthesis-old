@@ -321,16 +321,50 @@ def config_with(tmp_path, **agents):
     return str(path)
 
 
-def test_a_stopped_run_says_so_and_resumes_with_the_flag(
+def test_the_resume_flags_help_says_a_budget_stop_needs_a_new_label(capsys):
+    with pytest.raises(SystemExit):
+        lv.main(["--help"])
+    shown = " ".join(capsys.readouterr().out.split())
+    assert "stopped at its time budget" not in shown
+    assert (
+        "take up a run that stopped before its time budget was spent, such "
+        "as on an error; the budget holds across a resume, so a run stopped "
+        "at its budget needs a new --label" in shown
+    )
+
+
+def test_a_run_stopped_at_its_budget_is_sent_to_a_new_label(
     tmp_path, pinned, capsys
 ):
+    tight = config_with(tmp_path, run_budget_s=1e-9)
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    args += ["--config", tight]
+    assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 3
+    out = capsys.readouterr().out
+    assert "--resume" not in out
+    assert (
+        "the budget holds across a resume, so this run has none left: run "
+        "the set again under a new label, python -m ae_escalation.live "
+        "briefs --label <new label>" in out
+    )
+    # Under the same budget a resume replays what was recorded and stops
+    # again before any live call, as the message says.
+    model = stand_in()
+    assert lv.main([*args, "--resume"], chat_model=model, fetch=pinned) == 3
+    assert model.seen == []
+
+
+def test_a_stopped_run_resumes_with_the_flag_while_budget_is_left(
+    tmp_path, pinned
+):
+    # A larger budget stands in for a stop that left budget, such as an
+    # error, which --resume takes up.
     tight = config_with(tmp_path, run_budget_s=1e-9)
     args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
     code = lv.main(
         [*args, "--config", tight], chat_model=stand_in(), fetch=pinned
     )
     assert code == 3
-    assert "--resume" in capsys.readouterr().out
     assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 2
     assert (
         lv.main([*args, "--resume"], chat_model=stand_in(), fetch=pinned) == 0
