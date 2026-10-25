@@ -15,3 +15,6 @@ tests/__init__.py
 tests/conftest.py
 tests/test_data.py
 tests/test_timing.py
+.flake8
+ae_escalation/forecasts.py
+tests/test_forecasts.py

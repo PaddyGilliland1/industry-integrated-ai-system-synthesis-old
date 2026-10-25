@@ -1,0 +1,5 @@
+# Black puts spaces round a slice's colon when its bounds are expressions,
+# which flake8 reads as E203. Black's documentation says to ignore E203.
+[flake8]
+max-line-length = 79
+extend-ignore = E203
