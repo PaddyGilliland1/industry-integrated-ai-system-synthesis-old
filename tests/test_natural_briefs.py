@@ -40,9 +40,9 @@ NATURAL = {
         "demand",
         {
             "summary": "Plan for demand above the usual for the time of "
-            "year, climbing through the weeks ahead from {F1} to {F2}. There "
-            "is no drift alarm and the simple models broadly agree, so the "
-            "forecasts can be planned on.",
+            "year: {F1} to start with, rising to {F2} by the end of the weeks "
+            "ahead. There is no drift alarm and the simple models broadly "
+            "agree, so the forecasts can be planned on.",
             "expected_range": "The range to plan within runs from {F3} to "
             "{F4}, and by the bank holiday weeks it reaches {F5}.",
             "model_agreement": "The simple models broadly agree, within {F6} "
@@ -172,10 +172,10 @@ SHOWN = {
         "The demand level shows demand unusually high for the time of year. "
         "It is not pressure, need or priority.\n"
         "Drift alarm: none.\n"
-        "Summary: Plan for demand above the usual for the time of year, "
-        "climbing through the weeks ahead from 185 attendances (SA-MA "
-        "forecast for w/e 23 Apr 2023) to 202 attendances (SA-MA forecast "
-        "for w/e 14 May 2023). There is no drift alarm and the simple "
+        "Summary: Plan for demand above the usual for the time of year: 185 "
+        "attendances (SA-MA forecast for w/e 23 Apr 2023) to start with, "
+        "rising to 202 attendances (SA-MA forecast for w/e 14 May 2023) by "
+        "the end of the weeks ahead. There is no drift alarm and the simple "
         "models broadly agree, so the forecasts can be planned on.\n"
         "Expected range: The range to plan within runs from 164 attendances "
         "(low end of SA-MA's 80% range for w/e 23 Apr 2023) to 214 "
