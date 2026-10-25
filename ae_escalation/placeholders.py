@@ -419,8 +419,8 @@ MODEL_WORDS = [
         re.IGNORECASE,
     ),
     re.compile(
-        r"\bseasonal(?:ly)?[\s-]+(?:na[iï]ve|adjusted)\b"
-        r"|\bna[iï]ve\b|\blinear\b|\bSA[\s-]?MA\b|\bprimary\b|\bGRU\b"
+        r"\bseasonal(?:ly)?[\s-]+(?:na[i\u00ef]ve|adjusted)\b"
+        r"|\bna[i\u00ef]ve\b|\blinear\b|\bSA[\s-]?MA\b|\bprimary\b|\bGRU\b"
         r"|\bS?ARIMA\b",
         re.IGNORECASE,
     ),
@@ -579,7 +579,7 @@ def _word_problems(field, text):
 
 # --- the placeholders themselves ---------------------------------------------
 
-SIGNS = "+-−±~≈<>"
+SIGNS = "+-\u2212\u00b1~\u2248<>"
 UNIT_AFTER = re.compile(
     r"\s*(?:(?:attendances?|outlooks?|(?:un)?flagged|flags?|weeks?"
     r"|(?:bank\s+)?holidays?|patients?)\b|%|per\s?cent\b)",

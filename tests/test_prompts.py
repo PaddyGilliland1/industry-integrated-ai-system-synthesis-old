@@ -167,7 +167,7 @@ def test_the_reviewer_is_told_what_the_code_proves_and_what_it_judges():
 @pytest.mark.parametrize("agent", sorted(PROMPTS))
 def test_no_prompt_holds_a_long_dash(agent):
     for text in PROMPTS[agent].values():
-        assert not re.search("[–—]", text)
+        assert not re.search("[\u2013\u2014]", text)
 
 
 def test_the_screen_tells_the_investigator_what_each_token_writes(ninewells):

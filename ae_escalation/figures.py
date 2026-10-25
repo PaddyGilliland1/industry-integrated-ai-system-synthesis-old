@@ -286,7 +286,7 @@ def tokens(text):
 def within_rounding(written, target):
     """True when target, rounded to the decimal places written has, gives
     written, sign and all."""
-    text = str(written).replace(",", "").replace("−", "-")
+    text = str(written).replace(",", "").replace("\u2212", "-")
     places = len(text.split(".")[1]) if "." in text else 0
     return abs(float(text) - float(target)) <= 0.5 * 10**-places + 1e-9
 
