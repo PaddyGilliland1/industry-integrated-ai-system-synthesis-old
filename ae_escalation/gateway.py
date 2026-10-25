@@ -741,23 +741,59 @@ def make_chat_model(settings, env_file=ENV_PATH):
     )
 
 
-def _fetch_json(url):
-    """A URL's JSON, read within ten seconds."""
-    with urllib.request.urlopen(url, timeout=10) as reply:
+def _fetch_json(url, body=None):
+    """A URL's JSON, read within ten seconds; a body is posted as JSON."""
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(request, timeout=10) as reply:
         return json.load(reply)
+
+
+def reasoning_refusal(name, effort, thinking):
+    """Why the model would not honour the reasoning setting, or None.
+
+    Ollama's model card lists the thinking values a model honours. "none"
+    asks for false; null sends nothing, so the model keeps its default.
+    Ollama passes any other level on, and a renderer that does not list it
+    reads it as thinking on at full length, so only a listed level is
+    honoured.
+    """
+    if effort is None:
+        return None
+    values = (thinking or {}).get("values") or []
+    if not values:
+        return (
+            f"{name} lists no thinking values, so it honours no "
+            f"reasoning_effort; set it to null in config.json"
+        )
+    wanted = False if effort == "none" else effort
+    if any(type(v) is type(wanted) and v == wanted for v in values):
+        return None
+    listed = ", ".join(json.dumps(v) for v in values)
+    return (
+        f"{name} does not honour reasoning_effort {effort!r}: it lists "
+        f"{listed}, and runs any other level as thinking at full length; "
+        'set reasoning_effort in config.json to one it lists, "none" for '
+        "false, or null for its default"
+    )
 
 
 def check_local_model(settings, fetch=_fetch_json):
     """Check that Ollama on this machine holds the local model at its pinned
-    digest, before any live local run; return the digest.
+    digest and honours the reasoning setting config.json names, before any
+    live local run; return the digest.
 
     Raises
     ------
     RuntimeError
-        If the model is not pulled or its digest differs.
+        If the model is not pulled, its digest differs or it does not list
+        the reasoning setting.
     """
     parts = urlparse(settings.local.endpoint)
-    url = f"{parts.scheme}://{parts.netloc}/api/tags"
+    base = f"{parts.scheme}://{parts.netloc}"
+    url = f"{base}/api/tags"
     found = {m["name"]: m.get("digest") for m in fetch(url)["models"]}
     name = settings.local.model
     if name not in found:
@@ -767,6 +803,12 @@ def check_local_model(settings, fetch=_fetch_json):
             f"{name} has digest {found[name]}, not the pinned "
             f"{settings.local.digest}"
         )
+    card = fetch(f"{base}/api/show", {"model": name})
+    why = reasoning_refusal(
+        name, settings.local.reasoning_effort, card.get("thinking")
+    )
+    if why:
+        raise RuntimeError(why)
     return found[name]
 
 

@@ -422,19 +422,82 @@ def tags(digest):
     }
 
 
+# The thinking values Ollama 0.40.1's /api/show lists for the pinned model,
+# read on 25 Oct 2026: off, on, and "medium", which its Nemotron 3.5
+# renderer writes as "{reasoning effort: efficient}".
+NEMOTRON_THINKING = {"values": [False, True, "medium"], "default": True}
+
+
+def ollama(digest, thinking):
+    """A stand-in for Ollama's listing and its model card, by URL."""
+
+    def fetch(url, body=None):
+        if url.endswith("/api/show"):
+            return {"thinking": thinking}
+        return tags(digest)
+
+    return fetch
+
+
+def with_effort(settings, effort):
+    return settings.model_copy(
+        update={
+            "local": settings.local.model_copy(
+                update={"reasoning_effort": effort}
+            )
+        }
+    )
+
+
 def test_the_local_model_must_carry_the_pinned_digest(settings):
     seen = []
+    honoured = with_effort(settings, "medium")
 
-    def fetch(url):
-        seen.append(url)
-        return tags(settings.local.digest)
+    def fetch(url, body=None):
+        seen.append((url, body))
+        return ollama(settings.local.digest, NEMOTRON_THINKING)(url, body)
 
-    assert gw.check_local_model(settings, fetch) == settings.local.digest
-    assert seen == ["http://localhost:11434/api/tags"]
+    assert gw.check_local_model(honoured, fetch) == settings.local.digest
+    assert seen == [
+        ("http://localhost:11434/api/tags", None),
+        ("http://localhost:11434/api/show", {"model": settings.local.model}),
+    ]
     with pytest.raises(RuntimeError, match="digest"):
-        gw.check_local_model(settings, lambda url: tags("f" * 64))
+        gw.check_local_model(honoured, lambda url, body=None: tags("f" * 64))
     with pytest.raises(RuntimeError, match="not pulled"):
-        gw.check_local_model(settings, lambda url: {"models": []})
+        gw.check_local_model(honoured, lambda url, body=None: {"models": []})
+
+
+@pytest.mark.parametrize(
+    "effort, honoured",
+    [(None, True), ("none", True), ("medium", True), ("low", False)],
+)
+def test_the_reasoning_setting_must_be_one_the_local_model_lists(
+    settings, effort, honoured
+):
+    # Ollama passes a level the model does not list to its renderer, which
+    # reads any level but "medium" as thinking on at full length, so "low"
+    # would run unbounded thinking without a word.
+    s = with_effort(settings, effort)
+    fetch = ollama(settings.local.digest, NEMOTRON_THINKING)
+    if honoured:
+        assert gw.check_local_model(s, fetch) == settings.local.digest
+        return
+    with pytest.raises(RuntimeError) as info:
+        gw.check_local_model(s, fetch)
+    assert (
+        "does not honour reasoning_effort 'low': it lists false, true, "
+        '"medium"' in str(info.value)
+    )
+
+
+def test_a_model_that_lists_no_thinking_honours_no_reasoning_setting(
+    settings,
+):
+    fetch = ollama(settings.local.digest, None)
+    assert gw.check_local_model(with_effort(settings, None), fetch)
+    with pytest.raises(RuntimeError, match="lists no thinking values"):
+        gw.check_local_model(with_effort(settings, "none"), fetch)
 
 
 def test_the_frontier_backend_asks_for_json_schema_structured_output(
@@ -573,7 +636,9 @@ def test_the_request_record_holds_the_backend_settings_and_digest(
         "num_predict": settings.local.num_predict,
     }
     uncapped = settings.model_copy(
-        update={"local": settings.local.model_copy(update={"num_predict": None})}
+        update={
+            "local": settings.local.model_copy(update={"num_predict": None})
+        }
     )
     assert "num_predict" not in gw.backend_options(uncapped)
     assert request["digest"] == settings.local.digest

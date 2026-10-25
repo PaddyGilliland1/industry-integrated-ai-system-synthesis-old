@@ -83,9 +83,10 @@ class LocalBackend(_Frozen):
     digest: str = Field(pattern=DIGEST)
     temperature: float = Field(ge=0, le=2)
     endpoint: str = Field(pattern=r"^https?://")
-    # Agentic AI Systems ran this model at "low", which kept each call short
-    # enough for the replay set to stay inside the 15-minute budget. Null
-    # sends nothing, so the model keeps its own default.
+    # Ollama honours only a thinking value the model lists on its card, and
+    # runs any other level as thinking at full length, so a live run checks
+    # it first. "none" asks for no thinking. Null sends nothing, so the
+    # model keeps its own default.
     reasoning_effort: Literal[REASONING_EFFORTS] | None = None
     # The most tokens one reply may generate, its thinking included:
     # Ollama's num_predict. Without it a reply runs on until the context is

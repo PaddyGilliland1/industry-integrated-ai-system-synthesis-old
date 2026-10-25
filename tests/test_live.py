@@ -15,8 +15,17 @@ from .scripted import stand_in
 FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
 
 
-def tags(digest):
-    def fetch(url):
+def tags(digest, thinking=None):
+    """Ollama's listing with the model at a digest, and its model card. The
+    card lists the reasoning setting config.json names unless thinking
+    gives the values, so the flow runs; the real card's values are tested
+    in test_gateway."""
+    effort = cf.load_config(REPO / "config.json").local.reasoning_effort
+    card = thinking or {"values": [False, True, effort], "default": True}
+
+    def fetch(url, body=None):
+        if url.endswith("/api/show"):
+            return {"thinking": card}
         return {
             "models": [
                 {"name": "nemotron-3.5-lightning:30b-a3b", "digest": digest}
@@ -107,6 +116,29 @@ def test_a_label_already_recorded_is_never_run_again(tmp_path, pinned):
 def test_a_wrong_local_digest_stops_the_run_before_any_call(tmp_path, capsys):
     assert briefs(tmp_path, tags("f" * 64)) == 2
     assert "digest" in capsys.readouterr().out
+    assert not (tmp_path / "recordings").exists()
+
+
+def test_a_reasoning_setting_the_model_does_not_list_stops_the_run(
+    tmp_path, capsys
+):
+    digest = cf.load_config(REPO / "config.json").local.digest
+    card = {"values": [False, True, "medium"], "default": True}
+    raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
+    raw["local"]["reasoning_effort"] = "low"
+    config = tmp_path / "low.json"
+    config.write_text(json.dumps(raw), encoding="utf-8")
+    model = stand_in()
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    code = lv.main(
+        [*args, "--config", str(config)],
+        chat_model=model,
+        fetch=tags(digest, card),
+    )
+    assert code == 2 and model.seen == []
+    out = capsys.readouterr().out
+    assert "stopped before any model call" in out
+    assert "does not honour reasoning_effort 'low'" in out
     assert not (tmp_path / "recordings").exists()
 
 

@@ -27,7 +27,9 @@ run stopped at its budget has none left, and the set runs again under a new
 label.
 
 Before any model call it checks the backend: for local, that Ollama on this
-machine holds the model at its pinned digest, and it prints nvidia-smi; for
+machine holds the model at its pinned digest and lists the reasoning
+setting config.json names among its thinking values, and it prints
+nvidia-smi; for
 frontier, that a key is set in the git-ignored .env, never the shell's
 environment, and it names that file but never prints the key.
 A label already recorded is never run again, so no recording is replaced;
@@ -111,8 +113,11 @@ def preflight(settings, fetch, env_file):
     the frontier model, which cannot be pinned the same way)."""
     if settings.llm_backend == "local":
         digest = check_local_model(settings, fetch)
+        local = settings.local
         return [
-            f"backend: local, {settings.local.model} at digest {digest[:12]}",
+            f"backend: local, {local.model} at digest {digest[:12]}, "
+            f"reasoning_effort {local.reasoning_effort}, output cap "
+            f"{local.num_predict} tokens a reply",
             "GPU (the Ollama server should run with CUDA_VISIBLE_DEVICES=0):",
             gpu_status(),
         ], digest
