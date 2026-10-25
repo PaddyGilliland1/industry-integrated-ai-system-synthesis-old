@@ -42,7 +42,12 @@ from pydantic import (
 from . import placeholders as ph
 from .agents import fill, load_prompts
 from .figures import CheckResult, Failure
-from .gateway import BudgetExceeded, ReplayMiss, parse_structured
+from .gateway import (
+    BudgetExceeded,
+    ReplayMiss,
+    error_text,
+    parse_structured,
+)
 from .timing import release_horizon_weeks
 
 ROLES = (
@@ -418,7 +423,7 @@ class Coordinator:
         except (ReplayMiss, BudgetExceeded):
             raise
         except Exception as exc:
-            return None, {}, f"model error: {type(exc).__name__}: {exc}"
+            return None, {}, f"model error: {error_text(exc)}"
         parsed = parse_structured(reply, NotificationDrafts)
         found = {}
         for n in parsed.notifications if parsed else []:

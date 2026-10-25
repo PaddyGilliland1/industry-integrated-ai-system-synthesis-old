@@ -47,11 +47,17 @@ class AuditLog:
     def __init__(self, path=None):
         self.path = Path(path) if path else None
         self.entries = []
+        # While a resumed run repeats what the stopped run already logged,
+        # a function that says so; each entry it writes then is marked.
+        self.replaying = None
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def write(self, **entry):
-        """Append one entry."""
+        """Append one entry, marked replayed while a resume repeats what a
+        stopped run already logged."""
+        if self.replaying is not None and self.replaying():
+            entry = {**entry, "replayed": True}
         record = {"ts": datetime.now(timezone.utc).isoformat(), **entry}
         self.entries.append(record)
         if self.path:
@@ -73,25 +79,31 @@ class BudgetExceeded(RuntimeError):
 
 class Budget:
     """A live run's time budget, checked before every live model call, so
-    no call starts once it is spent (review P2-4)."""
+    no call starts once it is spent and none runs past it. A resumed run
+    carries the time the stopped run spent, so the budget holds for the
+    whole run, resumes and all."""
 
-    def __init__(self, limit_s, clock=time.monotonic):
+    def __init__(self, limit_s, clock=time.monotonic, spent_before=0.0):
         self.limit_s = limit_s
         self.clock = clock
         self.started = clock()
+        self.spent_before = spent_before
 
     @property
     def spent_s(self):
-        return self.clock() - self.started
+        """The seconds spent so far, with any spent before a resume."""
+        return self.spent_before + self.clock() - self.started
 
     def check(self):
-        """Raise BudgetExceeded once the budget is spent."""
+        """Raise BudgetExceeded once the budget is spent; else return the
+        seconds left, which bound the next call."""
         spent = self.spent_s
         if spent > self.limit_s:
             raise BudgetExceeded(
                 f"the live run passed its budget of {self.limit_s:g} s "
                 f"({spent:.0f} s spent)"
             )
+        return self.limit_s - spent
 
 
 class RecordingStore:
@@ -336,6 +348,9 @@ class ModelGateway:
         self.chat_model = chat_model
         self.time_limit_s = time_limit_s
         self.log = log or AuditLog()
+        # How many calls went to the model, so a resume can tell the calls
+        # it replays from the ones it makes.
+        self.live_calls = 0
 
     @classmethod
     def for_settings(
@@ -404,8 +419,12 @@ class ModelGateway:
         )
         held = self.store.get(key) if self.resume else None
         if self.live and held is None:
+            limit, capped = self.time_limit_s, False
             if self.budget is not None:
-                self.budget.check()
+                left = self.budget.check()
+                if left < limit:
+                    limit, capped = left, True
+            self.live_calls += 1
             runnable = self.chat_model
             if tools:
                 runnable = runnable.bind_tools(tools)
@@ -424,9 +443,17 @@ class ModelGateway:
                 )
             try:
                 reply = call_with_deadline(
-                    lambda: runnable.invoke(messages), self.time_limit_s
+                    lambda: runnable.invoke(messages), limit
                 )
             except Exception as exc:
+                if capped and isinstance(exc, CallTimeout):
+                    # The run's budget, not the model, cut this call short,
+                    # so it is not recorded: a resume makes it again, live.
+                    raise BudgetExceeded(
+                        f"the live run reached its budget of "
+                        f"{self.budget.limit_s:g} s during model call "
+                        f"{call_number} of run {run_id}"
+                    ) from exc
                 latency = time.monotonic() - started
                 error = {"class": _class_path(exc), "message": str(exc)}
                 self.store.put(
@@ -447,7 +474,9 @@ class ModelGateway:
                         "recorded_at": datetime.now(timezone.utc).isoformat(),
                     }
                 )
-                raise self._failed(exc, where, request, latency, False)
+                raise self._failed(
+                    exc, where, request, latency, False, error["message"]
+                )
             message = (
                 reply["raw"] if schema is not None and not tools else reply
             )
@@ -501,7 +530,12 @@ class ModelGateway:
             if recorded.get("kind") == "error":
                 exc = rebuild_error(recorded["error"])
                 raise self._failed(
-                    exc, where, request, recorded["latency_s"], True
+                    exc,
+                    where,
+                    request,
+                    recorded["latency_s"],
+                    True,
+                    recorded["error"]["message"],
                 )
             message = message_from_record(recorded["response"])
             latency = recorded["latency_s"]
@@ -536,9 +570,11 @@ class ModelGateway:
         )
         return message, record
 
-    def _failed(self, exc, where, request, latency, replayed):
+    def _failed(self, exc, where, request, latency, replayed, message):
         """Log a failed call and give its exception the call's record, so
-        the caller counts the call and names the error."""
+        the caller counts the call and names the error. The error's text is
+        built from the message as recorded, so a replay names it in the
+        same words even when the class writes its message differently."""
         record = CallRecord(
             run_id=where["run_id"],
             call_number=where["call_number"],
@@ -548,7 +584,7 @@ class ModelGateway:
             model=self.model_name,
             latency_s=round(latency, 4),
             replayed=replayed,
-            error=f"{type(exc).__name__}: {exc}",
+            error=f"{type(exc).__name__}: {message}",
         )
         self.log.write(
             kind="model error",
@@ -562,6 +598,15 @@ class ModelGateway:
         )
         exc.call_record = record
         return exc
+
+
+def error_text(exc):
+    """A failed call's error as its record names it, live and in replay
+    alike; an error raised outside a model call, as its class and text."""
+    record = getattr(exc, "call_record", None)
+    return (
+        record.error if record is not None else f"{type(exc).__name__}: {exc}"
+    )
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)

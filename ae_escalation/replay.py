@@ -49,11 +49,14 @@ from .figures import ledger_numbers, plain, within_rounding
 from .gateway import (
     AuditLog,
     Budget,
-    BudgetExceeded,
     ModelGateway,
     RecordingStore,
     ReplayMiss,
 )
+
+# run_set and coordinate_approved raise it from the gateway, and their
+# callers catch it from here.
+from .gateway import BudgetExceeded  # noqa: F401
 
 # The probe's count for the approved design (build spec, section 2, item 7).
 EXPECTED = {"total": 7, "by_source": {"latch": 4, "demand": 2, "surge": 1}}
@@ -360,6 +363,21 @@ def run_started(paths):
     return datetime.fromisoformat(min(starts)) if starts else None
 
 
+def spent(paths, step):
+    """The seconds a step's live runs have spent so far, from the last stop
+    in its progress file, which carries every earlier one."""
+    stops = [
+        e
+        for e in progress(paths)
+        if e.get("step") == step and e.get("spent_s") is not None
+    ]
+    return stops[-1]["spent_s"] if stops else 0.0
+
+
+def _spent(budget):
+    return None if budget is None else round(budget.spent_s, 1)
+
+
 def can_resume(paths, step):
     """Whether a step of this label started live and never completed, so
     --resume may take it up."""
@@ -411,13 +429,20 @@ def run_set(
     check = pre_run_check(run)
     if log is None:
         log = AuditLog(paths.audit) if live else AuditLog()
+    if resume:
+        # Everything up to the first live call repeats what the stopped run
+        # logged, the recount included.
+        log.replaying = lambda: True
     # The recount is logged before any agent runs, so the live run's own
-    # record holds it, not the notebook's output alone (review P3-14).
+    # record holds it, not the notebook's output alone.
     log.write(kind="pre-run check", **check)
     if not check["matches_probe"]:
         raise PreRunMismatch(f"the built rules give {check}, not {EXPECTED}")
     if live and budget is None:
-        budget = Budget(settings.agents.run_budget_s)
+        budget = Budget(
+            settings.agents.run_budget_s,
+            spent_before=spent(paths, "briefs") if resume else 0.0,
+        )
     gateway = ModelGateway.for_settings(
         settings,
         RecordingStore(paths.briefs),
@@ -428,6 +453,8 @@ def run_set(
         budget=budget,
         resume=resume,
     )
+    if resume:
+        log.replaying = lambda: gateway.live_calls == 0
     graph = BriefGraph(
         run,
         holidays,
@@ -443,21 +470,32 @@ def run_set(
     if live:
         note_progress(paths, "started", step="briefs", resume=resume)
     outcomes = []
-    for e, rid, plant in todo:
-        try:
-            outcomes.append(graph.run(e.as_of, e.hospital, rid, plant=plant))
-        except BudgetExceeded as exc:
-            note_progress(
-                paths,
-                "stopped",
-                step="briefs",
-                reason=str(exc),
-                completed=[o.run_id for o in outcomes],
-                in_progress=rid,
-            )
-            raise
+    try:
+        for e, rid, plant in todo:
+            try:
+                outcomes.append(
+                    graph.run(e.as_of, e.hospital, rid, plant=plant)
+                )
+            except Exception as exc:
+                # A stop of any kind says what was done and the time spent,
+                # which a resume carries.
+                if live:
+                    note_progress(
+                        paths,
+                        "stopped",
+                        step="briefs",
+                        reason=str(exc),
+                        completed=[o.run_id for o in outcomes],
+                        in_progress=rid,
+                        spent_s=_spent(budget),
+                    )
+                raise
+    finally:
+        log.replaying = None
     if live:
-        note_progress(paths, "completed", step="briefs")
+        note_progress(
+            paths, "completed", step="briefs", spent_s=_spent(budget)
+        )
     return ReplaySetResult(
         check=check,
         outcomes=outcomes[:-1],
@@ -495,10 +533,17 @@ def edit_reviewer(
     log=None,
     digest=None,
     resume=False,
+    budget=None,
 ):
-    """The Reviewer's wording check for the approver's edits (review P3-5),
-    recorded to paths.edit_reviews when live and replayed from there
-    otherwise, with the label's own Reviewer prompts."""
+    """The Reviewer's wording check for the approver's edits, recorded to
+    paths.edit_reviews when live and replayed from there otherwise, with
+    the label's own Reviewer prompts. Live, it spends the notify step's
+    budget."""
+    if live and budget is None:
+        budget = Budget(
+            settings.agents.run_budget_s,
+            spent_before=spent(paths, "notify") if resume else 0.0,
+        )
     gateway = ModelGateway.for_settings(
         settings,
         RecordingStore(paths.edit_reviews),
@@ -506,7 +551,7 @@ def edit_reviewer(
         chat_model=chat_model,
         log=log,
         digest=digest,
-        budget=Budget(settings.agents.run_budget_s) if live else None,
+        budget=budget,
         resume=resume,
     )
     prompts = label_prompts(paths, live)["reviewer"]
@@ -620,7 +665,10 @@ def coordinate_approved(
     if log is None:
         log = AuditLog(paths.audit) if live else AuditLog()
     if live and budget is None:
-        budget = Budget(settings.agents.run_budget_s)
+        budget = Budget(
+            settings.agents.run_budget_s,
+            spent_before=spent(paths, "notify") if resume else 0.0,
+        )
     gateway = ModelGateway.for_settings(
         settings,
         RecordingStore(paths.notify),
@@ -631,6 +679,8 @@ def coordinate_approved(
         budget=budget,
         resume=resume,
     )
+    if resume:
+        log.replaying = lambda: gateway.live_calls == 0
     coordinator = Coordinator(
         settings,
         gateway,
@@ -641,21 +691,26 @@ def coordinate_approved(
     if live:
         note_progress(paths, "started", step="notify", resume=resume)
     done = []
-    for item in queue.items():
-        if item.state not in ("approved", "approved with edit"):
-            continue
-        try:
-            done.append(coordinator.coordinate(item))
-        except BudgetExceeded as exc:
-            note_progress(
-                paths,
-                "stopped",
-                step="notify",
-                reason=str(exc),
-                completed=[d.brief_id for d in done],
-                in_progress=item.brief_id,
-            )
-            raise
+    try:
+        for item in queue.items():
+            if item.state not in ("approved", "approved with edit"):
+                continue
+            try:
+                done.append(coordinator.coordinate(item))
+            except Exception as exc:
+                if live:
+                    note_progress(
+                        paths,
+                        "stopped",
+                        step="notify",
+                        reason=str(exc),
+                        completed=[d.brief_id for d in done],
+                        in_progress=item.brief_id,
+                        spent_s=_spent(budget),
+                    )
+                raise
+    finally:
+        log.replaying = None
     if final is not None:
         final.parent.mkdir(parents=True, exist_ok=True)
         if outbox.exists():
@@ -663,5 +718,7 @@ def coordinate_approved(
         else:
             final.write_text("", encoding="utf-8")
     if live:
-        note_progress(paths, "completed", step="notify")
+        note_progress(
+            paths, "completed", step="notify", spent_s=_spent(budget)
+        )
     return done

@@ -491,3 +491,17 @@ def test_a_past_week_the_brief_states_is_neither_offered_nor_written(
     assert "past week's actual" in out.drafts[-1].check.failures[0].reason
     ids = [r["action_id"] for r in outbox(tmp_path)]
     assert "nw-hold-leave" not in ids and "nw-check-cover" in ids
+
+
+def test_a_coordinator_error_whose_text_is_not_its_message_replays(
+    approved, settings, tmp_path
+):
+    script = [failing(KeyError("choices")), notes(**GOOD)]
+    live = coordinator(settings, tmp_path, script).coordinate(approved)
+    again = coordinator(settings, tmp_path, [], live=False).coordinate(
+        approved
+    )
+    assert [a.state for a in again.actions] == [a.state for a in live.actions]
+    assert again.drafts[0].check.failures[0].reason == (
+        live.drafts[0].check.failures[0].reason
+    )

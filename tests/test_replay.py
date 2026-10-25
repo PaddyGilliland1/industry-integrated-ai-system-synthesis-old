@@ -634,3 +634,38 @@ def test_the_pre_run_check_is_the_first_entry_in_the_audit_log(
     assert first["kind"] == "pre-run check"
     assert first["total"] == 7 and first["matches_probe"] is True
     assert first["by_source"] == {"latch": 4, "demand": 2, "surge": 1}
+
+
+def test_a_resume_marks_the_audit_entries_it_repeats(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(12, clock=ticking()),
+        )
+    stopped = rp.progress(paths)[-1]
+    assert stopped["event"] == "stopped" and stopped["spent_s"] > 12
+    rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+        resume=True,
+    )
+    entries = [json.loads(x) for x in paths.audit.read_text().splitlines()]
+    fresh = [e for e in entries if not e.get("replayed")]
+    outcomes = [e["run_id"] for e in fresh if e["kind"] == "outcome"]
+    assert len(outcomes) == len(set(outcomes)) == 8
+    assert sum(e["kind"] == "pre-run check" for e in fresh) == 1
+    assert rp.progress(paths)[-1]["spent_s"] >= stopped["spent_s"]

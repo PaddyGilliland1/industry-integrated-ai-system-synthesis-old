@@ -46,6 +46,7 @@ from .gateway import (
     BudgetExceeded,
     CallRecord,
     ReplayMiss,
+    error_text,
     read_structured,
 )
 from .timing import release_horizon_weeks
@@ -453,7 +454,7 @@ def investigator_pass(
             calls.append(exc.call_record)
         return InvestigatorPass(
             status="stopped",
-            stop_reason=f"model error: {type(exc).__name__}: {exc}",
+            stop_reason=f"model error: {error_text(exc)}",
             cap_reached=cap_reached,
             calls=calls,
         )
@@ -545,7 +546,7 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
                 records.append(exc.call_record)
             problem = (
                 "the Reviewer's wording check could not run: model error: "
-                f"{type(exc).__name__}: {exc}"
+                f"{error_text(exc)}"
             )
             result = WordingResult(
                 passed=False,

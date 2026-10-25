@@ -57,7 +57,7 @@ from .adequacy import (
 from .approval import CRITERIA
 from .config import CONFIG_PATH, ENV_PATH, REPO, frontier_key, load_config
 from .gateway import _fetch_json, check_local_model, make_chat_model
-from .gateway import AuditLog, BudgetExceeded
+from .gateway import AuditLog, Budget, BudgetExceeded
 from .replay import (
     Paths,
     can_resume,
@@ -66,6 +66,7 @@ from .replay import (
     progress,
     queue_with_decisions,
     run_set,
+    spent,
     write_queue,
 )
 
@@ -322,6 +323,12 @@ def _notify(settings, paths, model, digest, resume):
         return 2
     run, holidays = load_run(settings)
     result = run_set(run, holidays, settings, paths, live=False)
+    # One budget for the whole step, edits' wording checks and drafts
+    # alike, carrying what a stopped run spent.
+    budget = Budget(
+        settings.agents.run_budget_s,
+        spent_before=spent(paths, "notify") if resume else 0.0,
+    )
     reviewer = edit_reviewer(
         settings,
         paths,
@@ -330,9 +337,12 @@ def _notify(settings, paths, model, digest, resume):
         log=AuditLog(paths.audit),
         digest=digest,
         resume=resume,
+        budget=budget,
     )
-    queue = queue_with_decisions(result, paths, record=True, reviewer=reviewer)
     try:
+        queue = queue_with_decisions(
+            result, paths, record=True, reviewer=reviewer
+        )
         done = coordinate_approved(
             queue,
             settings,
@@ -340,6 +350,7 @@ def _notify(settings, paths, model, digest, resume):
             live=True,
             chat_model=model,
             digest=digest,
+            budget=budget,
             resume=resume,
         )
     except BudgetExceeded as exc:

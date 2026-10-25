@@ -527,3 +527,48 @@ def test_a_replay_with_other_generation_settings_is_refused(
     )
     with pytest.raises(gw.ReplayMiss, match="differs"):
         call_once(replay)
+
+
+# --- the run's budget bounds each call, and a replayed error reads the same --
+
+
+def test_a_call_is_cut_at_the_budget_left_and_never_recorded(
+    settings, tmp_path
+):
+    def slow(messages):
+        time.sleep(0.5)
+        return AIMessage(content="late")
+
+    budget = gw.Budget(0.1)
+    g = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "rec.jsonl"),
+        live=True,
+        chat_model=gw.ScriptedModel(script=[slow]),
+        budget=budget,
+    )
+    started = time.monotonic()
+    with pytest.raises(gw.BudgetExceeded):
+        call_once(g)
+    assert time.monotonic() - started < 0.4
+    # A resume makes the call again, live, so none is recorded for it.
+    assert len(gw.RecordingStore(tmp_path / "rec.jsonl")) == 0
+
+
+def test_the_budget_carries_the_time_spent_before_a_resume():
+    budget = gw.Budget(10, clock=lambda: 100.0, spent_before=7)
+    assert budget.spent_s == 7 and budget.check() == 3
+    with pytest.raises(gw.BudgetExceeded):
+        gw.Budget(10, clock=lambda: 100.0, spent_before=11).check()
+
+
+def test_a_replayed_error_names_the_recorded_message(settings, tmp_path):
+    with pytest.raises(KeyError):
+        call_once(live_gateway(settings, tmp_path, [failing(KeyError("x"))]))
+    replay = gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "rec.jsonl"), live=False
+    )
+    with pytest.raises(KeyError) as info:
+        call_once(replay)
+    live_text = "KeyError: 'x'"
+    assert info.value.call_record.error == live_text
