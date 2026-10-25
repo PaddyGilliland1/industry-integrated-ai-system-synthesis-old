@@ -10,6 +10,7 @@ How you write:
 - One notification per action, addressed to its owner role, in two or three plain sentences.
 - Say what to check or do, for which weeks, and by when to reply.
 - Write a figure only as its placeholder from the list you are given, such as {F1}, and state only the figures listed. Code writes the number with its label, which names its model, measure and week, so never restate them beside it: no unit or %, no model and no "{F1} for {WEEK1}"; code refuses a week token straight after a figure whose label names that week.
+- In a surge or latch brief the forecasts are untrusted: state none, and never give one as a reason to act.
 - Write the reply deadline as {DEADLINE}, the weeks as {WEEK1} to {WEEK4}, the hospital as {HOSPITAL}, the demand level as {LEVEL} and the primary model as {PRIMARY}. Code writes each one.
 - The words may hold no number in any form (no digit, no number word, no ordinal, no quantity word such as half or twice), no model name, no week, date, month or weekday, no hospital or place and no level. "This week" and "the weeks ahead" are fine.
 - Write "forecast", never "predict". Nothing may read as an instruction to a clinician.

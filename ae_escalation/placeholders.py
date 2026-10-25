@@ -668,7 +668,9 @@ def _figure_problems(text, m, figures, ctx, fail):
     if ctx is None or not ctx.notification:
         return
     # A notification states only what the approved brief states, and only
-    # for the weeks its action covers, so no past week can pass as one.
+    # for the weeks its action covers, so no past week can pass as one. No
+    # Reviewer reads a notification, so an untrusted forecast is refused
+    # outright, never left to read as a reason to act.
     fig = figures[n - 1]
     _, week = resolved(fig, ctx)
     if ctx.stated is not None and n not in ctx.stated:
@@ -677,6 +679,13 @@ def _figure_problems(text, m, figures, ctx, fail):
             whole,
             f"{whole}: the approved brief's text does not state F{n}, so the "
             "notification may not",
+        )
+    elif fig.measure in FORECAST_MEASURES and not ctx.forecasts_trusted:
+        fail(
+            start,
+            whole,
+            f"{whole} is untrusted while the drift latch is set; a "
+            "notification never states an untrusted figure",
         )
     elif fig.measure == "history":
         fail(

@@ -7,17 +7,30 @@ labelled. Every model reply here is scripted."""
 import inspect
 import json
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
 from langchain_core.messages import AIMessage
+from pydantic import ValidationError
 
 from ae_escalation import agents as ag
 from ae_escalation import approval as ap
+from ae_escalation import briefs as br
 from ae_escalation import coordinator as co
 from ae_escalation import gateway as gw
+from ae_escalation import tools as tl
+from ae_escalation.figures import check_brief
 
-from .scripted import DONE, ORIGIN, TOOLS, WORDING_OK, good_draft, reply
+from .scripted import (
+    DONE,
+    ORIGIN,
+    TOOLS,
+    WORDING_OK,
+    figure,
+    good_draft,
+    reply,
+)
 
 WHEN = datetime(2026, 10, 27, 9, 30, tzinfo=timezone.utc)
 # The replay's clock starts at 10:00 on the release day, Tue 22 Jun 2021,
@@ -492,6 +505,144 @@ def test_a_past_week_the_brief_states_is_neither_offered_nor_written(
     assert "past week's actual" in out.drafts[-1].check.failures[0].reason
     ids = [r["action_id"] for r in outbox(tmp_path)]
     assert "nw-hold-leave" not in ids and "nw-check-cover" in ids
+
+
+# --- a surge or latch brief's forecasts are never a notification's ----------
+
+SURGE = "2019-10-06"
+# The surge's check-cover action, as the review's probe had a model write
+# it, giving the brief's primary forecast as the reason to act.
+SURGE_COVER = (
+    "{HOSPITAL}, {LEVEL}: please check whether extra shifts or bank staff "
+    "are needed for the weeks from {WEEK1} to {WEEK4}, as demand starts the "
+    "weeks ahead at {F2}. Please reply by {DEADLINE}."
+)
+
+
+@pytest.fixture
+def surge_brief(replay_run, holidays):
+    """The surge at the Royal Infirmary of Edinburgh, w/e 06 Oct 2019, as a
+    careful model writes it: the latest released week, then the primary's
+    forecast, a range end and the spread, each marked untrusted and offered
+    as nothing to plan on. It passes the code check."""
+    entry = next(
+        e for e in tl.screen_at(replay_run, SURGE) if e.hospital == "S314H"
+    )
+    box = ag.Toolbox(replay_run, holidays, entry, gw.AuditLog(), "surge")
+    where = {"hospital": "S314H", "as_of": SURGE}
+    box.execute("get_forecast", where)
+    box.execute("get_history", {**where, "weeks": 1})
+    forecast, history = (call.result for call in box.ledger)
+    primary = forecast["primary"]
+    h1 = next(
+        f
+        for f in forecast["forecasts"]
+        if f["model"] == primary and f["release_horizon"] == 1
+    )
+    at = {"model": primary, "horizon": 1}
+    latest = history["weeks"][-1]
+    spread = forecast["spread_pct"]["1"]
+    draft = {
+        "summary": "Demand broke above the forecasts in {LATCHED} and is "
+        "still running high, at {F1}. The forecasts are untrusted until a "
+        "person approves a latch reset, so plan from the released weeks.",
+        "expected_range": "No forecast range can be trusted while the drift "
+        "latch is set.",
+        "model_agreement": "{PRIMARY} puts the weeks ahead at {F2}, up to "
+        "{F3}, and the simple models spread {F4}, but all of them are "
+        "untrusted while the drift latch is set.",
+        "watch_points": [
+            "Check whether extra shifts or bank staff are needed from "
+            "{WEEK1} to {WEEK4}."
+        ],
+        "cited_figures": [
+            figure(
+                round(latest["attendances"]),
+                "T2",
+                "history",
+                week=latest["week_ending"],
+            ),
+            figure(round(h1["point"]), "T1", "point", **at),
+            figure(round(h1["range_80"]["high"]), "T1", "high_80", **at),
+            figure(round(spread, 1), "T1", "spread", horizon=1),
+        ],
+    }
+    brief = br.DemandBrief.assemble(
+        entry,
+        br.BriefDraft.model_validate(
+            draft, context={"text": ag.entry_context(entry)}
+        ),
+        br.brief_facts(replay_run, holidays, entry),
+        brief_id="rie",
+        backend="local",
+        model="m",
+        model_digest=None,
+    )
+    assert entry.kind == "surge"
+    assert check_brief(brief, box.ledger, entry.level).passed
+    return brief
+
+
+@pytest.mark.parametrize("n", [2, 3, 4])
+def test_a_notification_stating_an_untrusted_figure_is_refused(
+    surge_brief, settings, n
+):
+    item = SimpleNamespace(
+        current=surge_brief, brief_id="rie", state="approved"
+    )
+    action = next(a for a in co.plan(item, settings) if a.code == "hold-leave")
+    message = (
+        "{HOSPITAL}, {LEVEL}: please hold new leave requests, as demand "
+        f"starts the weeks ahead at {{F{n}}}. Please reply by {{DEADLINE}}."
+    )
+    with pytest.raises(ValidationError) as refused:
+        co.Notification.model_validate(
+            {"message": message},
+            context={
+                "text": co.notification_context(surge_brief, action),
+                "figures": surge_brief.cited_figures,
+            },
+        )
+    assert (
+        f"{{F{n}}} is untrusted while the drift latch is set; a "
+        "notification never states an untrusted figure"
+    ) in str(refused.value)
+
+
+def test_a_surge_brief_offers_no_forecast_and_one_stated_is_held(
+    surge_brief, settings, tmp_path
+):
+    assert co.stated_figures(surge_brief) == {1, 2, 3, 4}
+    item = SimpleNamespace(
+        current=surge_brief, brief_id="rie", state="approved"
+    )
+    model = gw.ScriptedModel(
+        script=[
+            notes(**{**GOOD, "check-cover": SURGE_COVER}),
+            notes(**{"check-cover": SURGE_COVER}),
+        ]
+    )
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "n.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    out = co.Coordinator(
+        settings, gateway, outbox=tmp_path / "outbox.jsonl"
+    ).coordinate(item)
+    offered = model.seen[0][-1].content.split("The figures you may state")[1]
+    offered = offered.split("The tokens")[0]
+    assert "- none: the brief states no figure to offer" in offered
+    held = next(a for a in out.actions if a.code == "check-cover")
+    assert held.state == "held"
+    assert (
+        out.drafts[-1]
+        .check.failures[0]
+        .reason.startswith("{F2} is untrusted while the drift latch is set")
+    )
+    ids = [r["action_id"] for r in outbox(tmp_path)]
+    assert "rie-check-cover" not in ids and "rie-hold-leave" in ids
 
 
 def test_a_coordinator_error_whose_text_is_not_its_message_replays(

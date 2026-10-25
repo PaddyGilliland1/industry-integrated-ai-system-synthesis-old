@@ -11,7 +11,9 @@ a token, such as {F1}, {WEEK1} to {WEEK4}, {DEADLINE}, {HOSPITAL} or
 holds each draft to the same word rules as a brief before anything reaches
 the outbox (D-SAFE-19, as amended), and to one more: a figure must be one
 the approved brief's text states, and no past week's actual, for one of the
-action's weeks or for no one week. A draft that fails gets one retry; if it
+action's weeks or for no one week. In a surge or latch brief no forecast,
+range end or spread is offered or allowed, since each is untrusted while
+the drift latch is set. A draft that fails gets one retry; if it
 fails again, nothing is written for that action and the manager sees the
 draft with its problems marked.
 
@@ -350,14 +352,22 @@ def _action_lines(actions):
 
 def offered_figures(brief):
     """The numbers of the figures a notification may state: those the
-    brief's text states, other than a past week's actual, for one of the
+    brief's text states, other than a past week's actual or, in a surge or
+    latch brief, an untrusted forecast, range end or spread, for one of the
     four weeks ahead or for no one week."""
     ctx = brief.text_context()
     out = []
     for n in sorted(stated_figures(brief)):
         fig = brief.cited_figures[n - 1]
         _, week = ph.resolved(fig, ctx)
-        if fig.measure != "history" and week in (None, *ctx.targets):
+        untrusted = (
+            fig.measure in ph.FORECAST_MEASURES and not ctx.forecasts_trusted
+        )
+        if (
+            fig.measure != "history"
+            and not untrusted
+            and week in (None, *ctx.targets)
+        ):
             out.append(n)
     return out
 

@@ -192,6 +192,14 @@ def test_no_worked_example_echoes_a_label():
         assert not re.search(r"\{F\d+\} (?:for|in|by) \{WEEK", text)
 
 
+def test_the_coordinator_is_told_to_state_no_untrusted_forecast():
+    system = PROMPTS["coordinator"]["SYSTEM"]
+    assert (
+        "In a surge or latch brief the forecasts are untrusted: state none, "
+        "and never give one as a reason to act." in system
+    )
+
+
 def test_the_reviewer_refuses_an_untrusted_forecast_given_as_guidance():
     system = PROMPTS["reviewer"]["SYSTEM"]
     assert "an untrusted forecast something to plan on" in system
