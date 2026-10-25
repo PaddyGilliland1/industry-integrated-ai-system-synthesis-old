@@ -458,3 +458,87 @@ def test_the_brief_is_dated_by_the_origin(run, holidays, settings, tmp_path):
     )
     assert out.brief.week == date(2021, 6, 13)
     assert out.brief.release_date == date(2021, 6, 22)
+
+
+# --- a failed model call (review P1-4) ---------------------------------------
+
+
+def failing(exc):
+    def raise_it(messages):
+        raise exc
+
+    return raise_it
+
+
+def test_an_investigator_error_is_recorded_and_the_replay_matches_it(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        failing(ConnectionError("dropped")),
+        DONE,
+        reply(good_draft(run)),
+        WORDING_OK,
+    ]
+    live = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert live.status == "verified" and len(live.attempts) == 2
+    assert live.attempts[0].stop_reason == (
+        "model error: ConnectionError: dropped"
+    )
+    assert [c.call_number for c in live.calls] == [1, 2, 3, 4, 5]
+    assert live.calls[1].error == "ConnectionError: dropped"
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert again.status == live.status
+    assert [a.stop_reason for a in again.attempts] == [
+        a.stop_reason for a in live.attempts
+    ]
+
+
+def test_an_investigator_timeout_on_the_retry_replays_not_verified(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        DONE,
+        reply(planted_draft(run)),
+        DONE,
+        failing(gw.CallTimeout("no reply within 240 s")),
+    ]
+    live = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert live.status == "not verified"
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert again.status == "not verified"
+    assert "CallTimeout" in again.attempts[-1].stop_reason
+
+
+def test_a_reviewer_error_fails_closed_without_asking_the_investigator(
+    run, holidays, settings, tmp_path
+):
+    log = gw.AuditLog()
+    script = [
+        TOOLS,
+        DONE,
+        reply(good_draft(run)),
+        failing(ConnectionError("reset")),
+    ]
+    out = graph(run, holidays, settings, script, tmp_path, log=log).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "not verified" and not out.can_approve
+    assert out.route.count("investigate") == 1
+    wording = out.attempts[-1].wording
+    assert not wording.passed and wording.reviewer_error
+    assert "ConnectionError: reset" in wording.problems[0]
+    assert "model error" in [e["kind"] for e in log.entries]
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert again.status == "not verified"

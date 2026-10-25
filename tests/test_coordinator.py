@@ -366,3 +366,38 @@ def test_nothing_in_the_coordinator_can_send():
     source = inspect.getsource(co)
     for word in ("smtplib", "requests", "urllib", "socket", "httpx"):
         assert f"import {word}" not in source
+
+
+# --- a failed model call (review P1-4) ---------------------------------------
+
+
+def failing(exc):
+    def raise_it(messages):
+        raise exc
+
+    return raise_it
+
+
+def test_a_coordinator_error_is_no_draft_and_the_retry_can_recover(
+    approved, settings, tmp_path
+):
+    script = [failing(ConnectionError("dropped")), notes(**GOOD)]
+    out = coordinator(settings, tmp_path, script).coordinate(approved)
+    assert all(a.notified for a in out.actions)
+    first = out.drafts[0].check.failures[0].reason
+    assert "no draft" in first and "ConnectionError: dropped" in first
+
+
+def test_two_coordinator_errors_hold_every_action_for_the_manager(
+    approved, settings, tmp_path
+):
+    log = gw.AuditLog()
+    script = [failing(ConnectionError("x")), failing(ConnectionError("y"))]
+    out = coordinator(settings, tmp_path, script, log=log).coordinate(approved)
+    assert {a.state for a in out.actions} == {"held"}
+    assert outbox(tmp_path) == []
+    assert [e["kind"] for e in log.entries].count("model error") == 2
+    again = coordinator(settings, tmp_path, [], live=False).coordinate(
+        approved
+    )
+    assert {a.state for a in again.actions} == {"held"}

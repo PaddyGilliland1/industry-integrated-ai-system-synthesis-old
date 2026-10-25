@@ -8,7 +8,11 @@ as indicative of a device (D-ETHICS-11), then the language model's check for
 claims of cause without a tool basis and anything that reads as an
 instruction to a clinician. A failure allows one retry, with the problems
 named. A brief that fails again is "not verified, do not act": it reaches
-the manager marked, it can never be approved, and it is a G4 event.
+the manager marked, it can never be approved, and it is a G4 event. A
+failed model call is recorded like any other (gateway.py): the
+Investigator's pass stops and the retry follows, while a wording check the
+Reviewer cannot give fails closed, "not verified", because the fault is not
+the Investigator's to fix.
 
 I adapted the shape from Agentic AI Systems (agentic_system.py): the
 bounded tool loop (_tool_loop) with its cap, the Investigator's pass that
@@ -400,9 +404,13 @@ def investigator_pass(
             calls=calls,
         )
     except Exception as exc:
+        # A failed model call is recorded under its own number, so the next
+        # call takes the next number and the replay meets the same error.
+        if getattr(exc, "call_record", None) is not None:
+            calls.append(exc.call_record)
         return InvestigatorPass(
             status="stopped",
-            stop_reason=f"error: {exc!r}",
+            stop_reason=f"model error: {type(exc).__name__}: {exc}",
             cap_reached=cap_reached,
             calls=calls,
         )
@@ -432,6 +440,10 @@ class WordingResult(BaseModel):
     passed: bool
     problems: list[str]
     by: Literal["code", "model"]
+    # True when the Reviewer could not give a verdict at all. The fault is
+    # not the Investigator's, so the brief ends "not verified" without a
+    # retry that would send it the Reviewer's problem as its own.
+    reviewer_error: bool = False
 
 
 def device_words(text):
@@ -459,14 +471,27 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
         SystemMessage(content=prompts["SYSTEM"]),
         HumanMessage(content=fill(prompts["VERDICT"], brief=brief.text())),
     ]
-    reply, record = gateway.call(
-        run_id=run_id,
-        call_number=call_number,
-        agent="reviewer",
-        purpose="wording",
-        messages=messages,
-        schema=WordingVerdict,
-    )
+    try:
+        reply, record = gateway.call(
+            run_id=run_id,
+            call_number=call_number,
+            agent="reviewer",
+            purpose="wording",
+            messages=messages,
+            schema=WordingVerdict,
+        )
+    except ReplayMiss:
+        raise
+    except Exception as exc:
+        # Fail closed: a wording check that could not run never passes.
+        problem = (
+            "the Reviewer's wording check could not run: model error: "
+            f"{type(exc).__name__}: {exc}"
+        )
+        result = WordingResult(
+            passed=False, problems=[problem], by="model", reviewer_error=True
+        )
+        return result, getattr(exc, "call_record", None)
     verdict = parse_structured(reply, WordingVerdict)
     if verdict is None:
         # An unreadable verdict is a failure, never a pass.
@@ -567,6 +592,7 @@ class BriefState(TypedDict, total=False):
     problems: list[str]
     status: str
     model_calls: int
+    reviewer_error: bool
     attempts: Annotated[list[dict], operator.add]
     calls: Annotated[list[dict], operator.add]
     route: Annotated[list[str], operator.add]
@@ -726,6 +752,7 @@ class BriefGraph:
         update = {
             "route": ["wording_check"],
             "passed": result.passed,
+            "reviewer_error": result.reviewer_error,
             "attempts": [self._attempt.model_dump(mode="json")],
         }
         if record is not None:
@@ -752,6 +779,8 @@ class BriefGraph:
     def _after_check(self, state):
         if state["passed"]:
             return "pass"
+        if state.get("reviewer_error"):
+            return "fail"
         return "retry" if state["attempt"] <= self.retries else "fail"
 
     def _build(self):

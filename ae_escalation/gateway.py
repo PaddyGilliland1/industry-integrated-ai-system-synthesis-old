@@ -2,11 +2,14 @@
 
 Every model call goes through the gateway. Live, it calls the chat model of
 the configured backend within a time limit and records the full request and
-reply, with the backend, model and digest that answered. In replay it
-returns the recorded reply and calls no model; a missing recording or a
-changed request raises ReplayMiss, so a replay can never quietly differ
-from the run it repeats. Every call, with its prompt and reply, also goes to
-the append-only audit log.
+reply, with the backend, model and digest that answered. A call that fails,
+a timeout or a dropped connection, is recorded too, with the error's class,
+message and latency, so its number is never used again and the replay
+raises the same error at the same point (review P1-4). In replay it returns
+the recorded reply, or raises the recorded error, and calls no model; a
+missing recording or a changed request raises ReplayMiss, so a replay can
+never quietly differ from the run it repeats. Every call, with its prompt
+and reply or error, also goes to the append-only audit log.
 
 I adapted these from Agentic AI Systems (agentic_system.py): ModelGateway
 with RecordingStore for record and exact replay, AuditLog for the JSONL
@@ -18,6 +21,7 @@ frontier runs of the same replay set sit side by side (D-FRAME-03).
 """
 
 import hashlib
+import importlib
 import json
 import re
 import threading
@@ -216,6 +220,35 @@ class CallRecord(BaseModel):
     tokens_in: int = 0
     tokens_out: int = 0
     replayed: bool = False
+    # The error's class and message, for a call that failed.
+    error: str = ""
+
+
+def _class_path(exc):
+    kind = type(exc)
+    return f"{kind.__module__}.{kind.__qualname__}"
+
+
+def rebuild_error(error):
+    """The recorded error as an exception of the same class with the same
+    message. A class whose constructor wants more than a message is built
+    without calling it, since only its type and message are replayed."""
+    module, _, name = error["class"].rpartition(".")
+    try:
+        kind = getattr(importlib.import_module(module), name)
+    except (ImportError, AttributeError):
+        kind = type(name, (RuntimeError,), {"__module__": module})
+    if not (isinstance(kind, type) and issubclass(kind, Exception)):
+        kind = type(name, (RuntimeError,), {"__module__": module})
+    try:
+        exc = kind(error["message"])
+        if str(exc) == error["message"]:
+            return exc
+    except Exception:
+        pass
+    exc = kind.__new__(kind)
+    Exception.__init__(exc, error["message"])
+    return exc
 
 
 class ModelGateway:
@@ -280,6 +313,14 @@ class ModelGateway:
         digest = request_hash(request)
         key = self.key(run_id, call_number)
         started = time.monotonic()
+        where = dict(
+            run_id=run_id,
+            call_number=call_number,
+            agent=agent,
+            purpose=purpose,
+            key=key,
+            request_hash=digest,
+        )
         if self.live:
             runnable = self.chat_model
             if tools:
@@ -297,9 +338,32 @@ class ModelGateway:
                 runnable = runnable.with_structured_output(
                     schema, include_raw=True, **method
                 )
-            reply = call_with_deadline(
-                lambda: runnable.invoke(messages), self.time_limit_s
-            )
+            try:
+                reply = call_with_deadline(
+                    lambda: runnable.invoke(messages), self.time_limit_s
+                )
+            except Exception as exc:
+                latency = time.monotonic() - started
+                error = {"class": _class_path(exc), "message": str(exc)}
+                self.store.put(
+                    {
+                        "key": key,
+                        "kind": "error",
+                        "backend": self.backend,
+                        "model": self.model_name,
+                        "digest": self.digest,
+                        "run_id": run_id,
+                        "call_number": call_number,
+                        "agent": agent,
+                        "purpose": purpose,
+                        "request_hash": digest,
+                        "request": request,
+                        "error": error,
+                        "latency_s": round(latency, 4),
+                        "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                raise self._failed(exc, where, request, latency, False)
             message = (
                 reply["raw"] if schema is not None and not tools else reply
             )
@@ -344,6 +408,11 @@ class ModelGateway:
                     f"{call_number} of run {run_id} on {self.backend} "
                     f"{self.model_name}, so the recording cannot stand in"
                 )
+            if recorded.get("kind") == "error":
+                exc = rebuild_error(recorded["error"])
+                raise self._failed(
+                    exc, where, request, recorded["latency_s"], True
+                )
             message = message_from_record(recorded["response"])
             latency = recorded["latency_s"]
             replayed = True
@@ -376,6 +445,33 @@ class ModelGateway:
             tokens_out=record.tokens_out,
         )
         return message, record
+
+    def _failed(self, exc, where, request, latency, replayed):
+        """Log a failed call and give its exception the call's record, so
+        the caller counts the call and names the error."""
+        record = CallRecord(
+            run_id=where["run_id"],
+            call_number=where["call_number"],
+            agent=where["agent"],
+            purpose=where["purpose"],
+            backend=self.backend,
+            model=self.model_name,
+            latency_s=round(latency, 4),
+            replayed=replayed,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        self.log.write(
+            kind="model error",
+            backend=self.backend,
+            model=self.model_name,
+            replayed=replayed,
+            prompt=request["messages"],
+            error=record.error,
+            latency_s=record.latency_s,
+            **where,
+        )
+        exc.call_record = record
+        return exc
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)

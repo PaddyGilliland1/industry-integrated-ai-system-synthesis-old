@@ -48,7 +48,7 @@ from .figures import (
     check_notification,
     marked,
 )
-from .gateway import parse_structured
+from .gateway import ReplayMiss, parse_structured
 from .timing import release_horizon_weeks
 
 ROLES = (
@@ -393,28 +393,36 @@ class Coordinator:
         self.log.write(**{**record, "kind": "outbox", "type": record["kind"]})
 
     def _draft(self, run_id, number, messages):
-        reply, _ = self.gateway.call(
-            run_id=run_id,
-            call_number=number,
-            agent="coordinator",
-            purpose="notifications",
-            messages=messages,
-            schema=NotificationDrafts,
-        )
+        """The model's drafts by action code, with its reply; a failed call
+        is no draft, and its error is named for the manager."""
+        try:
+            reply, _ = self.gateway.call(
+                run_id=run_id,
+                call_number=number,
+                agent="coordinator",
+                purpose="notifications",
+                messages=messages,
+                schema=NotificationDrafts,
+            )
+        except ReplayMiss:
+            raise
+        except Exception as exc:
+            return None, {}, f"model error: {type(exc).__name__}: {exc}"
         parsed = parse_structured(reply, NotificationDrafts)
         found = {}
         for n in parsed.notifications if parsed else []:
             found.setdefault(n.action_code, n.message)
-        return reply, found
+        return reply, found, ""
 
-    def _check(self, item, action, message, attempt):
+    def _check(self, item, action, message, attempt, error=""):
         brief = item.current
         rendered = ""
         if not message:
+            why = f": {error}" if error else ""
             missing = Failure(
                 field="message",
                 found="",
-                reason="no draft was written for this action",
+                reason=f"no draft was written for this action{why}",
             )
             result = CheckResult(passed=False, failures=[missing])
         else:
@@ -487,8 +495,10 @@ class Coordinator:
                 )
             ),
         ]
-        reply, found = self._draft(run_id, 1, messages)
-        drafts = [self._check(item, a, found.get(a.code), 1) for a in actions]
+        reply, found, error = self._draft(run_id, 1, messages)
+        drafts = [
+            self._check(item, a, found.get(a.code), 1, error) for a in actions
+        ]
         failing = [
             (a, d) for a, d in zip(actions, drafts) if not d.check.passed
         ]
@@ -499,14 +509,14 @@ class Coordinator:
                 for a, d in failing
             )
             retry = messages + [
-                reply,
+                *([reply] if reply is not None else []),
                 HumanMessage(
                     content=fill(self.prompts["RETRY"], problems=problems)
                 ),
             ]
-            _, again = self._draft(run_id, 2, retry)
+            _, again, error = self._draft(run_id, 2, retry)
             for a, _ in failing:
-                second = self._check(item, a, again.get(a.code), 2)
+                second = self._check(item, a, again.get(a.code), 2, error)
                 drafts.append(second)
                 final[a.code] = second
         start = clock_start(

@@ -375,3 +375,99 @@ def test_the_frontier_backend_asks_for_json_schema_structured_output(
             schema=Answer,
         )
         assert model.structured_kwargs == [want]
+
+
+# --- a failed call is recorded and replayed exactly (review P1-4) ------------
+
+
+class Picky(Exception):
+    """An error whose constructor wants more than a message, as many model
+    client errors do."""
+
+    def __init__(self, message, *, request):
+        super().__init__(message)
+        self.request = request
+
+
+def failing(exc):
+    def raise_it(messages):
+        raise exc
+
+    return raise_it
+
+
+KEY = "local|nemotron-3.5-lightning:30b-a3b|r1|c001"
+
+
+def call_once(g):
+    return g.call(
+        run_id="r1",
+        call_number=1,
+        agent="reviewer",
+        purpose="wording",
+        messages=ask(),
+    )
+
+
+def test_a_failed_call_is_recorded_logged_and_raised_with_its_record(
+    settings, tmp_path
+):
+    log = gw.AuditLog()
+    g = live_gateway(
+        settings, tmp_path, [failing(ConnectionError("refused"))], log
+    )
+    with pytest.raises(ConnectionError, match="refused") as info:
+        call_once(g)
+    rec = info.value.call_record
+    assert (rec.call_number, rec.error) == (1, "ConnectionError: refused")
+    saved = gw.RecordingStore(tmp_path / "rec.jsonl").get(KEY)
+    assert saved["kind"] == "error"
+    assert saved["error"] == {
+        "class": "builtins.ConnectionError",
+        "message": "refused",
+    }
+    assert saved["latency_s"] >= 0 and saved["request_hash"]
+    assert [e["kind"] for e in log.entries] == ["model error"]
+    assert log.entries[0]["error"] == "ConnectionError: refused"
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ConnectionError("refused"),
+        gw.CallTimeout("no reply within 240 s"),
+        Picky("bad gateway", request=object()),
+    ],
+    ids=["connection", "timeout", "picky"],
+)
+def test_a_replay_raises_the_recorded_error_class_and_message(
+    settings, tmp_path, exc
+):
+    with pytest.raises(type(exc)):
+        call_once(live_gateway(settings, tmp_path, [failing(exc)]))
+    replay = gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "rec.jsonl"), live=False
+    )
+    with pytest.raises(type(exc)) as info:
+        call_once(replay)
+    assert str(info.value) == str(exc)
+    assert info.value.call_record.replayed
+
+
+def test_a_call_past_the_time_limit_is_recorded_as_a_timeout(
+    settings, tmp_path
+):
+    quick = settings.model_copy(
+        update={
+            "agents": settings.agents.model_copy(update={"time_limit_s": 0.05})
+        }
+    )
+
+    def slow(messages):
+        time.sleep(0.5)
+        return AIMessage(content="late")
+
+    with pytest.raises(gw.CallTimeout):
+        call_once(live_gateway(quick, tmp_path, [slow]))
+    saved = gw.RecordingStore(tmp_path / "rec.jsonl").get(KEY)
+    assert saved["error"]["class"] == "ae_escalation.gateway.CallTimeout"
