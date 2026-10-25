@@ -1,0 +1,351 @@
+"""The model gateway: every model call goes through it, live calls are
+recorded with the backend and model that answered, a replay reads the
+recorded replies exactly without any model, and every call is in the audit
+log. No test here calls a real model: the live side is a scripted fake."""
+
+import json
+import time
+
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from pydantic import BaseModel
+
+from ae_escalation import config as cf
+from ae_escalation import gateway as gw
+
+from .conftest import REPO
+
+FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
+
+
+class Answer(BaseModel):
+    text: str
+
+
+@pytest.fixture
+def settings():
+    return cf.load_config(REPO / "config.json")
+
+
+@pytest.fixture
+def frontier(settings):
+    return settings.model_copy(update={"llm_backend": "frontier"})
+
+
+def ask(text="Say hello."):
+    return [SystemMessage(content="You are terse."), HumanMessage(text)]
+
+
+def live_gateway(settings, tmp_path, script, log=None):
+    return gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "rec.jsonl"),
+        live=True,
+        chat_model=gw.ScriptedModel(script=script),
+        log=log,
+    )
+
+
+# --- the audit log -----------------------------------------------------------
+
+
+def test_the_audit_log_appends_one_stamped_line_per_entry(tmp_path):
+    log = gw.AuditLog(tmp_path / "audit.jsonl")
+    log.write(kind="check", passed=False)
+    log.write(kind="decision", action="reject")
+    lines = (tmp_path / "audit.jsonl").read_text().splitlines()
+    assert [json.loads(x)["kind"] for x in lines] == ["check", "decision"]
+    assert all(json.loads(x)["ts"].endswith("+00:00") for x in lines)
+    assert [e["kind"] for e in log.entries] == ["check", "decision"]
+
+
+def test_an_audit_log_with_no_file_keeps_its_entries_in_memory():
+    log = gw.AuditLog()
+    log.write(kind="tool", name="get_forecast")
+    assert log.entries[0]["name"] == "get_forecast"
+
+
+# --- recordings --------------------------------------------------------------
+
+
+def test_a_recording_key_is_never_written_twice(tmp_path):
+    store = gw.RecordingStore(tmp_path / "rec.jsonl")
+    store.put({"key": "a", "x": 1})
+    with pytest.raises(ValueError, match="exists"):
+        store.put({"key": "a", "x": 2})
+    again = gw.RecordingStore(tmp_path / "rec.jsonl")
+    assert again.get("a") == {"key": "a", "x": 1} and len(again) == 1
+
+
+# --- live and replay ---------------------------------------------------------
+
+
+def test_a_live_call_records_the_backend_model_and_digest(settings, tmp_path):
+    g = live_gateway(settings, tmp_path, [AIMessage(content="hello")])
+    reply, rec = g.call(
+        run_id="r1",
+        call_number=1,
+        agent="investigator",
+        purpose="draft",
+        messages=ask(),
+    )
+    assert reply.content == "hello" and not rec.replayed
+    saved = gw.RecordingStore(tmp_path / "rec.jsonl").get(
+        "local|nemotron-3.5-lightning:30b-a3b|r1|c001"
+    )
+    assert saved["backend"] == "local"
+    assert saved["model"] == settings.local.model
+    assert saved["digest"] == settings.local.digest
+    assert saved["response"]["content"] == "hello"
+    assert saved["request"]["messages"][1]["content"] == "Say hello."
+
+
+def test_a_replay_reads_the_recorded_reply_without_any_model(
+    settings, tmp_path
+):
+    script = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "get_history", "args": {"weeks": 4}, "id": None}
+            ],
+        ),
+        AIMessage(content="done"),
+    ]
+    g = live_gateway(settings, tmp_path, script)
+    live = [
+        g.call(
+            run_id="r1",
+            call_number=n,
+            agent="investigator",
+            purpose="loop",
+            messages=ask(f"step {n}"),
+        )[0]
+        for n in (1, 2)
+    ]
+    replay = gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "rec.jsonl"), live=False
+    )
+    again = [
+        replay.call(
+            run_id="r1",
+            call_number=n,
+            agent="investigator",
+            purpose="loop",
+            messages=ask(f"step {n}"),
+        )
+        for n in (1, 2)
+    ]
+    assert all(rec.replayed for _, rec in again)
+    assert [m.content for m, _ in again] == [m.content for m in live]
+    assert again[0][0].tool_calls[0]["name"] == "get_history"
+    assert again[0][0].tool_calls[0]["args"] == {"weeks": 4}
+
+
+def test_a_replay_with_no_recording_raises_and_calls_no_model(
+    settings, tmp_path
+):
+    replay = gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "none.jsonl"), live=False
+    )
+    with pytest.raises(gw.ReplayMiss, match="no recording"):
+        replay.call(
+            run_id="r1",
+            call_number=1,
+            agent="investigator",
+            purpose="x",
+            messages=ask(),
+        )
+
+
+def test_a_replay_refuses_a_request_that_differs_from_the_recording(
+    settings, tmp_path
+):
+    g = live_gateway(settings, tmp_path, [AIMessage(content="hello")])
+    g.call(
+        run_id="r1",
+        call_number=1,
+        agent="investigator",
+        purpose="x",
+        messages=ask("one prompt"),
+    )
+    replay = gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "rec.jsonl"), live=False
+    )
+    with pytest.raises(gw.ReplayMiss, match="differs"):
+        replay.call(
+            run_id="r1",
+            call_number=1,
+            agent="investigator",
+            purpose="x",
+            messages=ask("another prompt"),
+        )
+
+
+def test_a_live_gateway_needs_a_chat_model(settings, tmp_path):
+    with pytest.raises(ValueError, match="chat model"):
+        gw.ModelGateway.for_settings(
+            settings, gw.RecordingStore(tmp_path / "r.jsonl"), live=True
+        )
+
+
+def test_the_backends_record_under_different_keys(
+    settings, frontier, tmp_path
+):
+    store = gw.RecordingStore(tmp_path / "rec.jsonl")
+    for s, word in ((settings, "local"), (frontier, "frontier")):
+        g = gw.ModelGateway.for_settings(
+            s,
+            store,
+            live=True,
+            chat_model=gw.ScriptedModel(script=[AIMessage(content=word)]),
+        )
+        g.call(
+            run_id="r1",
+            call_number=1,
+            agent="investigator",
+            purpose="x",
+            messages=ask(),
+        )
+    assert store.keys() == [
+        "local|nemotron-3.5-lightning:30b-a3b|r1|c001",
+        "frontier|claude-sonnet-5-5|r1|c001",
+    ]
+    assert store.get(store.keys()[1])["digest"] is None
+
+
+def test_a_schema_call_records_the_schema(settings, tmp_path):
+    g = live_gateway(settings, tmp_path, [AIMessage(content='{"text": "x"}')])
+    reply, _ = g.call(
+        run_id="r1",
+        call_number=1,
+        agent="reviewer",
+        purpose="wording",
+        messages=ask(),
+        schema=Answer,
+    )
+    rec = gw.RecordingStore(tmp_path / "rec.jsonl").get(
+        "local|nemotron-3.5-lightning:30b-a3b|r1|c001"
+    )
+    assert rec["request"]["schema"]["name"] == "Answer"
+    assert gw.parse_structured(reply, Answer) == Answer(text="x")
+
+
+def test_every_model_call_is_in_the_audit_log_with_prompt_and_reply(
+    settings, tmp_path
+):
+    log = gw.AuditLog()
+    g = live_gateway(settings, tmp_path, [AIMessage(content="hello")], log)
+    g.call(
+        run_id="r1",
+        call_number=1,
+        agent="investigator",
+        purpose="draft",
+        messages=ask(),
+    )
+    (entry,) = log.entries
+    assert entry["kind"] == "model" and entry["backend"] == "local"
+    assert entry["prompt"][1]["content"] == "Say hello."
+    assert entry["reply"]["content"] == "hello"
+    assert entry["key"] == "local|nemotron-3.5-lightning:30b-a3b|r1|c001"
+
+
+def test_a_slow_call_is_stopped_at_the_time_limit():
+    with pytest.raises(gw.CallTimeout):
+        gw.call_with_deadline(lambda: time.sleep(1), 0.05)
+
+
+# --- reading a structured answer ---------------------------------------------
+
+
+def test_a_structured_answer_is_read_from_a_tool_call_or_the_text():
+    by_tool = AIMessage(
+        content="",
+        tool_calls=[{"name": "Answer", "args": {"text": "a"}, "id": "t1"}],
+    )
+    fenced = AIMessage(content='Here:\n```json\n{"text": "b"}\n```')
+    junk = AIMessage(content="no json here")
+    assert gw.parse_structured(by_tool, Answer).text == "a"
+    assert gw.parse_structured(fenced, Answer).text == "b"
+    assert gw.parse_structured(junk, Answer) is None
+
+
+# --- the chat models behind the switch ---------------------------------------
+
+
+def test_the_local_backend_is_ollama_on_this_machine(settings):
+    model = gw.make_chat_model(settings)
+    assert type(model).__name__ == "ChatOpenAI"
+    assert model.model_name == settings.local.model
+    assert model.openai_api_base == "http://localhost:11434/v1"
+    assert model.temperature == 0
+
+
+def test_the_frontier_backend_is_the_claude_api_with_the_key_from_env(
+    frontier, tmp_path
+):
+    env = tmp_path / ".env"
+    env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
+    model = gw.make_chat_model(frontier, env_file=env, environ={})
+    assert type(model).__name__ == "ChatAnthropic"
+    assert model.model == "claude-sonnet-5-5"
+    assert model.anthropic_api_key.get_secret_value() == FAKE_KEY
+    assert FAKE_KEY not in repr(model)
+
+
+def test_no_frontier_model_is_made_without_a_key(frontier, tmp_path):
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        gw.make_chat_model(frontier, env_file=tmp_path / ".env", environ={})
+
+
+def test_the_frontier_key_never_reaches_a_recording_or_the_log(
+    frontier, tmp_path
+):
+    env = tmp_path / ".env"
+    env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
+    real = gw.make_chat_model(frontier, env_file=env, environ={})
+    log = gw.AuditLog(tmp_path / "audit.jsonl")
+    g = gw.ModelGateway.for_settings(
+        frontier,
+        gw.RecordingStore(tmp_path / "rec.jsonl"),
+        live=True,
+        chat_model=gw.ScriptedModel(script=[AIMessage(content="ok")]),
+        log=log,
+    )
+    g.call(
+        run_id="r1",
+        call_number=1,
+        agent="investigator",
+        purpose="x",
+        messages=ask(),
+    )
+    assert real is not None
+    for path in (tmp_path / "rec.jsonl", tmp_path / "audit.jsonl"):
+        assert FAKE_KEY not in path.read_text(encoding="utf-8")
+
+
+# --- the local model's digest ------------------------------------------------
+
+
+def tags(digest):
+    return {
+        "models": [
+            {"name": "nomic-embed-text:latest", "digest": "0" * 64},
+            {"name": "nemotron-3.5-lightning:30b-a3b", "digest": digest},
+        ]
+    }
+
+
+def test_the_local_model_must_carry_the_pinned_digest(settings):
+    seen = []
+
+    def fetch(url):
+        seen.append(url)
+        return tags(settings.local.digest)
+
+    assert gw.check_local_model(settings, fetch) == settings.local.digest
+    assert seen == ["http://localhost:11434/api/tags"]
+    with pytest.raises(RuntimeError, match="digest"):
+        gw.check_local_model(settings, lambda url: tags("f" * 64))
+    with pytest.raises(RuntimeError, match="not pulled"):
+        gw.check_local_model(settings, lambda url: {"models": []})
