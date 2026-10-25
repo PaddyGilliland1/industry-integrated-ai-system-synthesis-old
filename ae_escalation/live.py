@@ -73,25 +73,33 @@ def gpu_status():
 
 
 def preflight(settings, fetch, env_file, environ):
-    """Check the backend before any model call; return what to print."""
+    """Check the backend before any model call; return what to print and
+    the model digest observed, which every request then records (None for
+    the frontier model, which cannot be pinned the same way)."""
     if settings.llm_backend == "local":
         digest = check_local_model(settings, fetch)
         return [
             f"backend: local, {settings.local.model} at digest {digest[:12]}",
             "GPU (the Ollama server should run with CUDA_VISIBLE_DEVICES=0):",
             gpu_status(),
-        ]
+        ], digest
     frontier_key(settings, env_file, environ)
     return [
         f"backend: frontier, {settings.frontier.model}; the key is set in "
         f"{settings.frontier.api_key_env} (not shown)"
-    ]
+    ], None
 
 
-def _briefs(settings, paths, model):
+def _briefs(settings, paths, model, digest):
     run, holidays = load_run(settings)
     result = run_set(
-        run, holidays, settings, paths, live=True, chat_model=model
+        run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=model,
+        digest=digest,
     )
     write_queue(result, paths)
     write_form(result, paths)
@@ -111,7 +119,7 @@ def _briefs(settings, paths, model):
     return 0 if caught else 1
 
 
-def _notify(settings, paths, model):
+def _notify(settings, paths, model, digest):
     if not paths.decisions.exists():
         print(f"no decisions yet: Paddy's go in {paths.decisions}")
         return 2
@@ -122,7 +130,7 @@ def _notify(settings, paths, model):
     result = run_set(run, holidays, settings, paths, live=False)
     queue = queue_with_decisions(result, paths)
     done = coordinate_approved(
-        queue, settings, paths, live=True, chat_model=model
+        queue, settings, paths, live=True, chat_model=model, digest=digest
     )
     for d in done:
         print(f"{d.brief_id}:")
@@ -155,15 +163,16 @@ def main(
         print(f"{paths.briefs} is already recorded; use a new --label")
         return 2
     try:
-        for line in preflight(settings, fetch, env_file, environ):
-            print(line)
+        lines, digest = preflight(settings, fetch, env_file, environ)
     except RuntimeError as exc:
         print(f"stopped before any model call: {exc}")
         return 2
+    for line in lines:
+        print(line)
     model = chat_model or make_chat_model(settings, env_file, environ)
     if args.command == "briefs":
-        return _briefs(settings, paths, model)
-    return _notify(settings, paths, model)
+        return _briefs(settings, paths, model, digest)
+    return _notify(settings, paths, model, digest)
 
 
 if __name__ == "__main__":

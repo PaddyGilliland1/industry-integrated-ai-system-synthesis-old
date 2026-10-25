@@ -254,7 +254,16 @@ class ReplaySetResult(BaseModel):
     model: str
 
 
-def run_set(run, holidays, settings, paths, live, chat_model=None, log=None):
+def run_set(
+    run,
+    holidays,
+    settings,
+    paths,
+    live,
+    chat_model=None,
+    log=None,
+    digest=None,
+):
     """Run the replay set: the seven briefs, then the designed failure.
 
     Live, every model call is recorded to paths.briefs and every step to
@@ -269,7 +278,8 @@ def run_set(run, holidays, settings, paths, live, chat_model=None, log=None):
     BudgetExceeded
         If a live run passes settings.agents.run_budget_s.
     ReplayMiss
-        In replay, if a recording is missing or its request has changed.
+        In replay, if a recording is missing, its request has changed or it
+        was recorded on another model digest.
     """
     started = time.monotonic()
     check = pre_run_check(run)
@@ -283,6 +293,7 @@ def run_set(run, holidays, settings, paths, live, chat_model=None, log=None):
         live=live,
         chat_model=chat_model,
         log=log,
+        digest=digest,
     )
     graph = BriefGraph(run, holidays, settings, gateway, log=log)
     budget = settings.agents.run_budget_s
@@ -344,7 +355,14 @@ def queue_with_decisions(result, paths, log=None):
 
 
 def coordinate_approved(
-    queue, settings, paths, live, chat_model=None, log=None, outbox=None
+    queue,
+    settings,
+    paths,
+    live,
+    chat_model=None,
+    log=None,
+    outbox=None,
+    digest=None,
 ):
     """Run the coordinator on every approved brief in the queue.
 
@@ -368,6 +386,7 @@ def coordinate_approved(
         live=live,
         chat_model=chat_model,
         log=log,
+        digest=digest,
     )
     coordinator = Coordinator(settings, gateway, outbox=outbox, log=log)
     return [

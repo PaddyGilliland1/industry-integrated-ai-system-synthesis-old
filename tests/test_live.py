@@ -2,6 +2,7 @@
 scripted stand-in and a fake Ollama listing, so no test calls a model."""
 
 import csv
+import json
 
 import pytest
 
@@ -139,3 +140,15 @@ def test_the_command_line_explains_itself():
     with pytest.raises(SystemExit) as info:
         lv.main(["--help"])
     assert info.value.code == 0
+
+
+def test_the_digest_preflight_observed_is_in_every_request(
+    tmp_path, pinned, monkeypatch
+):
+    observed = "b" * 64
+    monkeypatch.setattr(lv, "check_local_model", lambda s, f: observed)
+    assert briefs(tmp_path, pinned) == 0
+    rec = tmp_path / "recordings" / "local" / "t1" / "briefs.jsonl"
+    records = [json.loads(x) for x in rec.read_text().splitlines()]
+    assert records and {r["request"]["digest"] for r in records} == {observed}
+    assert {r["digest"] for r in records} == {observed}

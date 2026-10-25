@@ -471,3 +471,59 @@ def test_a_call_past_the_time_limit_is_recorded_as_a_timeout(
         call_once(live_gateway(quick, tmp_path, [slow]))
     saved = gw.RecordingStore(tmp_path / "rec.jsonl").get(KEY)
     assert saved["error"]["class"] == "ae_escalation.gateway.CallTimeout"
+
+
+# --- the settings and the digest are pinned (review P2-3) --------------------
+
+
+def test_the_request_record_holds_the_backend_settings_and_digest(
+    settings, frontier, tmp_path
+):
+    call_once(live_gateway(settings, tmp_path, [AIMessage(content="x")]))
+    request = gw.RecordingStore(tmp_path / "rec.jsonl").get(KEY)["request"]
+    assert request["options"] == {
+        "temperature": settings.local.temperature,
+        "reasoning_effort": settings.local.reasoning_effort,
+    }
+    assert request["digest"] == settings.local.digest
+    other = gw.ModelGateway.for_settings(
+        frontier,
+        gw.RecordingStore(tmp_path / "f.jsonl"),
+        live=True,
+        chat_model=gw.ScriptedModel(script=[AIMessage(content="x")]),
+    )
+    call_once(other)
+    saved = gw.RecordingStore(tmp_path / "f.jsonl").records()[0]["request"]
+    assert saved["options"] == {
+        "temperature": frontier.frontier.temperature,
+        "max_tokens": frontier.frontier.max_tokens,
+    }
+    assert saved["digest"] is None
+
+
+def test_a_replay_on_another_digest_is_refused_by_name(settings, tmp_path):
+    call_once(live_gateway(settings, tmp_path, [AIMessage(content="x")]))
+    replay = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "rec.jsonl"),
+        live=False,
+        digest="0" * 64,
+    )
+    with pytest.raises(gw.ReplayMiss, match="digest"):
+        call_once(replay)
+
+
+def test_a_replay_with_other_generation_settings_is_refused(
+    settings, tmp_path
+):
+    call_once(live_gateway(settings, tmp_path, [AIMessage(content="x")]))
+    warmer = settings.model_copy(
+        update={
+            "local": settings.local.model_copy(update={"temperature": 0.7})
+        }
+    )
+    replay = gw.ModelGateway.for_settings(
+        warmer, gw.RecordingStore(tmp_path / "rec.jsonl"), live=False
+    )
+    with pytest.raises(gw.ReplayMiss, match="differs"):
+        call_once(replay)

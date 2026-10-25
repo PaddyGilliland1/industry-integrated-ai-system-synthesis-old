@@ -180,11 +180,37 @@ def tool_record(tool):
     }
 
 
-def request_record(backend, model, messages, tools=None, schema=None):
-    """Everything a model call sends, as plain JSON."""
+def backend_options(settings):
+    """The active backend's generation settings, which change the reply as
+    surely as the prompt does, so the request hash covers them (review
+    P2-3)."""
+    if settings.llm_backend == "local":
+        return {
+            "temperature": settings.local.temperature,
+            "reasoning_effort": settings.local.reasoning_effort,
+        }
+    return {
+        "temperature": settings.frontier.temperature,
+        "max_tokens": settings.frontier.max_tokens,
+    }
+
+
+def request_record(
+    backend,
+    model,
+    messages,
+    tools=None,
+    schema=None,
+    options=None,
+    digest=None,
+):
+    """Everything a model call sends, as plain JSON, with the backend's
+    generation settings and the model digest the run was checked on."""
     return {
         "backend": backend,
         "model": model,
+        "options": options or {},
+        "digest": digest,
         "messages": [message_record(m) for m in messages],
         "tools": [tool_record(t) for t in tools or []],
         "schema": (
@@ -264,12 +290,14 @@ class ModelGateway:
         chat_model=None,
         time_limit_s=240,
         log=None,
+        options=None,
     ):
         if live and chat_model is None:
             raise ValueError("a live gateway needs a chat model")
         self.backend = backend
         self.model_name = model_name
         self.digest = digest
+        self.options = options or {}
         self.store = store
         self.live = live
         self.chat_model = chat_model
@@ -277,17 +305,21 @@ class ModelGateway:
         self.log = log or AuditLog()
 
     @classmethod
-    def for_settings(cls, settings, store, live, chat_model=None, log=None):
-        """A gateway for the configured backend and model."""
+    def for_settings(
+        cls, settings, store, live, chat_model=None, log=None, digest=None
+    ):
+        """A gateway for the configured backend and model. digest is the one
+        the live run's preflight observed; it defaults to the pinned one."""
         return cls(
             settings.llm_backend,
             settings.model_name,
-            settings.model_digest,
+            digest or settings.model_digest,
             store,
             live,
             chat_model=chat_model,
             time_limit_s=settings.agents.time_limit_s,
             log=log,
+            options=backend_options(settings),
         )
 
     def key(self, run_id, call_number):
@@ -308,7 +340,13 @@ class ModelGateway:
     ):
         """One model call; returns the reply and its CallRecord."""
         request = request_record(
-            self.backend, self.model_name, messages, tools, schema
+            self.backend,
+            self.model_name,
+            messages,
+            tools,
+            schema,
+            options=self.options,
+            digest=self.digest,
         )
         digest = request_hash(request)
         key = self.key(run_id, call_number)
@@ -401,6 +439,12 @@ class ModelGateway:
                     f"no recording for model call {call_number} of run "
                     f"{run_id} on {self.backend} {self.model_name}; the "
                     "replay needs the recordings shipped in recordings/"
+                )
+            if recorded.get("digest") != self.digest:
+                raise ReplayMiss(
+                    f"model call {call_number} of run {run_id} was recorded "
+                    f"on digest {recorded.get('digest')}, not {self.digest}, "
+                    "so the recording cannot stand in"
                 )
             if recorded["request_hash"] != digest:
                 raise ReplayMiss(
