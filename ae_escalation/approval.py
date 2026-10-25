@@ -22,12 +22,14 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     ValidationError,
+    field_validator,
     model_validator,
 )
 
@@ -120,6 +122,15 @@ class Decision(BaseModel):
     # True only if Paddy opts out and the approvals are simulated.
     simulated: bool = False
 
+    @field_validator("decided_at")
+    @classmethod
+    def uk_time_unless_stated(cls, value):
+        """A time typed without a zone is UK time, Europe/London, the
+        approver's clock (review P3-3)."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UK)
+        return value
+
     @model_validator(mode="after")
     def consistent(self):
         if (self.action == "edit") != (self.edited is not None):
@@ -129,12 +140,24 @@ class Decision(BaseModel):
         return self
 
 
-class NotApprovable(Exception):
+UK = ZoneInfo("Europe/London")
+
+
+class Refused(Exception):
+    """A decision the queue does not accept; nothing changes, and the
+    refusal is logged."""
+
+
+class NotApprovable(Refused):
     """An approval of a brief that is not verified, refused."""
 
 
-class Closed(Exception):
+class Closed(Refused):
     """A decision on a brief already approved or rejected."""
+
+
+class TooEarly(Refused):
+    """A decision dated before the run that wrote the brief began."""
 
 
 State = Literal[
@@ -188,9 +211,12 @@ class QueueItem(BaseModel):
 class ApprovalQueue:
     """The approval queue file, its items and the decisions on them."""
 
-    def __init__(self, path=None, log=None):
+    def __init__(self, path=None, log=None, not_before=None):
         self.path = Path(path) if path else None
         self.log = log or AuditLog()
+        # When the live run that wrote the briefs began: no decision can
+        # come before it (review P3-3).
+        self.not_before = not_before
         self._items = {}
         if self.path and self.path.exists():
             for line in self.path.read_text(encoding="utf-8").splitlines():
@@ -267,6 +293,11 @@ class ApprovalQueue:
 
     def _decide(self, decision):
         item = self._items[decision.brief_id]
+        if self.not_before and decision.decided_at <= self.not_before:
+            raise TooEarly(
+                f"{decision.brief_id}: decided at {decision.decided_at}, "
+                f"before the run began at {self.not_before}"
+            )
         if item.state in CLOSED:
             raise Closed(f"{item.brief_id} is already {item.state}")
         update = {"decisions": [*item.decisions, decision]}
@@ -300,13 +331,16 @@ class ApprovalQueue:
         ------
         NotApprovable
             An approval of a brief that is not verified, or whose edit
-            failed. Nothing changes, and the refusal is logged.
+            failed.
         Closed
             A decision on a brief already approved or rejected.
+        TooEarly
+            A decision dated before the run began.
+        Each is a Refused: nothing changes, and the refusal is logged.
         """
         try:
             item = self._decide(decision)
-        except NotApprovable as exc:
+        except Refused as exc:
             self.log.write(
                 kind="refused",
                 brief_id=decision.brief_id,

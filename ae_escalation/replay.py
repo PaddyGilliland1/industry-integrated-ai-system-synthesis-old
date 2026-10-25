@@ -303,6 +303,17 @@ def progress(paths):
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
+def run_started(paths):
+    """When the label's live brief run began: its first start in the
+    progress file, else its earliest recording; None if it never ran."""
+    starts = [e["at"] for e in progress(paths) if e.get("step") == "briefs"]
+    if not starts and paths.briefs.exists():
+        starts = [
+            r["recorded_at"] for r in RecordingStore(paths.briefs).records()
+        ]
+    return datetime.fromisoformat(min(starts)) if starts else None
+
+
 def can_resume(paths, step):
     """Whether a step of this label started live and never completed, so
     --resume may take it up."""
@@ -432,10 +443,13 @@ def queue_with_decisions(result, paths, log=None, record=False):
     audit log (review P2-7); a decision already recorded is not added
     twice.
     """
+    started = run_started(paths)
     if record:
-        queue = ApprovalQueue(paths.queue, log=log or AuditLog(paths.audit))
+        queue = ApprovalQueue(
+            paths.queue, log=log or AuditLog(paths.audit), not_before=started
+        )
     else:
-        queue = ApprovalQueue(log=log)
+        queue = ApprovalQueue(log=log, not_before=started)
         for outcome in result.outcomes:
             queue.add(outcome)
     if paths.decisions.exists():

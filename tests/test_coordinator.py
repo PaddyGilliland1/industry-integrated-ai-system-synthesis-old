@@ -7,6 +7,7 @@ labelled. Every model reply here is scripted."""
 import inspect
 import json
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -128,9 +129,12 @@ def test_the_clock_starts_on_release_day_and_sets_each_deadline(
     approved, settings
 ):
     plan = co.plan(approved, settings)
+    london = ZoneInfo("Europe/London")
     assert {a.deadline for a in plan} == {
-        datetime(2021, 6, 24, 10, 0, tzinfo=timezone.utc)
+        datetime(2021, 6, 24, 10, 0, tzinfo=london)
     }
+    # British Summer Time: 10:00 in the UK is 09:00 UTC (review P3-3).
+    assert plan[0].deadline.astimezone(timezone.utc).hour == 9
     assert plan[0].weeks == [
         date(2021, 6, 27),
         date(2021, 7, 4),
@@ -175,7 +179,7 @@ def test_drafts_that_pass_are_written_to_the_outbox_never_sent(
         first
     )
     assert "from w/e 27 Jun 2021" in first
-    assert "reply by 10:00" in first and "on Thu 24 Jun 2021" in first
+    assert "reply by 10:00 UK time on Thu 24 Jun 2021" in first
 
 
 def test_a_planted_wrong_date_is_caught_and_nothing_written_until_it_passes(

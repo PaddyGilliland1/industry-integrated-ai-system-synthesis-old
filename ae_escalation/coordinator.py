@@ -26,9 +26,10 @@ outbox file and are never sent: nothing in this module can send.
 
 import json
 import zlib
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 import numpy as np
 from pydantic import (
@@ -145,11 +146,14 @@ class Action(BaseModel):
         return CodeSet.for_action(self.level, self.deadline, self.weeks)
 
 
+UK = ZoneInfo("Europe/London")
+
+
 def clock_start(release_date, start_hour):
-    """The replay's clock: the release day at the assumed hour."""
-    return datetime.combine(
-        release_date, time(start_hour), tzinfo=timezone.utc
-    )
+    """The replay's clock: the release day at the assumed hour, UK time,
+    Europe/London, so 10:00 is 10:00 on a ward clock in summer and winter
+    alike (review P3-3)."""
+    return datetime.combine(release_date, time(start_hour), tzinfo=UK)
 
 
 def plan(item, settings):
@@ -328,7 +332,7 @@ class CoordinationResult(BaseModel):
         """A short table of the actions, for the notebook."""
         lines = [
             f"{a.code} | {a.action.owner} | reply by "
-            f"{a.action.deadline:%H:%M %a %d %b %Y} | {a.state}"
+            f"{ph.deadline_text(a.action.deadline)} | {a.state}"
             for a in self.actions
         ]
         return "\n".join([*lines, OUTBOX_LABEL, SIMULATED_LABEL])

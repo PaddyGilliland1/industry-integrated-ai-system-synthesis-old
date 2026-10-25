@@ -437,3 +437,18 @@ def test_the_queue_and_each_decision_reach_the_audit_and_queue_files(
     before = paths.queue.read_text()
     rp.queue_with_decisions(result, paths)
     assert paths.queue.read_text() == before
+
+
+def test_the_run_start_bounds_the_approvers_decisions(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    assert rp.run_started(paths) is None
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    started = rp.run_started(paths)
+    first = rp.progress(paths)[0]
+    assert started.isoformat() == first["at"]
+    queue = rp.queue_with_decisions(result, paths)
+    assert queue.not_before == started

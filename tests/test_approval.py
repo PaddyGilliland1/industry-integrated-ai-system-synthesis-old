@@ -337,3 +337,37 @@ def test_the_decisions_csv_has_a_simulated_column_read_back(
         writer.writeheader()
         writer.writerow(row)
     assert not ap.read_decisions(tmp_path / "g.csv")[0].simulated
+
+
+# --- the clock's zone and the decision's time (review P3-3) ------------------
+
+
+def test_a_decision_time_without_a_zone_is_uk_time():
+    d = ap.Decision.model_validate(
+        {
+            **decide("nw", "approve").model_dump(),
+            "decided_at": "2026-10-27T09:30:00",
+        }
+    )
+    assert d.decided_at.utcoffset().total_seconds() == 0
+    june = ap.Decision.model_validate(
+        {
+            **decide("nw", "approve").model_dump(),
+            "decided_at": "2026-06-27T09:30:00",
+        }
+    )
+    assert june.decided_at.utcoffset().total_seconds() == 3600
+
+
+def test_a_decision_dated_before_the_run_started_is_refused(verified):
+    started = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
+    log = gw.AuditLog()
+    q = ap.ApprovalQueue(log=log, not_before=started)
+    q.add(verified)
+    early = decide("nw", "approve").model_copy(
+        update={"decided_at": datetime(2020, 1, 1, tzinfo=timezone.utc)}
+    )
+    with pytest.raises(ap.Refused, match="before the run"):
+        q.decide(early)
+    assert log.entries[-1]["kind"] == "refused"
+    assert q.decide(decide("nw", "approve")).state == "approved"
