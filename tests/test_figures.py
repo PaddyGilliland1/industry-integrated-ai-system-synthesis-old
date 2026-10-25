@@ -590,6 +590,17 @@ def test_a_brief_cites_no_back_test_error_or_track_record_to_pass():
             "4; its unflagged outlooks turned busy 20.0% of the time.",
         ),
         (
+            {
+                "flags": 3,
+                "borne_out": 1,
+                "unflagged": 40,
+                "unflagged_busy": 8,
+                "unflagged_busy_pct": 20.0,
+            },
+            "This hospital's past outlook flags were borne out 1 time in 3; "
+            "its unflagged outlooks turned busy 20.0% of the time.",
+        ),
+        (
             {"flags": 0, "borne_out": 0, "unflagged": 1208},
             "This hospital has no past flag to judge.",
         ),

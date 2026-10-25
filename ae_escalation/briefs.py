@@ -230,6 +230,9 @@ def track_line(record):
     The national series is named as Scotland, which is no hospital.
     """
     who = NATIONAL if record.hospital == NATIONAL else "This hospital"
+    # A count of one takes "time", the one word that departs from the
+    # accepted sentence.
+    times = "time" if record.borne_out == 1 else "times"
     if record.flags == 0:
         return f"{who} has no past flag to judge."
     if record.unflagged_busy_pct is None:
@@ -238,9 +241,9 @@ def track_line(record):
             "track record's fixed sentence cannot state"
         )
     return (
-        f"{who}'s past outlook flags were borne out "
-        f"{record.borne_out} times in {record.flags}; its unflagged outlooks "
-        f"turned busy {record.unflagged_busy_pct:.1f}% of the time."
+        f"{who}'s past outlook flags were borne out {record.borne_out} "
+        f"{times} in {record.flags}; its unflagged outlooks turned busy "
+        f"{record.unflagged_busy_pct:.1f}% of the time."
     )
 
 
