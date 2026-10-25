@@ -54,7 +54,8 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
    - "Back-test error: SA-MA's back-test error at release horizon 1 is 8.1%."
    - "Track record: This hospital's past outlook flags were borne out 13 times in 21; its unflagged
      outlooks turned busy 23.6% of the time." With no past flag it reads "This hospital has no past flag
-     to judge." It is the template brief's sentence, accepted for both, and both call one function.
+     to judge." It is the template brief's sentence, accepted for both, and both call one function. On
+     the national brief, in both, "This hospital" becomes "Scotland", which is no hospital.
    - "Bank holidays ahead: Early May bank holiday (w/e 07 May 2023); coronation of King Charles III
      (w/e 14 May 2023)." or "none in the four weeks ahead".
 

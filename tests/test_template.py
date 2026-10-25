@@ -101,11 +101,16 @@ def test_the_track_record_sentence_takes_both_forms(demand, latch, replay_run):
     )
     assert rec.flags > 0
     assert (
-        f"This hospital's past outlook flags were borne out {rec.borne_out} "
+        f"Scotland's past outlook flags were borne out {rec.borne_out} "
         f"times in {rec.flags}; its unflagged outlooks turned busy "
         f"{rec.unflagged_busy_pct:.1f}% of the time."
     ) in latch.text()
     assert "This hospital has no past flag to judge." in demand.text()
+
+
+def test_the_national_template_brief_never_calls_scotland_a_hospital(latch):
+    assert latch.hospital == "Scotland"
+    assert "hospital" not in latch.text().lower()
 
 
 def test_the_track_sentence_is_the_agent_briefs_own(

@@ -295,7 +295,7 @@ SHOWN = {
         "latest released week.\n"
         "Back-test error: linear's back-test error at release horizon 1 is "
         "3.5%.\n"
-        "Track record: This hospital's past outlook flags were borne out 5 "
+        "Track record: Scotland's past outlook flags were borne out 5 "
         "times in 9; its unflagged outlooks turned busy 15.6% of the "
         "time.\n"
         "Bank holidays ahead: Good Friday (w/e 12 Apr 2020).\n"
@@ -352,6 +352,20 @@ def test_a_natural_brief_of_each_kind_passes_and_reads_plainly(
     result = check_brief(brief, ledger, entry.level)
     assert result.passed, result.failures
     assert brief.text(written_by=False) == SHOWN[key]
+
+
+def test_no_code_written_line_of_the_national_brief_calls_it_a_hospital(
+    replay_run, holidays
+):
+    _, brief, _ = natural_brief(replay_run, holidays, "scotland_latch")
+    agents = ("Summary:", "Expected range:", "Model agreement:", "- ")
+    code = [
+        line
+        for line in brief.text().splitlines()
+        if not line.startswith(agents)
+    ]
+    assert len(code) >= 8
+    assert not [line for line in code if "hospital" in line.lower()]
 
 
 # Lorn & Islands' check-cover notification, as a careful model would write

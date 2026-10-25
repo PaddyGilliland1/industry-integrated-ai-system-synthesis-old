@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import placeholders as ph
 from . import tools as tl
+from .design import NATIONAL
 from .timing import release_horizon_weeks
 from .tools import LEVEL_MEANING, Measure, ModelName
 
@@ -226,16 +227,18 @@ def track_line(record):
 
     It is the sentence accepted for both, word for word, so the template
     brief imports it from here rather than keeping a copy that could drift.
+    The national series is named as Scotland, which is no hospital.
     """
+    who = NATIONAL if record.hospital == NATIONAL else "This hospital"
     if record.flags == 0:
-        return "This hospital has no past flag to judge."
+        return f"{who} has no past flag to judge."
     if record.unflagged_busy_pct is None:
         raise ValueError(
             "the track record has flags but no unflagged outlook, which the "
             "track record's fixed sentence cannot state"
         )
     return (
-        f"This hospital's past outlook flags were borne out "
+        f"{who}'s past outlook flags were borne out "
         f"{record.borne_out} times in {record.flags}; its unflagged outlooks "
         f"turned busy {record.unflagged_busy_pct:.1f}% of the time."
     )

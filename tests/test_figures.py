@@ -593,6 +593,21 @@ def test_a_brief_cites_no_back_test_error_or_track_record_to_pass():
             {"flags": 0, "borne_out": 0, "unflagged": 1208},
             "This hospital has no past flag to judge.",
         ),
+        (
+            {
+                "hospital": "Scotland",
+                "flags": 9,
+                "borne_out": 5,
+                "unflagged": 77,
+                "unflagged_busy_pct": 100 * 12 / 77,
+            },
+            "Scotland's past outlook flags were borne out 5 times in 9; its "
+            "unflagged outlooks turned busy 15.6% of the time.",
+        ),
+        (
+            {"hospital": "Scotland", "flags": 0, "borne_out": 0},
+            "Scotland has no past flag to judge.",
+        ),
     ],
 )
 def test_the_track_record_line_is_the_accepted_sentence(record, line):
