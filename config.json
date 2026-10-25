@@ -5,7 +5,8 @@
     "digest": "e7a64ff15fb174c42b4f463e5c888c4f2c7b9cabf9e8d65a1c0874405426c1b2",
     "temperature": 0.0,
     "endpoint": "http://localhost:11434/v1",
-    "reasoning_effort": "low"
+    "reasoning_effort": "low",
+    "num_predict": 8192
   },
   "frontier": {
     "model": "claude-sonnet-5-5",

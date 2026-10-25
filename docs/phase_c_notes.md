@@ -4,7 +4,7 @@ Left from the Phase B engineering reviews of 25 Oct 2026 for the write-up stage.
 live run records.
 
 - **P3-10, config.json fields.** The file carries fields beyond the spec's list: `reasoning_effort`,
-  `agents`, `coordinator`, `max_tokens`, `api_key_env`, and the `acknowledgements` and `template_order`
+  `num_predict`, `agents`, `coordinator`, `max_tokens`, `api_key_env`, and the `acknowledgements` and `template_order`
   seeds. The README names each field (spec 1f, item 4).
 - **P3-11, built beyond the spec, for the method table.** The MHRA device-word code screen; the tool-call
   cap and the run budget, which holds for the whole run, resumes included; the "Written by" line; the

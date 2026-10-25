@@ -281,6 +281,92 @@ def test_the_local_backend_is_ollama_on_this_machine(settings):
     assert model.temperature == 0
 
 
+def ollama_wire(monkeypatch, content='{"text": "a"}'):
+    """The body of every request the local chat model sends, caught before
+    it leaves the process and answered with content, so no test reaches
+    Ollama."""
+    from functools import partial
+
+    import httpx
+    import langchain_openai
+
+    sent = []
+
+    def answer(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "id": "c1",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "m",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "total_tokens": 2,
+                },
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(answer))
+    made = partial(langchain_openai.ChatOpenAI, http_client=client)
+    monkeypatch.setattr(langchain_openai, "ChatOpenAI", made)
+    return sent
+
+
+def wire_gateway(settings, tmp_path):
+    """A live local gateway on the real chat model, its requests caught by
+    ollama_wire."""
+    return gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "rec.jsonl"),
+        live=True,
+        chat_model=gw.make_chat_model(settings),
+    )
+
+
+def call_each_way(g):
+    """One plain call, one with a tool bound and one for a typed answer, as
+    the agents make them."""
+    from langchain_core.tools import StructuredTool
+
+    tool = StructuredTool.from_function(
+        func=lambda text: text, name="echo", description="Echo the text."
+    )
+    for n, extra in enumerate(({}, {"tools": [tool]}, {"schema": Answer}), 1):
+        g.call(
+            run_id="r1",
+            call_number=n,
+            agent="investigator",
+            purpose="x",
+            messages=ask(),
+            **extra,
+        )
+
+
+def test_the_local_output_cap_reaches_ollama_as_the_field_it_reads(
+    settings, tmp_path, monkeypatch
+):
+    # Ollama's OpenAI-compatible endpoint reads max_tokens as num_predict
+    # and has no max_completion_tokens field, which is the name ChatOpenAI
+    # gives its own max_tokens, so a cap set that way never arrives.
+    sent = ollama_wire(monkeypatch)
+    call_each_way(wire_gateway(settings, tmp_path))
+    assert len(sent) == 3
+    for body in sent:
+        assert body["max_tokens"] == settings.local.num_predict
+        assert "max_completion_tokens" not in body
+    assert settings.local.num_predict == 8192
+
+
 def test_the_frontier_backend_is_the_claude_api_with_the_key_from_env(
     frontier, tmp_path
 ):
@@ -484,7 +570,12 @@ def test_the_request_record_holds_the_backend_settings_and_digest(
     assert request["options"] == {
         "temperature": settings.local.temperature,
         "reasoning_effort": settings.local.reasoning_effort,
+        "num_predict": settings.local.num_predict,
     }
+    uncapped = settings.model_copy(
+        update={"local": settings.local.model_copy(update={"num_predict": None})}
+    )
+    assert "num_predict" not in gw.backend_options(uncapped)
     assert request["digest"] == settings.local.digest
     other = gw.ModelGateway.for_settings(
         frontier,

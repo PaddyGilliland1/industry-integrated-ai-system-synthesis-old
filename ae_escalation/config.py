@@ -87,6 +87,10 @@ class LocalBackend(_Frozen):
     # enough for the replay set to stay inside the 15-minute budget. Null
     # sends nothing, so the model keeps its own default.
     reasoning_effort: Literal[REASONING_EFFORTS] | None = None
+    # The most tokens one reply may generate, its thinking included:
+    # Ollama's num_predict. Without it a reply runs on until the context is
+    # full. Null sends nothing.
+    num_predict: int | None = Field(default=None, gt=0)
 
     @field_validator("endpoint")
     @classmethod

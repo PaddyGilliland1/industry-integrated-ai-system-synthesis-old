@@ -228,10 +228,15 @@ def backend_options(settings):
     """The active backend's generation settings, which change the reply as
     surely as the prompt does, so the request hash covers them."""
     if settings.llm_backend == "local":
-        return {
+        options = {
             "temperature": settings.local.temperature,
             "reasoning_effort": settings.local.reasoning_effort,
         }
+        # Only when set, so a label recorded before the cap existed keeps
+        # the options it was recorded with.
+        if settings.local.num_predict is not None:
+            options["num_predict"] = settings.local.num_predict
+        return options
     return {
         "temperature": settings.frontier.temperature,
         "max_tokens": settings.frontier.max_tokens,
@@ -701,6 +706,15 @@ def make_chat_model(settings, env_file=ENV_PATH):
         from langchain_openai import ChatOpenAI
 
         local = settings.local
+        # ChatOpenAI sends its own max_tokens as max_completion_tokens, a
+        # field Ollama's OpenAI-compatible endpoint does not read, so the
+        # cap goes in the body as max_tokens, which Ollama reads as
+        # num_predict.
+        cap = (
+            {"extra_body": {"max_tokens": local.num_predict}}
+            if local.num_predict is not None
+            else {}
+        )
         return ChatOpenAI(
             model=local.model,
             api_key="ollama",
@@ -709,6 +723,7 @@ def make_chat_model(settings, env_file=ENV_PATH):
             timeout=settings.agents.time_limit_s + 5,
             max_retries=0,
             reasoning_effort=local.reasoning_effort,
+            **cap,
         )
     from langchain_anthropic import ChatAnthropic
 
