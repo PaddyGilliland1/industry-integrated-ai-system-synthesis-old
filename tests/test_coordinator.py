@@ -436,3 +436,58 @@ def test_the_summary_says_why_there_is_no_draft(approved, settings, tmp_path):
     out = coordinator(settings, tmp_path, script).coordinate(approved)
     shown = out.summary()
     assert "no draft was written for this action: model error" in shown
+
+
+# --- a notification states the brief's figures for its own weeks only -------
+
+
+def test_a_past_week_the_brief_states_is_neither_offered_nor_written(
+    replay_run, settings, tmp_path
+):
+    from types import SimpleNamespace
+
+    from ae_escalation import briefs as br
+    from ae_escalation import tools as tl
+
+    from .scripted import figure
+
+    entry = next(
+        e for e in tl.screen_at(replay_run, ORIGIN) if e.hospital == "T101H"
+    )
+    draft = good_draft(replay_run)
+    draft["summary"] += " It compares with {F8}."
+    draft["cited_figures"].append(
+        figure(788, "T5", "history", week="2020-06-14")
+    )
+    brief = br.DemandBrief.assemble(
+        entry,
+        br.BriefDraft.model_validate(draft),
+        brief_id="nw",
+        backend="local",
+        model="m",
+        model_digest=None,
+    )
+    item = SimpleNamespace(current=brief, brief_id="nw", state="approved")
+    past = "Hold new leave for {F8}. Please reply by {DEADLINE}."
+    model = gw.ScriptedModel(
+        script=[
+            notes(**{**GOOD, "hold-leave": past}),
+            notes(**{"hold-leave": past}),
+        ]
+    )
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "n.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    out = co.Coordinator(
+        settings, gateway, outbox=tmp_path / "outbox.jsonl"
+    ).coordinate(item)
+    prompt = model.seen[0][-1].content
+    assert "- {F1}:" in prompt and "{F8}" not in prompt
+    held = next(a for a in out.actions if a.code == "hold-leave")
+    assert held.state == "held"
+    assert "past week's actual" in out.drafts[-1].check.failures[0].reason
+    ids = [r["action_id"] for r in outbox(tmp_path)]
+    assert "nw-hold-leave" not in ids and "nw-check-cover" in ids

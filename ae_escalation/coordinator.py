@@ -5,16 +5,15 @@ Code does the deciding (D-ARCH-21). It sets the staffing actions for the
 level, assigns each to a role, sets its reply deadline, tracks it and
 escalates it when the deadline passes without an acknowledgement. The
 language model drafts only each notification's wording, and writes no
-figure, date or time of its own: each is a placeholder, {DEADLINE},
-{WEEK1} to {WEEK4} or one of the approved brief's own figures such as {F1},
-and code writes in the value (placeholders.py; review P1-1, option A). A
-Pydantic model holds each draft to those rules, then the code figure check
-reads it as it will be written, before anything reaches the outbox
-(D-SAFE-19, as amended; review P1-2): a number must be a figure the
-approved brief's text states or the action's level, and a date one of the
-action's weeks, its deadline or a date the brief states. A draft that fails
-gets one retry; if it fails again, nothing is written for that action and
-the manager sees the draft with its failing figures marked.
+figure, date, time, hospital or level of its own: each is a placeholder or
+a token, such as {F1}, {WEEK1} to {WEEK4}, {DEADLINE}, {HOSPITAL} or
+{LEVEL}, and code writes in the value (placeholders.py). A Pydantic model
+holds each draft to the same word rules as a brief before anything reaches
+the outbox (D-SAFE-19, as amended), and to one more: a figure must be one
+the approved brief's text states, and no past week's actual, for one of the
+action's weeks or for no one week. A draft that fails gets one retry; if it
+fails again, nothing is written for that action and the manager sees the
+draft with its problems marked.
 
 Assumed and labelled: the actions are illustrative front-door staffing
 actions. OPEL's Appendix F gives only the structure, actions by level with
@@ -340,15 +339,29 @@ def _action_lines(actions):
     )
 
 
+def offered_figures(brief):
+    """The numbers of the figures a notification may state: those the
+    brief's text states, other than a past week's actual, for one of the
+    four weeks ahead or for no one week."""
+    ctx = brief.text_context()
+    out = []
+    for n in sorted(stated_figures(brief)):
+        fig = brief.cited_figures[n - 1]
+        _, week = ph.resolved(fig, ctx)
+        if fig.measure != "history" and week in (None, *ctx.targets):
+            out.append(n)
+    return out
+
+
 def _figure_lines(brief):
-    """Each figure the brief states, with its placeholder and the text code
-    writes for it."""
+    """Each figure a notification may state, with its placeholder and the
+    text code writes for it."""
     ctx = brief.text_context()
     lines = [
         f"- {{F{n}}}: {ph.shown(brief.cited_figures[n - 1], ctx)}"
-        for n in sorted(stated_figures(brief))
+        for n in offered_figures(brief)
     ]
-    return "\n".join(lines) or "- none: the brief's text states no figure"
+    return "\n".join(lines) or "- none: the brief states no figure to offer"
 
 
 def _date_lines(brief):

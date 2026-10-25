@@ -619,12 +619,32 @@ def _figure_problems(text, m, figures, ctx, fail):
             f"to F{len(figures)}",
         )
         return
-    if ctx is not None and ctx.stated is not None and n not in ctx.stated:
+    if ctx is None or not ctx.notification:
+        return
+    # A notification states only what the approved brief states, and only
+    # for the weeks its action covers, so no past week can pass as one.
+    fig = figures[n - 1]
+    _, week = resolved(fig, ctx)
+    if ctx.stated is not None and n not in ctx.stated:
         fail(
             start,
             whole,
             f"{whole}: the approved brief's text does not state F{n}, so the "
             "notification may not",
+        )
+    elif fig.measure == "history":
+        fail(
+            start,
+            whole,
+            f"{whole} is a past week's actual; a notification states only "
+            "figures for its action's weeks, or for no one week",
+        )
+    elif week is not None and ctx.weeks is not None and week not in ctx.weeks:
+        fail(
+            start,
+            whole,
+            f"{whole} is for {week_text(week)}, which is not one of the "
+            "action's weeks",
         )
 
 

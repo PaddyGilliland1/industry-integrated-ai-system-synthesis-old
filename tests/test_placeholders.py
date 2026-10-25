@@ -422,3 +422,56 @@ def test_a_cited_figure_must_say_what_it_is():
     with pytest.raises(ValidationError) as info:
         br.CitedFigure(value=1120, tool_call_id="T1", unit="attendances")
     assert "measure" in str(info.value)
+
+
+# --- notifications -----------------------------------------------------------
+
+
+def notice(text, weeks=None, stated=frozenset({1, 3, 4, 7, 8})):
+    """The problems in a notification for an action whose deadline is set,
+    covering weeks, from a brief whose text states the figures in
+    stated."""
+    ctx = CTX.model_copy(
+        update={
+            "deadline": datetime(
+                2021, 6, 24, 10, tzinfo=ZoneInfo("Europe/London")
+            ),
+            "weeks": tuple(CTX.targets if weeks is None else weeks),
+            "stated": stated,
+        }
+    )
+    return ph.problems({"message": text}, FIGURES, ctx)
+
+
+def test_a_notification_may_state_the_briefs_figures_for_its_weeks():
+    assert not notice(
+        "{HOSPITAL}, {LEVEL}: {PRIMARY} forecasts {F1}, with a back-test "
+        "error of {F4}; {F8} of the past outlooks. Check cover for the "
+        "weeks from {WEEK1} to {WEEK4} and reply by {DEADLINE}."
+    )
+
+
+@pytest.mark.parametrize(
+    "text, named, says",
+    [
+        ("Expect {F2}.", "{F2}", "does not state F2"),
+        ("Expect {F7} this week.", "{F7}", "past week's actual"),
+        ("Hold leave for {F7}.", "{F7}", "past week's actual"),
+        ("Expect {F1} next week.", "next week", "{WEEK1}"),
+        ("This is a level IV week.", "level IV", "{LEVEL}"),
+        ("Check the next three weeks.", "three", "{F1}"),
+    ],
+)
+def test_a_notification_states_only_what_the_brief_states_for_its_weeks(
+    text, named, says
+):
+    got = notice(text)
+    mine = [p for p in got if p.found == named]
+    assert mine and says in mine[0].reason, got
+
+
+def test_a_figure_for_a_week_the_action_does_not_cover_is_refused():
+    two = CTX.targets[:2]
+    got = notice("Expect {F3}.", weeks=two)
+    assert got and "not one of the action's weeks" in got[0].reason
+    assert not notice("Expect {F1}.", weeks=two)
