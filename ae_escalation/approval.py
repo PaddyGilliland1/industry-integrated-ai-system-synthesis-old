@@ -35,7 +35,7 @@ from pydantic import (
 
 from .agents import BriefOutcome
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief
-from .figures import CheckResult, check_brief, marked
+from .figures import CheckResult, check_brief, marked, tokens
 from .gateway import AuditLog
 from .placeholders import failures_of
 
@@ -212,6 +212,63 @@ class QueueItem(BaseModel):
         return self.current.text(written_by=written_by)
 
 
+# What a factual edit changes, as the text reads once rendered: a figure,
+# a date, the level or a hospital (build spec, section 2, item 6).
+FACTUAL_KINDS = (
+    "number",
+    "date",
+    "year",
+    "time",
+    "level",
+    "conditional level",
+    "horizon",
+    "weeks",
+    "iso week",
+    "hospital",
+)
+
+
+def _facts(texts):
+    return sorted(
+        (t.kind, str(t.value))
+        for text in texts
+        for t in tokens(text)
+        if t.kind in FACTUAL_KINDS
+    )
+
+
+def _figure_set(figures):
+    return sorted(
+        tuple(str(v) for v in f.model_dump(mode="json").values())
+        for f in figures
+    )
+
+
+def factual_changes(base, draft, edited):
+    """What an edit changed that makes it factual, found by code (review
+    P3-4): the cited figures, or a figure, date, level or hospital in the
+    text as the manager reads it. A correction of a statement of fact in
+    words is the approver's to declare."""
+    changes = []
+    if _figure_set(base.cited_figures) != _figure_set(draft.cited_figures):
+        changes.append("the cited figures changed")
+    after = (
+        edited.rendered().values()
+        if edited is not None
+        else [
+            draft.summary,
+            draft.expected_range,
+            draft.model_agreement,
+            draft.backtest_error,
+            draft.track_record,
+            *draft.watch_points,
+        ]
+    )
+    if _facts(base.rendered().values()) != _facts(after):
+        changes.append("a figure, date, level or hospital in the text changed")
+    return changes
+
+
 class ApprovalQueue:
     """The approval queue file, its items and the decisions on them."""
 
@@ -224,6 +281,8 @@ class ApprovalQueue:
         # Every decision refused, each with its row and reason, so one bad
         # row stops nothing (review P3-7).
         self.refusals = []
+        # Who found the last decision's factual edit, for the audit log.
+        self._factual_by = ""
         self._items = {}
         if self.path and self.path.exists():
             for line in self.path.read_text(encoding="utf-8").splitlines():
@@ -326,6 +385,16 @@ class ApprovalQueue:
         else:
             edited, result = self._recheck(item, decision.edited)
             update["edit"], update["last_edit"] = edited, result
+            base = item.current or item.outcome.brief
+            found = factual_changes(base, decision.edited, edited)
+            self._factual_by = (
+                ("both" if found else "approver")
+                if decision.factual_edit
+                else ("code" if found else "")
+            )
+            if found and not decision.factual_edit:
+                decision = decision.model_copy(update={"factual_edit": True})
+                update["decisions"] = [*item.decisions, decision]
             if item.state == "not verified":
                 pass
             elif result.passed:
@@ -351,6 +420,7 @@ class ApprovalQueue:
             A decision dated before the run began.
         Each is a Refused: nothing changes, and the refusal is logged.
         """
+        self._factual_by = "approver" if decision.factual_edit else ""
         try:
             item = self._decide(decision)
         except Refused as exc:
@@ -362,6 +432,8 @@ class ApprovalQueue:
                 reason=str(exc),
             )
             raise
+        # The decision as kept, with any factual edit code found.
+        decision = item.decisions[-1]
         self._save(
             {"event": "decision", "decision": decision.model_dump(mode="json")}
         )
@@ -374,6 +446,7 @@ class ApprovalQueue:
             criteria_met=decision.criteria.count(),
             criteria=decision.criteria.model_dump(),
             factual_edit=decision.factual_edit,
+            factual_edit_by=self._factual_by,
             simulated=decision.simulated,
             state=item.state,
             edit_check=(

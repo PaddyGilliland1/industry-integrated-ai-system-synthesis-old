@@ -371,3 +371,67 @@ def test_a_decision_dated_before_the_run_started_is_refused(verified):
         q.decide(early)
     assert log.entries[-1]["kind"] == "refused"
     assert q.decide(decide("nw", "approve")).state == "approved"
+
+
+# --- code detects a factual edit (review P3-4) -------------------------------
+
+
+def edited_copy(good, **fields):
+    return br.BriefDraft.model_validate(
+        {**good.model_dump(mode="json"), **fields}
+    )
+
+
+def test_a_rewording_is_not_a_factual_edit(verified, good, tmp_path):
+    reworded = edited_copy(good, summary="Reworded. " + good.summary)
+    item = queue(tmp_path, verified).decide(
+        decide("nw", "edit", edited=reworded)
+    )
+    assert item.state == "approved with edit"
+    assert not item.decisions[-1].factual_edit
+
+
+def test_code_marks_an_edit_that_changes_a_date_or_figure_as_factual(
+    verified, good, tmp_path
+):
+    log = gw.AuditLog()
+    moved = edited_copy(
+        good, summary=good.summary.replace("{WEEK1}", "{WEEK2}")
+    )
+    q = queue(tmp_path, verified, log=log)
+    item = q.decide(decide("nw", "edit", edited=moved))
+    assert item.decisions[-1].factual_edit
+    assert log.entries[-1]["factual_edit_by"] == "code"
+    assert q.g6()["approved_without_factual_edit"] == 0
+    again = ap.ApprovalQueue(tmp_path / "queue.jsonl")
+    assert again.item("nw").decisions[-1].factual_edit
+
+
+def test_code_marks_a_changed_cited_figure_set_as_factual(
+    verified, good, tmp_path
+):
+    figures = good.model_dump(mode="json")["cited_figures"]
+    fewer = edited_copy(
+        good,
+        expected_range="The range is wide.",
+        cited_figures=[figures[0], *figures[3:]],
+        model_agreement="The four forecasts spread {F2}% of the primary's.",
+        backtest_error="SA-MA's own back-test error at release horizon 1 is "
+        "{F3}%.",
+        track_record="This hospital has no past flag to judge; {F4} of its "
+        "{F5} unflagged outlooks turned busy.",
+    )
+    item = queue(tmp_path, verified).decide(decide("nw", "edit", edited=fewer))
+    assert item.decisions[-1].factual_edit
+
+
+def test_the_approver_may_still_declare_a_factual_edit(
+    verified, good, tmp_path
+):
+    log = gw.AuditLog()
+    reworded = edited_copy(good, summary="Reworded. " + good.summary)
+    queue(tmp_path, verified, log=log).decide(
+        decide("nw", "edit", edited=reworded, factual=True)
+    )
+    assert log.entries[-1]["factual_edit"] is True
+    assert log.entries[-1]["factual_edit_by"] == "approver"
