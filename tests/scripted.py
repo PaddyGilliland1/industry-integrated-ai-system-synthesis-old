@@ -29,15 +29,9 @@ TOOLS = AIMessage(
     content="",
     tool_calls=[
         tc("get_forecast", hospital="T101H", as_of=ORIGIN),
-        tc(
-            "get_backtest_error",
-            hospital="T101H",
-            as_of=ORIGIN,
-            model="SA-MA",
-            horizon=1,
-        ),
+        tc("get_backtest_error", hospital="T101H", as_of=ORIGIN, horizon=1),
         tc("get_track_record", hospital="T101H", as_of=ORIGIN),
-        tc("get_calendar", week="2021-06-27", as_of=ORIGIN),
+        tc("get_calendar", as_of=ORIGIN),
     ],
 )
 
@@ -48,12 +42,12 @@ def good_draft(run, **changes):
         run, tl.ForecastRequest(hospital="T101H", as_of=ORIGIN, horizon=1)
     )
     sama = next(x for x in f.forecasts if x.model == "SA-MA")
-    e = tl.get_backtest_error(
+    (e,) = tl.get_backtest_error(
         run,
         tl.BacktestErrorRequest(
             hospital="T101H", as_of=ORIGIN, model="SA-MA", horizon=1
         ),
-    )
+    ).errors
     tr = tl.get_track_record(
         run, tl.TrackRecordRequest(hospital="T101H", as_of=ORIGIN)
     )

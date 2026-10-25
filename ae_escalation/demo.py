@@ -32,7 +32,6 @@ from .briefs import BriefDraft, CitedFigure, ToolCall
 from .coordinator import CoordinationResult, Coordinator, plan
 from .gateway import ModelGateway, RecordingStore, ScriptedModel
 from .replay import plant_figure
-from .timing import release_horizon_weeks
 
 LABEL = "Scripted stand-in: nothing it says is a model's output."
 ORIGIN = "2021-06-13"
@@ -52,16 +51,12 @@ def _entry(run):
 
 
 def _requests(entry):
-    week = release_horizon_weeks(entry.as_of)[0].date()
     base = {"hospital": entry.hospital, "as_of": entry.as_of}
     return [
         ("get_forecast", tl.ForecastRequest(**base)),
-        (
-            "get_backtest_error",
-            tl.BacktestErrorRequest(**base, model=entry.primary, horizon=1),
-        ),
+        ("get_backtest_error", tl.BacktestErrorRequest(**base, horizon=1)),
         ("get_track_record", tl.TrackRecordRequest(**base)),
-        ("get_calendar", tl.CalendarRequest(week=week, as_of=entry.as_of)),
+        ("get_calendar", tl.CalendarRequest(as_of=entry.as_of)),
     ]
 
 
@@ -88,8 +83,9 @@ def true_draft(ledger, entry):
     that returned it: the primary model's release horizon 1 forecast and
     80% range, the models' spread, its back-test error and the track
     record."""
-    forecast, error, record = (c.result for c in ledger[:3])
+    forecast, errors, record = (c.result for c in ledger[:3])
     primary = forecast["primary"]
+    error = next(e for e in errors["errors"] if e["model"] == primary)
     f = next(
         x
         for x in forecast["forecasts"]

@@ -84,12 +84,12 @@ def test_the_backtest_table_is_the_tools_error_for_each_model_and_horizon(
 ):
     rows = demand.error_rows()
     assert [r[0] for r in rows] == list(tl.SIMPLE_MODELS)
-    e = tl.get_backtest_error(
+    (e,) = tl.get_backtest_error(
         replay_run,
         tl.BacktestErrorRequest(
             hospital="T101H", as_of="2021-06-13", model="linear", horizon=3
         ),
-    )
+    ).errors
     assert rows[2][3] == f"{e.mape:.1f}%"
 
 
@@ -181,7 +181,7 @@ def test_it_is_built_from_tool_calls_as_of_the_origin(demand):
         "get_track_record",
     }
     assert all(c.request["as_of"] == "2021-06-13" for c in demand.ledger)
-    assert len(demand.ledger) == 1 + 16 + 1
+    assert len(demand.ledger) == 1 + 4 + 1
 
 
 # --- the comparison's pass rule (option A) -----------------------------------

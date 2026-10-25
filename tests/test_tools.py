@@ -66,6 +66,30 @@ def test_the_calendar_names_the_holidays_in_a_week(holidays):
     assert quiet.holidays == [] and quiet.covered
 
 
+def test_one_calendar_call_covers_the_four_weeks_ahead(holidays):
+    out = tl.get_calendar(holidays, tl.CalendarRequest(as_of="2019-12-08"))
+    assert [(str(h.date), h.release_horizon) for h in out.holidays] == [
+        ("2019-12-25", 2),
+        ("2019-12-26", 2),
+        ("2020-01-01", 3),
+        ("2020-01-02", 3),
+    ]
+    assert out.covered
+
+
+def test_the_calendar_returns_holiday_dates_only_never_the_week_asked(
+    holidays,
+):
+    assert set(tl.CalendarResult.model_fields) == {"holidays", "covered"}
+    out = tl.get_calendar(
+        holidays, tl.CalendarRequest(week="2022-01-02", as_of="2021-06-13")
+    )
+    dumped = out.model_dump(mode="json")
+    assert "2022-01-02" not in str(dumped)
+    assert [str(h.date) for h in out.holidays] == ["2021-12-27", "2021-12-28"]
+    assert {h.release_horizon for h in out.holidays} == {None}
+
+
 def test_the_calendar_says_when_a_week_is_outside_the_file(holidays):
     out = tl.get_calendar(
         holidays, tl.CalendarRequest(week="2018-12-30", as_of="2018-12-09")
@@ -178,8 +202,24 @@ def test_the_backtest_error_is_the_mape_of_the_latest_released_targets(run):
     y, f = run.series["T101H"], run.runs["T101H"]["fcs"]["linear"]
     tg = np.arange(t - 103, t + 1)
     want = 100 * np.nanmean(np.abs(y[tg] - f[tg - 3, 2]) / y[tg])
-    assert out.mape == pytest.approx(want)
-    assert out.targets == 104
+    (error,) = out.errors
+    assert error.mape == pytest.approx(want)
+    assert error.targets == 104
+
+
+def test_one_backtest_call_gives_each_models_error_at_a_horizon(run):
+    out = tl.get_backtest_error(
+        run, tl.BacktestErrorRequest(hospital="T101H", horizon=2, as_of=ORIGIN)
+    )
+    assert out.release_horizon == 2
+    assert [e.model for e in out.errors] == list(tl.SIMPLE_MODELS)
+    one = tl.get_backtest_error(
+        run,
+        tl.BacktestErrorRequest(
+            hospital="T101H", model="linear", horizon=2, as_of=ORIGIN
+        ),
+    )
+    assert one.errors == [e for e in out.errors if e.model == "linear"]
 
 
 def test_the_track_record_counts_only_outlooks_released_by_the_origin(run):

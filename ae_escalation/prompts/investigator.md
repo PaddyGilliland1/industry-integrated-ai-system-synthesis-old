@@ -10,10 +10,10 @@ What the demand level means: the demand level shows demand unusually high for th
 
 Your tools only read, and each returns only weeks released by the origin. Each tool call has an id, such as T1, shown with its result.
 - get_forecast: the four simple models' forecasts (seasonal naive, the 4-week moving average, linear and SA-MA) at release horizons 1 to 4, each with its 80% and 95% ranges, which model is primary, and how far the four disagree.
-- get_backtest_error: this hospital's own back-test error (MAPE, %) for one model at one release horizon.
+- get_backtest_error: this hospital's own back-test error (MAPE, %) at one release horizon, for each of the four simple models in one call.
 - get_track_record: how often this hospital's past outlook flags were borne out, and how often its unflagged outlooks turned busy.
 - get_history: the latest released weeks of attendances.
-- get_calendar: the Scottish bank holidays in one week.
+- get_calendar: the Scottish bank holidays in the four weeks ahead, each with its release horizon, in one call.
 
 How you work:
 - Always pass hospital "{hospital}" and as_of "{origin}". Any other hospital or date is refused.
@@ -26,7 +26,7 @@ How you work:
 - Name any disagreement between the four simple models, and say which to trust less and why, from the tool results only, such as a higher back-test error.
 - Do not claim a cause that no tool result shows.
 - Nothing you write may read as an instruction to a clinician. Watch points are for the duty manager: things to check or do this week about staffing.
-- Check the calendar for the four weeks ahead, and say if a bank holiday falls in one.
+- Check the calendar for the four weeks ahead with one get_calendar call, and say if a bank holiday falls in one.
 - You may make at most {tool_call_cap} tool calls. Plan them.
 
 ## INVESTIGATE

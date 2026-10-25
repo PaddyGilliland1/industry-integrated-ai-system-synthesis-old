@@ -23,7 +23,7 @@ from . import rules as ru
 from .backtest import ratio_range
 from .data import HOSPITAL_NAMES
 from .design import DRIFT_START, NATIONAL
-from .timing import release_date
+from .timing import release_date, release_horizon_weeks
 
 ModelName = Literal[
     "seasonal naive", "4-week moving average", "linear", "SA-MA"
@@ -116,20 +116,29 @@ class HistoryResult(Result):
 
 
 class BacktestErrorRequest(Request):
-    model: ModelName
     horizon: int = Field(ge=1, le=4, description="A release horizon.")
+    model: ModelName | None = Field(
+        default=None, description="One simple model; all four if absent."
+    )
+
+
+class ModelError(Result):
+    """One simple model's back-test MAPE at the request's release horizon,
+    over its latest released targets."""
+
+    model: ModelName
+    mape: float | None
+    targets: int
 
 
 class BacktestErrorResult(Result):
-    """The hospital's own back-test MAPE for one model and release horizon,
-    over its latest released targets."""
+    """The hospital's own back-test error at one release horizon: each
+    simple model's, or the one asked for."""
 
     hospital: str
     as_of: date
-    model: ModelName
     release_horizon: int
-    mape: float | None
-    targets: int
+    errors: list[ModelError]
 
 
 # --- get_track_record --------------------------------------------------------
@@ -159,20 +168,29 @@ class TrackRecordResult(Result):
 class CalendarRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    week: date = Field(description="A week ending, Monday to Sunday.")
+    week: date | None = Field(
+        default=None,
+        description="One week ending, Monday to Sunday; the four weeks "
+        "ahead of the origin if absent.",
+    )
     as_of: date
 
 
 class Holiday(Result):
     date: date
     title: str
+    release_horizon: int | None = Field(
+        description="The release horizon whose week it falls in, if any."
+    )
 
 
 class CalendarResult(Result):
-    week_ending: date
+    """The holidays only: the week asked about is never echoed back, so no
+    date in the result is one the Investigator supplied."""
+
     holidays: list[Holiday]
     covered: bool = Field(
-        description="Whether the frozen file covers the week."
+        description="Whether the frozen file covers every week asked about."
     )
 
 
@@ -285,31 +303,34 @@ def get_history(run, request):
 
 
 def get_backtest_error(run, request):
-    """Return the hospital's back-test MAPE for one model and release
-    horizon, over the latest 104 targets released by the origin.
+    """Return the hospital's back-test MAPE at one release horizon, for each
+    simple model or the one asked for, over the latest 104 targets released
+    by the origin.
 
     It is the window the re-selection scores, so the error a brief quotes is
-    the one the model was chosen on.
+    the one the model was chosen on. One call gives all four models, so the
+    Investigator can compare them within its cap of tool calls.
     """
     t = _locate(run, request.hospital, request.as_of)
     y = run.series[request.hospital]
-    f = run.runs[request.hospital]["fcs"][request.model]
     h = request.horizon + 1
     tg = np.arange(max(h, t - ERROR_WINDOW + 1), t + 1)
-    pred = f[tg - h, h - 1]
-    ok = np.isfinite(pred) & np.isfinite(y[tg])
-    mape = (
-        float(100 * np.mean(np.abs(y[tg][ok] - pred[ok]) / y[tg][ok]))
-        if ok.any()
-        else None
-    )
+    models = [request.model] if request.model else SIMPLE_MODELS
+    errors = []
+    for m in models:
+        pred = run.runs[request.hospital]["fcs"][m][tg - h, h - 1]
+        ok = np.isfinite(pred) & np.isfinite(y[tg])
+        mape = (
+            float(100 * np.mean(np.abs(y[tg][ok] - pred[ok]) / y[tg][ok]))
+            if ok.any()
+            else None
+        )
+        errors.append(ModelError(model=m, mape=mape, targets=int(ok.sum())))
     return BacktestErrorResult(
         hospital=request.hospital,
         as_of=request.as_of,
-        model=request.model,
         release_horizon=request.horizon,
-        mape=mape,
-        targets=int(ok.sum()),
+        errors=errors,
     )
 
 
@@ -327,28 +348,31 @@ def get_track_record(run, request):
 
 
 def get_calendar(holidays, request):
-    """Return the Scottish bank holidays in the week, Monday to Sunday, from
-    the frozen GOV.UK file, and whether the file covers that week.
+    """Return the Scottish bank holidays in the four weeks ahead of the
+    origin, or in one week, Monday to Sunday, from the frozen GOV.UK file,
+    and whether the file covers every week asked about.
 
     Holidays are known ahead, so naming a target week's holiday is not a
     look-ahead. Three of the nine national outlier weeks in the data test
-    are Christmas weeks, which is why a brief must say when one falls.
+    are Christmas weeks, which is why a brief must say when one falls. Each
+    holiday carries the release horizon its week is at, if any.
     """
-    end = request.week
-    start = end - pd.Timedelta(days=6)
+    ahead = [w.date() for w in release_horizon_weeks(request.as_of)]
+    ends = [request.week] if request.week else ahead
     first, last = holidays[0][0], holidays[-1][0]
-    covered = start >= date(first.year, 1, 1) and end <= date(
-        last.year, 12, 31
-    )
-    return CalendarResult(
-        week_ending=end,
-        holidays=[
-            Holiday(date=d, title=title)
+    found, covered = [], True
+    for end in ends:
+        start = end - pd.Timedelta(days=6)
+        covered &= start >= date(first.year, 1, 1) and end <= date(
+            last.year, 12, 31
+        )
+        horizon = ahead.index(end) + 1 if end in ahead else None
+        found += [
+            Holiday(date=d, title=title, release_horizon=horizon)
             for d, title in holidays
             if start <= d <= end
-        ],
-        covered=covered,
-    )
+        ]
+    return CalendarResult(holidays=found, covered=covered)
 
 
 def screen_at(run, as_of):

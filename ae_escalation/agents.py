@@ -48,8 +48,9 @@ TOOL_DESCRIPTIONS = {
         "to the origin. Read-only."
     ),
     "get_backtest_error": (
-        "The hospital's own back-test MAPE (%) for one simple model at one "
-        "release horizon, over its latest 104 released targets. Read-only."
+        "The hospital's own back-test MAPE (%) at one release horizon, for "
+        "each of the four simple models (or one, if named), over its latest "
+        "104 released targets. Read-only."
     ),
     "get_track_record": (
         "How often the hospital's past outlook flags were borne out, and "
@@ -57,8 +58,9 @@ TOOL_DESCRIPTIONS = {
         "weeks were all released by the origin. Read-only."
     ),
     "get_calendar": (
-        "The Scottish bank holidays in one week, Monday to Sunday, from the "
-        "frozen GOV.UK file. Read-only."
+        "The Scottish bank holidays in the four weeks ahead of the origin, "
+        "each with the release horizon it falls in (or in one week, if "
+        "named), from the frozen GOV.UK file. Read-only."
     ),
 }
 REQUESTS = {

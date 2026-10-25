@@ -141,11 +141,8 @@ class TemplateBrief(BaseModel):
         for model in tl.SIMPLE_MODELS:
             cells = [model]
             for k in (1, 2, 3, 4):
-                e = next(
-                    x
-                    for x in self.errors
-                    if x.model == model and x.release_horizon == k
-                )
+                at = next(x for x in self.errors if x.release_horizon == k)
+                e = next(x for x in at.errors if x.model == model)
                 cells.append("none" if e.mape is None else f"{e.mape:.1f}%")
             rows.append(cells)
         return rows
@@ -212,19 +209,13 @@ def template_brief(run, entry):
     req = tl.ForecastRequest(hospital=entry.hospital, as_of=entry.as_of)
     forecasts = call("get_forecast", req, tl.get_forecast(run, req))
     errors = []
-    for model in tl.SIMPLE_MODELS:
-        for k in (1, 2, 3, 4):
-            req = tl.BacktestErrorRequest(
-                hospital=entry.hospital,
-                as_of=entry.as_of,
-                model=model,
-                horizon=k,
-            )
-            errors.append(
-                call(
-                    "get_backtest_error", req, tl.get_backtest_error(run, req)
-                )
-            )
+    for k in (1, 2, 3, 4):
+        req = tl.BacktestErrorRequest(
+            hospital=entry.hospital, as_of=entry.as_of, horizon=k
+        )
+        errors.append(
+            call("get_backtest_error", req, tl.get_backtest_error(run, req))
+        )
     req = tl.TrackRecordRequest(hospital=entry.hospital, as_of=entry.as_of)
     track = call("get_track_record", req, tl.get_track_record(run, req))
     return TemplateBrief(

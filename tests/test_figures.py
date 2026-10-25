@@ -76,16 +76,17 @@ LEDGER = [
         {
             "hospital": "T101H",
             "as_of": "2021-06-13",
-            "model": "SA-MA",
             "horizon": 1,
+            "model": None,
         },
         {
             "hospital": "T101H",
             "as_of": "2021-06-13",
-            "model": "SA-MA",
             "release_horizon": 1,
-            "mape": 6.1234,
-            "targets": 104,
+            "errors": [
+                {"model": "SA-MA", "mape": 6.1234, "targets": 104},
+                {"model": "linear", "mape": 9.8765, "targets": 104},
+            ],
         },
     ),
     call(
@@ -105,8 +106,17 @@ LEDGER = [
     call(
         "T4",
         "get_calendar",
-        {"week": "2021-06-27", "as_of": "2021-06-13"},
-        {"week_ending": "2021-06-27", "holidays": [], "covered": True},
+        {"week": None, "as_of": "2021-06-13"},
+        {
+            "holidays": [
+                {
+                    "date": "2021-08-02",
+                    "title": "Summer bank holiday",
+                    "release_horizon": None,
+                }
+            ],
+            "covered": True,
+        },
     ),
     call(
         "T5",
@@ -425,6 +435,35 @@ def test_a_backtest_figure_for_another_model_fails():
         cited_figures=[fig(6.12, "T2", "linear", 1)],
     )
     assert not check(b).passed
+
+
+def test_a_backtest_figure_from_a_four_model_call_must_name_its_model():
+    unnamed = brief(
+        backtest_error="The error is 6.1%.",
+        cited_figures=[fig(6.12, "T2", horizon=1)],
+    )
+    named = brief(
+        backtest_error="SA-MA's error is 6.1%; linear's is 9.9%.",
+        cited_figures=[fig(6.12, "T2", "SA-MA", 1), fig(9.88, "T2", "linear")],
+    )
+    assert "names no model" in reasons(check(unnamed))
+    assert check(named).passed, reasons(check(named))
+    other = brief(
+        backtest_error="SA-MA's error is 9.9%.",
+        cited_figures=[fig(9.88, "T2", "SA-MA", 1)],
+    )
+    assert not check(other).passed
+
+
+def test_a_calendar_figure_counts_the_holidays_it_returned():
+    b = brief(
+        summary="The calendar lists 1 bank holiday.",
+        cited_figures=[fig(1, "T4")],
+    )
+    assert check(b).passed, reasons(check(b))
+    assert not check(
+        brief(summary="It lists 2.", cited_figures=[fig(2, "T4")])
+    ).passed
 
 
 def test_a_date_no_tool_returned_fails():

@@ -403,16 +403,24 @@ def _candidates(call, fig):
     if call.name == "get_forecast":
         return _forecast_candidates(result, fig)
     if call.name == "get_backtest_error":
-        for key, mine in (
-            ("model", fig.model),
-            ("release_horizon", fig.horizon),
-        ):
-            if mine is not None and mine != result[key]:
-                return None, (
-                    f"it names {mine}, but {call.id} is for {result[key]}"
-                )
+        horizon = result["release_horizon"]
+        if fig.horizon is not None and fig.horizon != horizon:
+            return None, (
+                f"it names release horizon {fig.horizon}, but {call.id} is "
+                f"for release horizon {horizon}"
+            )
+        errors = result["errors"]
+        if fig.model is None and len(errors) > 1:
+            return None, (
+                f"it names no model, and {call.id} holds each model's error"
+            )
+        mine = [e for e in errors if fig.model in (None, e["model"])]
+        if not mine:
+            return None, f"it names {fig.model}, but {call.id} has no error"
         keys = ("mape", "targets")
-        return _numbers(result, keys), f"for {result['model']}"
+        return _numbers(mine[0], keys), (
+            f"for {mine[0]['model']} at release horizon {horizon}"
+        )
     if call.name == "get_track_record":
         keys = (
             "flags",
