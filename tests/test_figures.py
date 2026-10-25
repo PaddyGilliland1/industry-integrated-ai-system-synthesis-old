@@ -552,8 +552,7 @@ def test_code_writes_the_fact_lines_from_the_tools():
         "Model agreement: The models disagree; trust the lowest less.\n"
         "Back-test error: SA-MA's back-test error at release horizon 1 is "
         "6.1%.\n"
-        "Track record: no past flag to judge; of 136 unflagged outlooks, 29 "
-        "turned busy.\n"
+        "Track record: This hospital has no past flag to judge.\n"
         "Bank holidays ahead: Summer holiday (w/e 04 Jul 2021).\n"
         "Watch points:" in text
     )
@@ -570,32 +569,53 @@ def test_a_brief_cites_no_back_test_error_or_track_record_to_pass():
     "record, line",
     [
         (
-            {"flags": 21, "borne_out": 13, "unflagged": 208},
-            "of 21 flagged outlooks, 13 were borne out; of 208 unflagged "
-            "outlooks, 49 turned busy.",
+            {
+                "flags": 21,
+                "borne_out": 13,
+                "unflagged": 208,
+                "unflagged_busy_pct": 100 * 49 / 208,
+            },
+            "This hospital's past outlook flags were borne out 13 times in "
+            "21; its unflagged outlooks turned busy 23.6% of the time.",
         ),
         (
-            {"flags": 1, "borne_out": 1, "unflagged": 1, "unflagged_busy": 1},
-            "of 1 flagged outlook, 1 was borne out; of 1 unflagged outlook, 1 "
-            "turned busy.",
+            {
+                "flags": 4,
+                "borne_out": 4,
+                "unflagged": 40,
+                "unflagged_busy": 8,
+                "unflagged_busy_pct": 20.0,
+            },
+            "This hospital's past outlook flags were borne out 4 times in "
+            "4; its unflagged outlooks turned busy 20.0% of the time.",
         ),
         (
             {"flags": 0, "borne_out": 0, "unflagged": 1208},
-            "no past flag to judge; of 1,208 unflagged outlooks, 49 turned "
-            "busy.",
-        ),
-        (
-            {"flags": 3, "borne_out": 0, "unflagged": 0, "unflagged_busy": 0},
-            "of 3 flagged outlooks, 0 were borne out; no unflagged outlook "
-            "to judge.",
+            "This hospital has no past flag to judge.",
         ),
     ],
 )
-def test_the_track_record_line_takes_every_form(record, line):
+def test_the_track_record_line_is_the_accepted_sentence(record, line):
     result = FACTS.track_record.model_copy(
         update={"unflagged_busy": 49, **record}
     )
     assert br.track_line(result) == line
+
+
+def test_the_track_record_line_refuses_flags_with_none_unflagged():
+    # The accepted sentence has no form for it, and no screened brief in
+    # the data has it, so code refuses rather than word it itself.
+    result = FACTS.track_record.model_copy(
+        update={
+            "flags": 3,
+            "borne_out": 0,
+            "unflagged": 0,
+            "unflagged_busy": 0,
+            "unflagged_busy_pct": None,
+        }
+    )
+    with pytest.raises(ValueError, match="no unflagged outlook"):
+        br.track_line(result)
 
 
 def test_the_back_test_line_names_its_model_and_says_when_none_is_known():

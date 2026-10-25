@@ -39,7 +39,7 @@ from pydantic import BaseModel, ConfigDict
 
 from . import tools as tl
 from .approval import Criteria
-from .briefs import LEVEL_FROM, ToolCall
+from .briefs import LEVEL_FROM, ToolCall, track_line
 from .placeholders import day_text, release_text, week_text
 
 WEEKS = ("national latch week", "demand week")
@@ -65,22 +65,6 @@ def watch_point(latched, direction, flagged):
     if latched:
         return WATCH[direction]
     return WATCH["flagged"] if flagged else WATCH["otherwise"]
-
-
-def track_sentence(record):
-    """The track record's fixed sentence, from get_track_record."""
-    if record.flags == 0:
-        return "This hospital has no past flag to judge."
-    if record.unflagged_busy_pct is None:
-        raise ValueError(
-            "the track record has flags but no unflagged outlook, which the "
-            "template's fixed sentence cannot state"
-        )
-    return (
-        f"This hospital's past outlook flags were borne out "
-        f"{record.borne_out} times in {record.flags}; its unflagged outlooks "
-        f"turned busy {record.unflagged_busy_pct:.1f}% of the time."
-    )
 
 
 def drift_sentence(latched, since, direction):
@@ -188,7 +172,7 @@ class TemplateBrief(BaseModel):
                 self.error_rows(),
             ),
             "",
-            track_sentence(self.track),
+            track_line(self.track),
             drift_sentence(
                 self.latched, self.latched_since, self.breach_direction
             ),

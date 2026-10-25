@@ -108,6 +108,18 @@ def test_the_track_record_sentence_takes_both_forms(demand, latch, replay_run):
     assert "This hospital has no past flag to judge." in demand.text()
 
 
+def test_the_track_sentence_is_the_agent_briefs_own(
+    demand, latch, replay_run, holidays
+):
+    from ae_escalation import briefs as br
+
+    for t in (demand, latch):
+        entry = entry_at(replay_run, t.week.isoformat(), t.hospital)
+        facts = br.brief_facts(replay_run, holidays, entry)
+        assert facts.track_record == t.track
+        assert f"\n{br.track_line(facts.track_record)}\n" in t.text()
+
+
 def test_the_drift_sentence_names_the_latch_and_its_direction(latch, surge):
     assert (
         "Drift: latched since w/e 22 Mar 2020, after a downward breach. The "

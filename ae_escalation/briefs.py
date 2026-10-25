@@ -207,11 +207,6 @@ def brief_facts(run, holidays, entry):
     )
 
 
-def _counted(n, noun):
-    """A count with its noun: 1 flagged outlook, 21 flagged outlooks."""
-    return f"{ph.figure_text(n)} {noun}{'' if n == 1 else 's'}"
-
-
 def backtest_line(result):
     """The back-test error line: the primary model's own error, as code
     writes it from get_backtest_error."""
@@ -226,23 +221,24 @@ def backtest_line(result):
 
 
 def track_line(record):
-    """The track record line, as code writes it from get_track_record."""
-    if record.flags:
-        verb = "was" if record.borne_out == 1 else "were"
-        flagged = (
-            f"of {_counted(record.flags, 'flagged outlook')}, "
-            f"{ph.figure_text(record.borne_out)} {verb} borne out"
+    """The track record's fixed sentence, as code writes it from
+    get_track_record, in the agent's brief and the template brief alike.
+
+    It is the sentence accepted for both, word for word, so the template
+    brief imports it from here rather than keeping a copy that could drift.
+    """
+    if record.flags == 0:
+        return "This hospital has no past flag to judge."
+    if record.unflagged_busy_pct is None:
+        raise ValueError(
+            "the track record has flags but no unflagged outlook, which the "
+            "track record's fixed sentence cannot state"
         )
-    else:
-        flagged = "no past flag to judge"
-    if record.unflagged:
-        unflagged = (
-            f"of {_counted(record.unflagged, 'unflagged outlook')}, "
-            f"{ph.figure_text(record.unflagged_busy)} turned busy"
-        )
-    else:
-        unflagged = "no unflagged outlook to judge"
-    return f"{flagged}; {unflagged}."
+    return (
+        f"This hospital's past outlook flags were borne out "
+        f"{record.borne_out} times in {record.flags}; its unflagged outlooks "
+        f"turned busy {record.unflagged_busy_pct:.1f}% of the time."
+    )
 
 
 def _holiday_title(title):

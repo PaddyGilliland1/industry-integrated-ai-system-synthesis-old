@@ -97,8 +97,7 @@ def test_code_writes_the_fact_lines_from_its_own_tool_calls(
     assert (
         "Back-test error: linear's back-test error at release horizon 1 is "
         "4.8%.\n"
-        "Track record: no past flag to judge; of 86 unflagged outlooks, 26 "
-        "turned busy.\n"
+        "Track record: This hospital has no past flag to judge.\n"
         "Bank holidays ahead: Good Friday (w/e 12 Apr 2020)." in out.display()
     )
 

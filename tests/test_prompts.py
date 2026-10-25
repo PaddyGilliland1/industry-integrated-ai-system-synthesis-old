@@ -93,8 +93,8 @@ weakest record here, 11.1% (seasonal naive back-test error, release horizon \
 1): it puts demand at 723 attendances (seasonal naive forecast for w/e 16 \
 Jul 2023), well below the rest.
 Back-test error: SA-MA's back-test error at release horizon 1 is 5.6%.
-Track record: of 24 flagged outlooks, 19 were borne out; of 208 unflagged \
-outlooks, 38 turned busy.
+Track record: This hospital's past outlook flags were borne out 19 times in \
+24; its unflagged outlooks turned busy 18.3% of the time.
 Bank holidays ahead: none in the four weeks ahead.
 Watch points:
 - Check whether extra shifts or bank staff are needed from w/e 16 Jul 2023 to \

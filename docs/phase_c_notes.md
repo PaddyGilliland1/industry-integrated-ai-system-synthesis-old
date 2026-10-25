@@ -52,8 +52,9 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
    `get_track_record` and `get_calendar` itself, as of the origin, and writes each as a fixed sentence
    from the tool result:
    - "Back-test error: SA-MA's back-test error at release horizon 1 is 8.1%."
-   - "Track record: of 21 flagged outlooks, 13 were borne out; of 208 unflagged outlooks, 49 turned
-     busy." With no past flag it reads "no past flag to judge".
+   - "Track record: This hospital's past outlook flags were borne out 13 times in 21; its unflagged
+     outlooks turned busy 23.6% of the time." With no past flag it reads "This hospital has no past flag
+     to judge." It is the template brief's sentence, accepted for both, and both call one function.
    - "Bank holidays ahead: Early May bank holiday (w/e 07 May 2023); coronation of King Charles III
      (w/e 14 May 2023)." or "none in the four weeks ahead".
 
