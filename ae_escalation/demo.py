@@ -6,8 +6,9 @@ model and no GPU. Nothing it says is a model's output: its drafts quote true
 tool values, and the planted ones add a figure or a date no tool returned.
 It shows:
 
-- a figure planted by code in the first draft, as the live designed
-  failure plants it, caught by the code check and fixed on the retry;
+- a figure planted by code in the first readable draft, as the live
+  designed failure plants it, caught at that figure by the code check and
+  fixed on the retry;
 - a brief that fails twice, marked "not verified, do not act", and its
   approval refused;
 - a manager's edit that fails the code check, returned marked;
@@ -152,8 +153,8 @@ def _gateway(settings, folder, name, script):
 
 def scripted_brief(run, holidays, settings, plants, run_id, folder=None):
     """One brief through the real graph with the stand-in. plants is 0 for
-    a true draft, 1 for a figure planted by code in the first draft only,
-    as the live designed failure does, or 2 for a planted draft both
+    a true draft, 1 for a figure planted by code in the first readable draft
+    only, as the live designed failure does, or 2 for a planted draft both
     times."""
     folder = folder or tempfile.mkdtemp()
     entry = _entry(run)

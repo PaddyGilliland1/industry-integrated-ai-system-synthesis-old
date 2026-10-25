@@ -939,8 +939,8 @@ class BriefGraph:
         run_id : str
             Names the run in the recordings, so a replay finds its calls.
         plant : callable, optional
-            The designed failure: a function of the first draft and the
-            ledger that returns the draft with a planted figure.
+            The designed failure: a function of the first readable draft
+            and the ledger that returns the draft with a planted figure.
 
         Returns
         -------

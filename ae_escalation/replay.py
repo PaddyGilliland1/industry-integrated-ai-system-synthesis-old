@@ -15,7 +15,8 @@ nothing is chosen after a brief has been read:
 - the template comparison's two weeks: the national latch week and the
   demand week, the first demand brief by origin;
 - the designed failure: one more run of the demand week's brief, whose
-  first draft gets a figure no tool returned, planted by code. I chose the
+  first readable draft gets a figure no tool returned, planted by code; it
+  is caught only when the code check fails at that figure. I chose the
   demand week because its forecasts are trusted, so a planted forecast
   reads as plausible.
 
