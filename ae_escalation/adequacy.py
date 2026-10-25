@@ -17,6 +17,7 @@ to approval.
 """
 
 import csv
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -83,6 +84,9 @@ class AdequacyRecord(BaseModel):
     # True when this set goes to the approver: the local set with 6 of 7
     # adequate. A frontier set waits for the approver's choice of set.
     to_approval: bool
+    # True when the verdict is the one bounded prompt-tuning round, so the
+    # local set may be scored once more, under a new label.
+    tuning_next: bool = False
     verdict: str
 
 
@@ -217,7 +221,7 @@ def assess(result, scores, round, label):
         )
     adequate = sum(b.adequate for b in briefs)
     total = len(briefs)
-    case = to_approval = False
+    case = to_approval = tuning = False
     if result.backend == "frontier":
         verdict = (
             f"{adequate} of {total} adequate on the frontier backend. Both "
@@ -231,6 +235,7 @@ def assess(result, scores, round, label):
             "approval, and the frontier backend does not run."
         )
     elif round == 1:
+        tuning = True
         verdict = (
             f"{adequate} of {total} adequate: one bounded prompt-tuning "
             "round, then score the set again."
@@ -252,6 +257,7 @@ def assess(result, scores, round, label):
         total=total,
         frontier_case=case,
         to_approval=to_approval,
+        tuning_next=tuning,
         verdict=verdict,
     )
 
@@ -268,8 +274,11 @@ def write_record(record, paths):
         "",
         record.verdict,
         "",
+        f"Round: {record.round}",
         f"Frontier case: {'yes' if record.frontier_case else 'no'}",
         f"Goes to approval: {'yes' if record.to_approval else 'no'}",
+        "Prompt-tuning round next: "
+        f"{'yes' if record.tuning_next else 'no'}",
         "",
         "| Brief | Status | Criteria met | Not met | Adequate |",
         "|---|---|---|---|---|",
@@ -286,10 +295,14 @@ def write_record(record, paths):
 
 
 def record_says(path):
-    """The record's two verdict lines, read back: whether it states the
-    frontier case and whether its set goes to approval."""
+    """The record's verdict lines, read back: its round, whether it states
+    the frontier case, whether its set goes to approval and whether the
+    prompt-tuning round follows."""
     text = path.read_text(encoding="utf-8")
+    found = re.search(r"^Round: (\d)$", text, re.M)
     return {
+        "round": int(found.group(1)) if found else None,
         "frontier_case": "Frontier case: yes" in text,
         "to_approval": "Goes to approval: yes" in text,
+        "tuning_next": "Prompt-tuning round next: yes" in text,
     }

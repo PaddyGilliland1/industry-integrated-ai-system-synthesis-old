@@ -278,21 +278,54 @@ class Paths:
         return self.base / "outbox" / name
 
 
+class PromptsDiffer(RuntimeError):
+    """The frontier label's prompts are not the local label's, so the two
+    sets would not have run on the same prompts."""
+
+
 def label_prompts(paths, live):
-    """The prompts a labelled run uses: copied from the package when the
-    label is first recorded, and read from that copy ever after, so a
-    round's recordings still replay after the prompt-tuning round changes
-    the package's prompts (review P2-10)."""
+    """The prompts a labelled run uses, kept beside its recordings and read
+    from that copy ever after, so a round's recordings still replay after
+    the prompt-tuning round changes the package's prompts.
+
+    A local label copies the package's prompts when it is first recorded.
+    A frontier label copies the local label's kept prompts instead, and
+    every time it is read they must still be the same, file for file, so
+    the two sets are compared on the same prompts."""
     folder = paths.prompts
+    source = ag.PROMPTS_PATH
+    frontier = paths.backend == "frontier"
+    if frontier:
+        source = Paths.under(paths.base, "local", paths.label).prompts
+        if not source.exists():
+            raise ReplayMiss(
+                f"no prompts were kept in {source}; the frontier set runs on "
+                "the local label's prompts"
+            )
     if live and not folder.exists():
         folder.mkdir(parents=True)
-        for source in sorted(ag.PROMPTS_PATH.glob("*.md")):
-            shutil.copyfile(source, folder / source.name)
+        for path in sorted(source.glob("*.md")):
+            shutil.copyfile(path, folder / path.name)
     if not folder.exists():
         raise ReplayMiss(
             f"no prompts were kept in {folder}; the replay needs the "
             "prompts the label ran with"
         )
+    if frontier:
+        names = {p.name for p in source.glob("*.md")}
+        names |= {p.name for p in folder.glob("*.md")}
+        differ = sorted(
+            n
+            for n in names
+            if not (source / n).exists()
+            or not (folder / n).exists()
+            or (source / n).read_bytes() != (folder / n).read_bytes()
+        )
+        if differ:
+            raise PromptsDiffer(
+                "the frontier label's prompts differ from the local "
+                f"label's: {', '.join(differ)}"
+            )
     return load_prompts(folder)
 
 

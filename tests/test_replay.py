@@ -257,12 +257,37 @@ def test_a_label_keeps_its_prompts_and_replays_from_them(
     tuned.mkdir()
     for name in kept:
         text = (ag.PROMPTS_PATH / name).read_text()
-        (tuned / name).write_text(text.replace("Plan them.", "Plan well."))
+        (tuned / name).write_text(text.replace("plan them", "plan them well"))
     monkeypatch.setattr(ag, "PROMPTS_PATH", tuned)
     again = rp.run_set(replay_run, holidays, settings, paths, live=False)
     assert [o.status for o in again.outcomes] == [
         o.status for o in live.outcomes
     ]
+
+
+def test_a_frontier_label_takes_its_prompts_from_the_local_label(tmp_path):
+    from ae_escalation import agents as ag
+
+    local = rp.Paths.under(tmp_path, "local", "round2")
+    local.prompts.mkdir(parents=True)
+    for source in ag.PROMPTS_PATH.glob("*.md"):
+        tuned = source.read_text(encoding="utf-8") + "\nTuned.\n"
+        (local.prompts / source.name).write_text(tuned, encoding="utf-8")
+    frontier = rp.Paths.under(tmp_path, "frontier", "round2")
+    rp.label_prompts(frontier, live=True)
+    for source in local.prompts.glob("*.md"):
+        copy = frontier.prompts / source.name
+        assert copy.read_text(encoding="utf-8").endswith("Tuned.\n")
+    (frontier.prompts / "reviewer.md").write_text("changed", encoding="utf-8")
+    with pytest.raises(rp.PromptsDiffer, match="reviewer.md"):
+        rp.label_prompts(frontier, live=False)
+
+
+def test_a_frontier_label_needs_the_local_labels_prompts(tmp_path):
+    frontier = rp.Paths.under(tmp_path, "frontier", "round2")
+    with pytest.raises(rp.ReplayMiss, match="local"):
+        rp.label_prompts(frontier, live=True)
+    assert not frontier.prompts.exists()
 
 
 # --- the budget, a stop and a resume (review P2-4) ---------------------------

@@ -1,7 +1,7 @@
 """The live run of the replay set, for the main session.
 
     python -m ae_escalation.live briefs [--label round1] [--resume]
-    python -m ae_escalation.live adequacy [--label round1] [--round 1]
+    python -m ae_escalation.live adequacy [--label round1]
     python -m ae_escalation.live choose --label round2 --set frontier \\
         --initials PG
     python -m ae_escalation.live notify [--label round1] [--resume]
@@ -11,7 +11,10 @@ backend config.json names, recording every model call, then writes the
 adequacy form and scores sheet for the main session's reviewer. "adequacy"
 reads the reviewer's scores, records the adequacy test in approvals/ and,
 only when the verdict sends the set to approval, releases the approval
-queue for Paddy, so the record exists before he reads any brief.
+queue for Paddy, so the record exists before he reads any brief. The round
+a set is scored in comes from the records already written, never from the
+command: the second is allowed only after a first whose verdict was the
+prompt-tuning round, and there is no third.
 "notify" runs after Paddy's decisions are in
 approvals/decisions_<backend>_<label>.csv: the coordinator drafts the
 notifications for the approved briefs, live, and writes them to the outbox,
@@ -25,10 +28,10 @@ machine holds the model at its pinned digest, and it prints nvidia-smi; for
 frontier, that a key is set in the git-ignored .env, never the shell's
 environment, and it names that file but never prints the key.
 A label already recorded is never run again, so no recording is replaced;
-a second round, such as after the one prompt-tuning round, takes a new
-label. The frontier backend runs the set only with the stated case: the
-local set's adequacy record for the same label saying "Frontier case: yes",
-and only once. "choose" then records the approver's choice between the two
+the set after the one prompt-tuning round takes a new label. The frontier
+backend runs the set only with the stated case: the local set's adequacy
+record for the same label saying "Frontier case: yes", and only once, on
+the prompts that local label kept. "choose" then records the approver's choice between the two
 sets and releases the chosen set's queue. The notebook then replays every
 run from the recordings, without the model.
 """
@@ -169,16 +172,58 @@ def _briefs(settings, paths, model, digest, resume):
     return 0 if caught is True else 1
 
 
-def _adequacy(settings, paths, round_):
-    """Record the adequacy test from the reviewer's scores, and release the
-    approver's queue only when the verdict sends this set to approval
-    (review P2-6). It calls no model."""
+def scoring_round(out, backend, label):
+    """Which round this label's set is scored in, found from the adequacy
+    records already written, never claimed: as (round, why not).
+
+    A local set is the first round when no other local label has a record.
+    It is the second only when one other label's record is a first round
+    whose verdict was the prompt-tuning round, and there is no second round
+    yet. Any other scoring, a second first round or a second second round,
+    is refused. A frontier set takes the round of the local set under the
+    same label."""
+    folder = Path(out) / "approvals"
+    if backend == "frontier":
+        local = Paths.under(out, "local", label).adequacy_record
+        if not local.exists():
+            return None, f"the local set under {label} has no record: {local}"
+        return record_says(local)["round"], ""
+    others = {
+        path.stem.removeprefix("adequacy_record_local_"): record_says(path)
+        for path in sorted(folder.glob("adequacy_record_local_*.md"))
+        if path.stem != f"adequacy_record_local_{label}"
+    }
+    first = [name for name, r in others.items() if r["round"] == 1]
+    second = [name for name, r in others.items() if r["round"] == 2]
+    if second:
+        return None, (
+            f"the local set has had its second round already, as "
+            f"{second[0]}, and there is no third"
+        )
+    if not first:
+        return 1, ""
+    if not others[first[0]]["tuning_next"]:
+        return None, (
+            f"the first round, {first[0]}, called for no prompt-tuning "
+            "round, so there is no second round to score"
+        )
+    return 2, ""
+
+
+def _adequacy(settings, paths):
+    """Record the adequacy test from the reviewer's scores, in the round
+    the records give, and release the approver's queue only when the
+    verdict sends this set to approval. It calls no model."""
     record_path = paths.adequacy_record
     if record_path.exists():
         print(f"{record_path} exists; it is never replaced")
         return 2
     if not paths.adequacy_scores.exists():
         print(f"no scores yet: the reviewer fills {paths.adequacy_scores}")
+        return 2
+    round_, why = scoring_round(paths.base, paths.backend, paths.label)
+    if round_ is None:
+        print(f"not scored: {why}")
         return 2
     try:
         scores = read_scores(paths.adequacy_scores)
@@ -330,13 +375,6 @@ def main(
         help="take up a run that stopped at its time budget",
     )
     parser.add_argument(
-        "--round",
-        type=int,
-        choices=(1, 2),
-        default=1,
-        help="adequacy: 2 after the one bounded prompt-tuning round",
-    )
-    parser.add_argument(
         "--set",
         choices=("local", "frontier"),
         help="choose: the set the approver chose for approval",
@@ -347,7 +385,7 @@ def main(
     paths = Paths.under(args.out, settings.llm_backend, args.label)
     step = args.command
     if step == "adequacy":
-        return _adequacy(settings, paths, args.round)
+        return _adequacy(settings, paths)
     if step == "choose":
         return _choose(settings, args.out, args.label, args.set, args.initials)
     if step == "briefs" and settings.llm_backend == "frontier":

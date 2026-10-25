@@ -153,11 +153,15 @@ def key_file(tmp_path):
 
 
 def stated_case(tmp_path, label, pinned):
-    """The local set's second round, scored under 6 of 7: the stated
-    case for the frontier backend, recorded by the adequacy command."""
+    """The local set scored under 6 of 7 in its first round, then again
+    under the label after the prompt-tuning round: the stated case for the
+    frontier backend, recorded by the adequacy command."""
+    assert briefs(tmp_path, pinned, f"{label}-first") == 0
+    score_all(tmp_path, f"{label}-first", unmet=2)
+    assert adequacy(tmp_path, f"{label}-first") == 0
     assert briefs(tmp_path, pinned, label) == 0
     score_all(tmp_path, label, unmet=2)
-    assert adequacy(tmp_path, label, "--round", "2") == 0
+    assert adequacy(tmp_path, label) == 0
 
 
 def frontier(tmp_path, *args, env_file=None):
@@ -215,10 +219,59 @@ def test_the_frontier_backend_never_runs_without_the_stated_case(
 def test_the_frontier_backend_runs_once_per_set(tmp_path, capsys, pinned):
     stated_case(tmp_path, "t1", pinned)
     assert frontier(tmp_path, "briefs", "--label", "t1") == 0
-    stated_case(tmp_path, "t2", pinned)
+    # No second stated case can be scored, so it is written by hand here to
+    # show the frontier refuses a second run all the same.
+    second = tmp_path / "approvals" / "adequacy_record_local_t2.md"
+    second.write_text("Round: 2\nFrontier case: yes\n", encoding="utf-8")
+    copied = tmp_path / "recordings" / "local" / "t2"
+    (copied / "prompts").mkdir(parents=True)
     capsys.readouterr()
     assert frontier(tmp_path, "briefs", "--label", "t2") == 2
     assert "once" in capsys.readouterr().out
+
+
+def record_text(tmp_path, label):
+    path = tmp_path / "approvals" / f"adequacy_record_local_{label}.md"
+    return path.read_text(encoding="utf-8")
+
+
+def test_the_round_comes_from_the_records_not_the_command(
+    tmp_path, pinned, capsys
+):
+    assert briefs(tmp_path, pinned, "t1") == 0
+    score_all(tmp_path, "t1", unmet=2)
+    assert adequacy(tmp_path, "t1") == 0
+    first = record_text(tmp_path, "t1")
+    assert "Round: 1" in first and "Prompt-tuning round next: yes" in first
+    assert briefs(tmp_path, pinned, "t2") == 0
+    score_all(tmp_path, "t2")
+    assert adequacy(tmp_path, "t2") == 0
+    second = record_text(tmp_path, "t2")
+    assert "Round: 2" in second and "Goes to approval: yes" in second
+    # A third scoring, of either round, is refused.
+    assert briefs(tmp_path, pinned, "t3") == 0
+    score_all(tmp_path, "t3", unmet=2)
+    capsys.readouterr()
+    assert adequacy(tmp_path, "t3") == 2
+    assert "second round" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        adequacy(tmp_path, "t3", "--round", "1")
+
+
+def test_a_set_that_went_to_approval_has_no_second_round(
+    tmp_path, pinned, capsys
+):
+    assert briefs(tmp_path, pinned, "t1") == 0
+    score_all(tmp_path, "t1")
+    assert adequacy(tmp_path, "t1") == 0
+    assert briefs(tmp_path, pinned, "t2") == 0
+    score_all(tmp_path, "t2", unmet=2)
+    capsys.readouterr()
+    assert adequacy(tmp_path, "t2") == 2
+    assert "no prompt-tuning round" in capsys.readouterr().out
+    assert not (
+        tmp_path / "approvals" / "adequacy_record_local_t2.md"
+    ).exists()
 
 
 def test_the_approvers_choice_of_set_is_recorded_and_releases_it(
