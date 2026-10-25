@@ -405,3 +405,25 @@ def test_two_coordinator_errors_hold_every_action_for_the_manager(
         approved
     )
     assert {a.state for a in again.actions} == {"held"}
+
+
+# --- the manager sees what was held (review P3-6) ----------------------------
+
+
+def test_the_summary_shows_a_held_drafts_marked_text(
+    approved, settings, tmp_path
+):
+    planted = dict(GOOD)
+    planted["hold-leave"] = GOOD["hold-leave"] + " Expect 1,450 attendances."
+    script = [notes(**planted), notes(**{"hold-leave": planted["hold-leave"]})]
+    out = coordinator(settings, tmp_path, script).coordinate(approved)
+    shown = out.summary()
+    assert "hold-leave" in shown and "held" in shown
+    assert "[[NOT VERIFIED: 1,450]]" in shown
+
+
+def test_the_summary_says_why_there_is_no_draft(approved, settings, tmp_path):
+    script = [failing(ConnectionError("x")), failing(ConnectionError("y"))]
+    out = coordinator(settings, tmp_path, script).coordinate(approved)
+    shown = out.summary()
+    assert "no draft was written for this action: model error" in shown

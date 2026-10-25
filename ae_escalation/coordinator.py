@@ -329,12 +329,17 @@ class CoordinationResult(BaseModel):
     drafts: list[DraftCheck]
 
     def summary(self):
-        """A short table of the actions, for the notebook."""
-        lines = [
-            f"{a.code} | {a.action.owner} | reply by "
-            f"{ph.deadline_text(a.action.deadline)} | {a.state}"
-            for a in self.actions
-        ]
+        """A short table of the actions, for the notebook and the live
+        command, with each held action's draft as the manager sees it, its
+        failing figures marked (review P3-6)."""
+        lines = []
+        for a in self.actions:
+            lines.append(
+                f"{a.code} | {a.action.owner} | reply by "
+                f"{ph.deadline_text(a.action.deadline)} | {a.state}"
+            )
+            if a.state == "held":
+                lines.append(f"  held, shown to the manager: {a.shown}")
         return "\n".join([*lines, OUTBOX_LABEL, SIMULATED_LABEL])
 
 
@@ -540,12 +545,17 @@ class Coordinator:
                     "the outbox, and the manager sees it marked",
                     simulated=False,
                 )
+                why = "; ".join(f.reason for f in d.check.failures)
                 outcomes.append(
                     ActionOutcome(
                         action=a,
                         message=shown,
                         history=[held],
-                        shown=marked(shown, d.check.failures),
+                        shown=(
+                            marked(shown, d.check.failures)
+                            if shown
+                            else f"no draft: {why}"
+                        ),
                     )
                 )
                 continue
