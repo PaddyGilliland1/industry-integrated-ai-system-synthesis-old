@@ -657,3 +657,78 @@ def test_two_reviewer_slips_fail_closed_without_the_investigator(
     wording = out.attempts[-1].wording
     assert wording.reviewer_error and len(wording.reviewer_slips) == 2
     assert "no readable verdict" in wording.problems[0]
+
+
+# --- the designed failure's accounting (review P2-8) -------------------------
+
+
+def plant_value(value):
+    def plant(draft, ledger):
+        n = len(draft.cited_figures) + 1
+        return draft.model_copy(
+            update={
+                "summary": draft.summary + f" Expect {{F{n}}} attendances.",
+                "cited_figures": [
+                    *draft.cited_figures,
+                    br.CitedFigure(
+                        value=value,
+                        tool_call_id="T1",
+                        model="SA-MA",
+                        horizon=1,
+                        unit="attendances",
+                    ),
+                ],
+            }
+        )
+
+    return plant
+
+
+def test_caught_means_a_failure_found_at_the_planted_value(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, reply(good_draft(run)), DONE]
+    script += [reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "planted", plant=plant_value(9876)
+    )
+    first = out.attempts[0]
+    assert first.planted and first.planted_value == 9876
+    assert out.planted_caught is True
+    assert out.planted_attempt == 1
+
+
+def test_a_failure_for_another_reason_is_not_the_plant_caught(
+    run, holidays, settings, tmp_path
+):
+    true = round(good_draft(run)["cited_figures"][0]["value"])
+    script = [TOOLS, DONE, reply(planted_draft(run)), DONE]
+    script += [reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "planted", plant=plant_value(true)
+    )
+    assert not out.attempts[0].check.passed
+    assert out.planted_caught is False
+
+
+def test_the_plant_goes_into_the_first_readable_draft(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, AIMessage(content="Sorry, no."), DONE]
+    script += [reply(good_draft(run))]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "planted", plant=plant_value(9876)
+    )
+    assert not out.attempts[0].planted and out.attempts[1].planted
+    assert out.planted_attempt == 2 and out.planted_caught is True
+
+
+def test_a_brief_never_readable_was_never_planted(
+    run, holidays, settings, tmp_path
+):
+    sorry = AIMessage(content="Sorry, no.")
+    script = [TOOLS, DONE, sorry, DONE, sorry]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "planted", plant=plant_value(9876)
+    )
+    assert out.planted_caught is None and out.planted_attempt is None

@@ -126,7 +126,7 @@ def _briefs(settings, paths, model, digest, resume):
         return _stopped(exc, paths, "briefs")
     write_queue(result, paths)
     write_form(result, paths)
-    caught = not result.planted.attempts[0].check.passed
+    caught = result.planted.planted_caught
     print(
         f"{len(result.outcomes)} briefs on {result.backend} {result.model}; "
         f"pre-run check {result.check}"
@@ -135,11 +135,15 @@ def _briefs(settings, paths, model, digest, resume):
         print(f"  {o.run_id}: {o.status} after {len(o.attempts)} attempt(s)")
     events = sum(o.status == "not verified" for o in result.outcomes)
     print(f"not verified (G4 events): {events}")
-    print(f"planted figure caught: {'yes' if caught else 'NO'}")
+    shown = {True: "yes", False: "NO", None: "NO, no readable draft"}
+    print(
+        f"planted figure caught: {shown[caught]}"
+        + (f", in attempt {result.planted.planted_attempt}" if caught else "")
+    )
     print(f"recordings: {paths.briefs}")
     print(f"approval queue: {paths.queue_csv}")
     print(f"adequacy form for the reviewer: {paths.adequacy_form}")
-    return 0 if caught else 1
+    return 0 if caught is True else 1
 
 
 def _notify(settings, paths, model, digest, resume):

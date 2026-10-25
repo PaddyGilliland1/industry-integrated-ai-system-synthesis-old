@@ -583,6 +583,8 @@ class Attempt(BaseModel):
     number: int
     stop_reason: str = ""
     planted: bool = False
+    # The figure code planted, so "caught" can mean a failure at it.
+    planted_value: float | None = None
     check: CheckResult | None = None
     wording: WordingResult | None = None
 
@@ -611,6 +613,26 @@ class BriefOutcome(BaseModel):
         return self.status == "verified"
 
     @property
+    def planted_attempt(self):
+        """The attempt that carried the designed failure, or None if no
+        readable draft ever came to plant it in."""
+        return next((a.number for a in self.attempts if a.planted), None)
+
+    @property
+    def planted_caught(self):
+        """True when the code check failed at the planted figure itself, not
+        merely failed (review P2-8); None if nothing was planted."""
+        attempt = next((a for a in self.attempts if a.planted), None)
+        if attempt is None:
+            return None
+        if attempt.check is None or attempt.planted_value is None:
+            return False
+        return any(
+            _number(f.found) == attempt.planted_value
+            for f in attempt.check.failures
+        )
+
+    @property
     def failures(self):
         """The last attempt's failing figures."""
         last = self.attempts[-1] if self.attempts else None
@@ -635,6 +657,13 @@ class BriefOutcome(BaseModel):
             else []
         )
         return "\n".join([banner, text, *notes])
+
+
+def _number(text):
+    try:
+        return float(text.replace(",", ""))
+    except ValueError:
+        return None
 
 
 class BriefState(TypedDict, total=False):
@@ -720,14 +749,23 @@ class BriefGraph:
         )
         record = Attempt(number=attempt, stop_reason=out.stop_reason)
         draft = out.draft
-        if draft is not None and attempt == 1 and self._plant is not None:
-            draft = self._plant(draft, list(self._toolbox.ledger))
-            record = record.model_copy(update={"planted": True})
+        if draft is not None and self._plant is not None:
+            # The plant goes into the first readable draft, whichever
+            # attempt gives it, and only once.
+            planted = self._plant(draft, list(self._toolbox.ledger))
+            added = planted.cited_figures[len(draft.cited_figures) :]
+            value = added[0].value if added else None
+            draft, self._plant = planted, None
+            record = record.model_copy(
+                update={"planted": True, "planted_value": value}
+            )
             self.log.write(
                 kind="planted",
                 run_id=state["run_id"],
+                attempt=attempt,
+                value=value,
                 note="designed failure: a figure no tool returned, planted "
-                "by code in the Investigator's first draft",
+                "by code in the Investigator's first readable draft",
             )
         self._attempt = record
         update = {
