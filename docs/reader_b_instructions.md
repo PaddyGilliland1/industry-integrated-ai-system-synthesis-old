@@ -1,12 +1,12 @@
 # Reading the demand briefs: instructions for Reader B
 
-Thank you for helping. You are Reader B. Please do not write your name on anything you return.
+You are Reader B. Please do not write your name on anything you return.
 
 ## What this is
 
-A computer system writes a short weekly note, the demand brief, for the manager who staffs the front door of a hospital emergency department in Scotland. It helps the manager decide whether extra shifts, bank staff or held leave are needed in the weeks ahead. The weeks you will read are past weeks from Public Health Scotland's published figures, replayed as if live. Nothing was sent to anyone, and a person approves every note before anyone acts on it.
+A computer system writes a short weekly note, the demand brief, for the manager who staffs a Scottish emergency department's front door. It helps decide whether extra shifts, bank staff or held leave are needed. You will read past weeks, replayed as if live. Nothing was sent, and a person approves every note before anyone acts.
 
-You were asked because you did not build the system, so please work alone and discuss the notes with nobody until you have finished.
+You did not build the system, so please work alone and discuss the notes with nobody until you finish.
 
 ## What the demand level means
 
@@ -15,11 +15,11 @@ Each note carries a demand level from 1 to 4, set by fixed rules, not by the wri
 ## What you will read
 
 1. Four demand briefs, labelled Brief 1 to Brief 4.
-2. Two pairs of texts, each pair about one week, labelled Text A and Text B. The order inside a pair tells you nothing about how either text was written.
+2. Two pairs of texts, each about one week, labelled Text A and Text B. Their order tells you nothing about how either was written.
 
 ## How to rate each brief
 
-Read each brief as the duty manager would this week. Mark each of the six criteria on the form as met or not met:
+Read each brief as the duty manager would. Mark each of the six criteria on the form as met or not met:
 
 1. Figures correct. The system has already checked every figure against its source. Mark it not met if a figure is marked NOT VERIFIED, two figures contradict each other, or one looks wrong to you.
 2. Uncertainty stated. The note gives a range, the hospital's own past forecast error and its track record.
@@ -40,4 +40,4 @@ Mark each text in a pair against the same six criteria, and say whether you foun
 
 ## Good to know
 
-There are no right answers, and no note is about any patient. Nobody sees your ratings until you have finished, and you will not see anyone else's. The task takes about 45 minutes. Return the form to the person who gave it to you.
+There are no right answers, and no note is about any patient. You will not see anyone else's ratings, and nobody sees yours until you finish. The task takes about 45 minutes. Return the form to the person who gave it to you.
