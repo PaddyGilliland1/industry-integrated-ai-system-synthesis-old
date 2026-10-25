@@ -284,3 +284,41 @@ def test_a_stopped_run_says_so_and_resumes_with_the_flag(
     assert (
         lv.main([*args, "--resume"], chat_model=stand_in(), fetch=pinned) == 2
     )
+
+
+def test_an_edits_wording_check_is_recorded_live_and_replayed(
+    tmp_path, pinned
+):
+    from ae_escalation import replay as rp
+
+    assert briefs(tmp_path, pinned) == 0
+    score_all(tmp_path)
+    assert adequacy(tmp_path) == 0
+    queue = tmp_path / "approvals" / "queue_local_t1.csv"
+    with open(queue, newline="", encoding="utf-8-sig") as fh:
+        row = list(csv.DictReader(fh))[0]
+    edit = queue.parent / row["edited_file"]
+    draft = json.loads(edit.read_text(encoding="utf-8"))
+    draft["summary"] = "Reworded. " + draft["summary"]
+    edit.write_text(json.dumps(draft), encoding="utf-8")
+    row.update(
+        action="edit",
+        initials="AB",
+        decided_at="2026-10-27T09:30:00+00:00",
+        factual_edit="no",
+        **{c: "yes" for c in lv.CRITERIA_FIELDS},
+    )
+    out = tmp_path / "approvals" / "decisions_local_t1.csv"
+    with open(out, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    args = ["notify", "--label", "t1", "--out", str(tmp_path)]
+    assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 0
+    paths = rp.Paths.under(tmp_path, "local", "t1")
+    assert paths.edit_reviews.exists()
+    settings = cf.load_config(REPO / "config.json")
+    run, holidays = lv.load_run(settings)
+    result = rp.run_set(run, holidays, settings, paths, live=False)
+    again = rp.queue_with_decisions(result, paths, settings=settings)
+    assert again.item(row["brief_id"]).state == "approved with edit"

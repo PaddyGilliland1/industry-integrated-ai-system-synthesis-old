@@ -223,6 +223,11 @@ class Paths:
         return self._recordings / "notify.jsonl"
 
     @property
+    def edit_reviews(self):
+        """The Reviewer's wording checks on the approver's edits."""
+        return self._recordings / "edits.jsonl"
+
+    @property
     def progress(self):
         """The live runs' start, stop and completion, append-only."""
         return self._recordings / "progress.jsonl"
@@ -443,7 +448,46 @@ def write_queue(result, paths, log=None):
     return queue
 
 
-def queue_with_decisions(result, paths, log=None, record=False):
+def edit_reviewer(
+    settings,
+    paths,
+    live,
+    chat_model=None,
+    log=None,
+    digest=None,
+    resume=False,
+):
+    """The Reviewer's wording check for the approver's edits (review P3-5),
+    recorded to paths.edit_reviews when live and replayed from there
+    otherwise, with the label's own Reviewer prompts."""
+    gateway = ModelGateway.for_settings(
+        settings,
+        RecordingStore(paths.edit_reviews),
+        live=live,
+        chat_model=chat_model,
+        log=log,
+        digest=digest,
+        budget=Budget(settings.agents.run_budget_s) if live else None,
+        resume=resume,
+    )
+    prompts = label_prompts(paths, live)["reviewer"]
+
+    def review(brief, run_id):
+        result, _ = ag.wording_check(
+            brief,
+            gateway=gateway,
+            prompts=prompts,
+            run_id=run_id,
+            call_number=1,
+        )
+        return result
+
+    return review
+
+
+def queue_with_decisions(
+    result, paths, log=None, record=False, reviewer=None, settings=None
+):
     """The queue with the approver's decisions from paths.decisions, when
     that file exists.
 
@@ -454,15 +498,21 @@ def queue_with_decisions(result, paths, log=None, record=False):
     audit log (review P2-7); a decision already recorded is not added
     twice. A row it cannot read, or a decision the queue refuses, is logged
     and listed in queue.refusals, and the other rows still apply (review
-    P3-7).
+    P3-7). An edit is checked by reviewer; given settings and no reviewer,
+    the edits' recorded wording checks are replayed from paths.edit_reviews.
     """
     started = run_started(paths)
+    if reviewer is None and settings is not None:
+        reviewer = edit_reviewer(settings, paths, live=False, log=log)
     if record:
         queue = ApprovalQueue(
-            paths.queue, log=log or AuditLog(paths.audit), not_before=started
+            paths.queue,
+            log=log or AuditLog(paths.audit),
+            not_before=started,
+            reviewer=reviewer,
         )
     else:
-        queue = ApprovalQueue(log=log, not_before=started)
+        queue = ApprovalQueue(log=log, not_before=started, reviewer=reviewer)
         for outcome in result.outcomes:
             queue.add(outcome)
     if not paths.decisions.exists():

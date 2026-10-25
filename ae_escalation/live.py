@@ -59,6 +59,7 @@ from .replay import (
     Paths,
     can_resume,
     coordinate_approved,
+    edit_reviewer,
     progress,
     queue_with_decisions,
     run_set,
@@ -276,7 +277,16 @@ def _notify(settings, paths, model, digest, resume):
         return 2
     run, holidays = load_run(settings)
     result = run_set(run, holidays, settings, paths, live=False)
-    queue = queue_with_decisions(result, paths, record=True)
+    reviewer = edit_reviewer(
+        settings,
+        paths,
+        live=True,
+        chat_model=model,
+        log=AuditLog(paths.audit),
+        digest=digest,
+        resume=resume,
+    )
+    queue = queue_with_decisions(result, paths, record=True, reviewer=reviewer)
     try:
         done = coordinate_approved(
             queue,

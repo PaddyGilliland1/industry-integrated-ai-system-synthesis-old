@@ -3,12 +3,13 @@
 Paddy approves, edits or rejects each replay brief himself, with his
 initials and a timestamp, and records which of the six approval criteria
 each brief met (D-EVAL-19; build spec, section 2, item 6). Only a verified
-brief can be approved. Every edit re-runs the code figure check before it
-can be approved; an edit that fails comes back to the manager marked "not
-verified, do not act" with its failing figures marked, never to the
-Investigator, which would overwrite it. A brief that is "not verified" can
-never be approved, edited or not, and counts as a G4 event; the manager may
-edit it, for the record, or reject it.
+brief can be approved. Every edit re-runs the code figure check, then the
+device-word screen and the Reviewer's wording check, before it can be
+approved (review P3-5); an edit that fails comes back to the manager marked
+"not verified, do not act" with its failing figures or words marked, never
+to the Investigator, which would overwrite it. A brief that is "not
+verified" can never be approved, edited or not, and counts as a G4 event;
+the manager may edit it, for the record, or reject it.
 
 The queue is an append-only JSONL file of events, queued briefs and
 decisions, so the states can always be rebuilt from it, and every act goes
@@ -33,7 +34,7 @@ from pydantic import (
     model_validator,
 )
 
-from .agents import BriefOutcome
+from .agents import BriefOutcome, WordingResult, device_words
 from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief
 from .figures import CheckResult, check_brief, marked, tokens
 from .gateway import AuditLog
@@ -185,6 +186,8 @@ class QueueItem(BaseModel):
     current: DemandBrief | None
     edit: DemandBrief | None = None
     last_edit: CheckResult | None = None
+    # The wording checks on the last edit, once its code check passed.
+    edit_wording: WordingResult | None = None
     decisions: list[Decision] = Field(default_factory=list)
 
     def display(self, written_by=True):
@@ -200,6 +203,13 @@ class QueueItem(BaseModel):
             text = marked(
                 self.edit.text(failed, written_by=written_by), failures
             )
+            wording = self.edit_wording
+            if self.last_edit.passed and wording and not wording.passed:
+                named = "\n".join(f"- {p}" for p in wording.problems)
+                return (
+                    f"{banner}\nYour edit failed the wording check:\n"
+                    f"{named}\n{text}"
+                )
             return f"{banner}\nYour edit failed the code check.\n{text}"
         if self.state == "not verified":
             shown = self.outcome.display(written_by=written_by)
@@ -272,9 +282,12 @@ def factual_changes(base, draft, edited):
 class ApprovalQueue:
     """The approval queue file, its items and the decisions on them."""
 
-    def __init__(self, path=None, log=None, not_before=None):
+    def __init__(self, path=None, log=None, not_before=None, reviewer=None):
         self.path = Path(path) if path else None
         self.log = log or AuditLog()
+        # The Reviewer's wording check for an edit: a function of the
+        # edited brief and a run id. With none, no edit can pass.
+        self.reviewer = reviewer
         # When the live run that wrote the briefs began: no decision can
         # come before it (review P3-3).
         self.not_before = not_before
@@ -385,6 +398,13 @@ class ApprovalQueue:
         else:
             edited, result = self._recheck(item, decision.edited)
             update["edit"], update["last_edit"] = edited, result
+            edits = sum(d.action == "edit" for d in item.decisions) + 1
+            wording = None
+            if result.passed:
+                wording = self._wording(edited, f"{item.brief_id}-edit{edits}")
+            update["edit_wording"] = wording
+            if wording is not None and not wording.passed:
+                result = result.model_copy(update={"passed": False})
             base = item.current or item.outcome.brief
             found = factual_changes(base, decision.edited, edited)
             self._factual_by = (
@@ -405,6 +425,24 @@ class ApprovalQueue:
         new = item.model_copy(update=update)
         self._items[item.brief_id] = new
         return new
+
+    def _wording(self, brief, run_id):
+        """The edit's wording checks: the device-word screen in code, then
+        the Reviewer, failing closed when there is none to ask."""
+        found = device_words("\n".join(brief.rendered().values()))
+        if found:
+            return WordingResult(passed=False, problems=found, by="code")
+        if self.reviewer is None:
+            return WordingResult(
+                passed=False,
+                problems=[
+                    "the wording check could not run on this edit: no "
+                    "Reviewer was given"
+                ],
+                by="model",
+                reviewer_error=True,
+            )
+        return self.reviewer(brief, run_id)
 
     def decide(self, decision):
         """Apply one decision and return the item as it now stands.
@@ -451,6 +489,11 @@ class ApprovalQueue:
             state=item.state,
             edit_check=(
                 None if item.last_edit is None else item.last_edit.passed
+            ),
+            edit_wording=(
+                None
+                if item.edit_wording is None
+                else item.edit_wording.model_dump()
             ),
         )
         return item

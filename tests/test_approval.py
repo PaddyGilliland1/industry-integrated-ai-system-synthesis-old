@@ -76,8 +76,12 @@ def decide(brief_id, action, edited=None, factual=False, **unmet):
     )
 
 
-def queue(tmp_path, *outcomes, log=None):
-    q = ap.ApprovalQueue(tmp_path / "queue.jsonl", log=log)
+def passing(brief, run_id):
+    return ag.WordingResult(passed=True, problems=[], by="model")
+
+
+def queue(tmp_path, *outcomes, log=None, reviewer=passing):
+    q = ap.ApprovalQueue(tmp_path / "queue.jsonl", log=log, reviewer=reviewer)
     for o in outcomes:
         q.add(o)
     return q
@@ -435,3 +439,49 @@ def test_the_approver_may_still_declare_a_factual_edit(
     )
     assert log.entries[-1]["factual_edit"] is True
     assert log.entries[-1]["factual_edit_by"] == "approver"
+
+
+# --- an edit faces the wording checks too (review P3-5) ----------------------
+
+
+def test_an_edit_with_a_device_word_fails_in_code(verified, good, tmp_path):
+    worded = edited_copy(
+        good, summary=good.summary.replace("forecasts", "predicts")
+    )
+    item = queue(tmp_path, verified).decide(
+        decide("nw", "edit", edited=worded)
+    )
+    assert item.state == "edit failed"
+    assert "predict" in item.display()
+
+
+def test_an_edit_the_reviewer_fails_is_returned_marked(
+    verified, good, tmp_path
+):
+    seen = []
+
+    def failing(brief, run_id):
+        seen.append(run_id)
+        return ag.WordingResult(
+            passed=False, problems=['"stop admitting" instructs'], by="model"
+        )
+
+    reworded = edited_copy(good, summary="Reworded. " + good.summary)
+    item = queue(tmp_path, verified, reviewer=failing).decide(
+        decide("nw", "edit", edited=reworded)
+    )
+    assert item.state == "edit failed" and seen == ["nw-edit1"]
+    shown = item.display()
+    assert shown.startswith("NOT VERIFIED, DO NOT ACT")
+    assert "stop admitting" in shown
+
+
+def test_an_edit_with_no_reviewer_to_check_it_fails_closed(
+    verified, good, tmp_path
+):
+    reworded = edited_copy(good, summary="Reworded. " + good.summary)
+    item = queue(tmp_path, verified, reviewer=None).decide(
+        decide("nw", "edit", edited=reworded)
+    )
+    assert item.state == "edit failed"
+    assert "wording check could not run" in item.display()
