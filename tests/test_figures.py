@@ -305,7 +305,8 @@ def test_the_brief_copies_the_rules_level_primary_and_prints_its_meaning():
     assert b.level == ENTRY.level and b.level_source == "flag"
     assert b.primary == "SA-MA"
     assert b.level_meaning == tl.LEVEL_MEANING
-    assert f"{tl.LEVEL_MEANING}\n{tl.level_band(b.level)}\n" in b.text()
+    band = tl.level_band(b.level, b.level_source)
+    assert f"{tl.LEVEL_MEANING}\n{band}\n" in b.text()
     assert b.backend == "local" and b.model.startswith("nemotron")
 
 

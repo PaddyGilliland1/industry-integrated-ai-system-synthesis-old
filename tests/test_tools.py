@@ -251,29 +251,112 @@ def test_the_screen_at_the_latch_week_names_four_latch_briefs(run):
         assert e.level_meaning == tl.LEVEL_MEANING
 
 
+LEVEL_1 = (
+    "Level 1 means usual demand for the time of year, below 1.05 times the "
+    "seasonal baseline; levels 2 to 4 mean unusually high. "
+)
+
+
 @pytest.mark.parametrize(
-    "level, line",
+    "level, source, line",
     [
         (
             1,
-            "Level 1 means usual demand for the time of year, below 1.05 "
-            "times the seasonal baseline; levels 2 to 4 mean unusually high.",
+            "flag",
+            LEVEL_1 + "From the flag, going by past forecast errors, no "
+            "week ahead has at least an even chance of reaching 1.05 times "
+            "the seasonal baseline.",
         ),
         (
             2,
-            "Level 2 means demand 1.05 to under 1.10 times the seasonal "
-            "baseline.",
+            "flag",
+            "Level 2 from the flag means that, going by past forecast "
+            "errors, one of the four weeks ahead has at least an even chance "
+            "of reaching 1.05 times the seasonal baseline.",
+        ),
+        (
+            1,
+            "surge",
+            LEVEL_1 + "From the surge, the latest released week was below "
+            "1.05 times the lowest seasonal baseline of the four weeks ahead.",
+        ),
+        (
+            2,
+            "surge",
+            "Level 2 from the surge means the latest released week was 1.05 "
+            "to under 1.10 times the lowest seasonal baseline of the four "
+            "weeks ahead.",
         ),
         (
             3,
-            "Level 3 means demand 1.10 to under 1.15 times the seasonal "
-            "baseline.",
+            "surge",
+            "Level 3 from the surge means the latest released week was 1.10 "
+            "to under 1.15 times the lowest seasonal baseline of the four "
+            "weeks ahead.",
         ),
-        (4, "Level 4 means demand 1.15 times the seasonal baseline or more."),
+        (
+            4,
+            "surge",
+            "Level 4 from the surge means the latest released week was at "
+            "least 1.15 times the lowest seasonal baseline of the four weeks "
+            "ahead.",
+        ),
+        (
+            1,
+            "held",
+            LEVEL_1 + "Held, it is the level the flag gave in the week before "
+            "the alarm, when no week ahead had at least an even chance of "
+            "reaching 1.05 times the seasonal baseline. It is kept until a "
+            "person approves a latch reset.",
+        ),
+        (
+            2,
+            "held",
+            "Level 2, held, is the level the flag gave in the week before the "
+            "alarm, when one of the four weeks ahead had at least an even "
+            "chance of reaching 1.05 times the seasonal baseline. It is kept "
+            "until a person approves a latch reset.",
+        ),
     ],
 )
-def test_each_level_states_its_band_from_the_rules_cuts(level, line):
-    assert tl.level_band(level) == line
+def test_each_level_states_what_its_source_means(level, source, line):
+    assert tl.level_band(level, source) == line
+
+
+@pytest.mark.parametrize("level, source", [(3, "flag"), (4, "held")])
+def test_a_level_its_source_cannot_give_is_refused(level, source):
+    with pytest.raises(ValueError):
+        tl.level_band(level, source)
+
+
+def test_each_replay_briefs_band_line_is_true_of_the_rule(run):
+    # What each line says, checked on the run itself: the flag's chance at
+    # the origin, the latest week over the lowest seasonal baseline ahead,
+    # and the flag in the week before a held episode's alarm.
+    from ae_escalation import replay as rp
+    from ae_escalation import rules as ru
+
+    seen = set()
+    for e in rp.replay_entries(run):
+        rows = run.frame[run.frame["series"] == e.hospital].reset_index()
+        t = int(run.weeks.get_loc(pd.Timestamp(e.as_of)))
+        chances = rows.loc[:, ["P1", "P2", "P3", "P4"]].to_numpy()
+        if e.level_source == "flag":
+            assert chances[t].max() >= ru.FLAG_P
+        elif e.level_source == "surge":
+            cap = run.caps[e.hospital][t, ru.LEAD - 1 :]
+            ratio = run.series[e.hospital][t] / cap.min()
+            assert ru.band_level(np.array([ratio]))[0] == e.level
+        else:
+            ep = next(
+                x
+                for x in run.runs[e.hospital]["episodes"]
+                if x["alarm"] <= t and (x["reset"] is None or x["reset"] > t)
+            )
+            before = np.nan_to_num(chances[ep["alarm"] - 1], nan=-1.0)
+            assert (before.max() >= ru.FLAG_P) == (e.level == 2)
+        seen.add((e.level_source, e.level))
+    assert {s for s, _ in seen} == {"flag", "surge", "held"}
 
 
 def test_the_screen_at_the_demand_week_names_ninewells_from_the_flag(run):

@@ -74,30 +74,79 @@ Measure = Literal[
 ]
 
 
-def level_band(level):
-    """The line that follows the level's meaning in every brief: this
-    level's band of demand over the seasonal baseline, from the rule's cuts.
+# The four weeks ahead are release horizons 1 to 4, data horizons LEAD to H.
+AHEAD = {4: "four"}[ru.H - ru.LEAD + 1]
+
+
+def level_band(level, source):
+    """The line that follows the level's meaning in every brief: what this
+    level means from its source, built from the rule's constants.
 
     The meaning line alone reads as if every level were unusually high, so
-    a level 1 brief also says that level 1 is usual demand.
+    level 1 also says it is usual demand. Each clause says what rules.py
+    does. The flag (exceed_prob, any_at_least) is raised when, by the
+    primary's forecast and its past errors, a week ahead has at least an
+    even chance of reaching the first cut times its capacity, and gives
+    level 2, or 1 when not raised. The line says "past forecast errors"
+    without naming the primary, since the template brief never names one.
+    A surge level (run_realtime) is the band of the latest released week
+    over the capacity of each week ahead, which is its band over the lowest
+    of them. A held level (demand_level) is the flag's level in the week
+    before the alarm.
     """
     cuts = [f"{c:.2f}" for c in ru.CUTS]
     top = len(cuts) + 1
-    if level == 1:
-        return (
-            f"Level 1 means usual demand for the time of year, below "
-            f"{cuts[0]} times the seasonal baseline; levels 2 to {top} mean "
-            "unusually high."
-        )
-    if level == top:
-        return (
-            f"Level {top} means demand {cuts[-1]} times the seasonal "
-            "baseline or more."
-        )
-    return (
-        f"Level {level} means demand {cuts[level - 2]} to under "
-        f"{cuts[level - 1]} times the seasonal baseline."
+    chance = (
+        "an even chance"
+        if ru.FLAG_P == 0.5
+        else f"a {100 * ru.FLAG_P:g}% chance"
     )
+    reach = f"{cuts[0]} times the seasonal baseline"
+    held = "It is kept until a person approves a latch reset."
+    level_1 = (
+        f"Level 1 means usual demand for the time of year, below {cuts[0]} "
+        f"times the seasonal baseline; levels 2 to {top} mean unusually high."
+    )
+    if source == "flag" and level == 1:
+        return (
+            f"{level_1} From the flag, going by past forecast errors, no week "
+            f"ahead has at least {chance} of reaching {reach}."
+        )
+    if source == "flag" and level == 2:
+        return (
+            "Level 2 from the flag means that, going by past forecast errors, "
+            f"one of the {AHEAD} weeks ahead has at least {chance} of "
+            f"reaching {reach}."
+        )
+    if source == "held" and level == 1:
+        return (
+            f"{level_1} Held, it is the level the flag gave in the week "
+            f"before the alarm, when no week ahead had at least {chance} of "
+            f"reaching {reach}. {held}"
+        )
+    if source == "held" and level == 2:
+        return (
+            "Level 2, held, is the level the flag gave in the week before the "
+            f"alarm, when one of the {AHEAD} weeks ahead had at least "
+            f"{chance} of reaching {reach}. {held}"
+        )
+    if source == "surge" and 1 <= level <= top:
+        lowest = f"the lowest seasonal baseline of the {AHEAD} weeks ahead"
+        if level == 1:
+            return (
+                f"{level_1} From the surge, the latest released week was "
+                f"below {cuts[0]} times {lowest}."
+            )
+        band = (
+            f"at least {cuts[-1]}"
+            if level == top
+            else f"{cuts[level - 2]} to under {cuts[level - 1]}"
+        )
+        return (
+            f"Level {level} from the surge means the latest released week "
+            f"was {band} times {lowest}."
+        )
+    raise ValueError(f"the rule gives no level {level} from the {source}")
 
 
 class Request(BaseModel):

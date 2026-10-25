@@ -22,7 +22,10 @@ trust less. Two things differ from the spec's wording. The article in the
 drift sentence: "a downward breach", where the spec's "an {upward |
 downward}" would print "an downward". And the band line after the meaning
 line, which the agent's brief prints too, so the two stay comparable: the
-meaning line alone reads as if level 1 were unusually high.
+meaning line alone reads as if level 1 were unusually high. The band line
+says what the level's source means, so for the flag it names the flag's
+threshold, an even chance; it never states a week's own chance or names a
+primary model.
 
 Option A, the comparison's pass rule: in a week, the agent adds value only
 if it meets every criterion the template brief meets, and at least one it
@@ -160,7 +163,7 @@ class TemplateBrief(BaseModel):
             f"Demand level {self.level}, from "
             f"{LEVEL_FROM[self.level_source]}.",
             tl.LEVEL_MEANING,
-            tl.level_band(self.level),
+            tl.level_band(self.level, self.level_source),
             "",
             "Forecasts, with their 80% and 95% ranges:",
             *table(heads, self.forecast_rows()),

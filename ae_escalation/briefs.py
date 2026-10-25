@@ -501,7 +501,7 @@ def brief_text(head, shown, written_by=True):
         f"released {ph.release_text(head.release_date)}",
         f"Demand level {head.level}, from {LEVEL_FROM[head.level_source]}.",
         head.level_meaning,
-        tl.level_band(head.level),
+        tl.level_band(head.level, head.level_source),
     ]
     if head.drift_alarm:
         article = "an" if head.breach_direction == "upward" else "a"

@@ -49,7 +49,7 @@ def test_the_fields_come_in_the_specs_order(demand):
         "2021",
         "Demand level 2, from the flag.",
         tl.LEVEL_MEANING,
-        tl.level_band(2),
+        tl.level_band(2, "flag"),
         "Forecasts",
         "Back-test error",
         "This hospital has no past flag to judge.",
@@ -152,7 +152,8 @@ def test_the_band_line_follows_the_meaning_as_in_the_agents_brief(
     demand, latch
 ):
     for t in (demand, latch):
-        assert f"{tl.LEVEL_MEANING}\n{tl.level_band(t.level)}\n" in t.text()
+        band = tl.level_band(t.level, t.level_source)
+        assert f"{tl.LEVEL_MEANING}\n{band}\n" in t.text()
     assert latch.level == 1 and demand.level == 2
 
 
@@ -168,8 +169,11 @@ def test_the_level_line_names_its_source(latch, surge):
 
 
 def test_it_shows_no_gru_no_chance_no_calendar_and_no_ranking(demand, latch):
-    for t in (demand.text(), latch.text()):
-        low = t.lower()
+    for brief in (demand, latch):
+        # The band line is the rule's, printed in both briefs alike: it
+        # names the flag's threshold, never a week's own stated chance.
+        band = tl.level_band(brief.level, brief.level_source)
+        low = brief.text().replace(band, "").lower()
         for word in (
             "gru",
             "chance",
@@ -180,6 +184,7 @@ def test_it_shows_no_gru_no_chance_no_calendar_and_no_ranking(demand, latch):
             "best",
         ):
             assert word not in low, word
+        assert "primary" not in band.lower()
 
 
 def test_every_number_and_date_in_it_comes_from_a_tool_result(demand, latch):
@@ -188,7 +193,7 @@ def test_every_number_and_date_in_it_comes_from_a_tool_result(demand, latch):
         dates = fg.ledger_dates(t.ledger, t.hospital, t.week)
         # The band line's numbers are the rule's cuts, not a tool's, and
         # the agent's brief prints the same line.
-        band = tl.level_band(t.level)
+        band = tl.level_band(t.level, t.level_source)
         assert band in t.text()
         for token in fg.tokens(t.text().replace(band, "")):
             if token.kind == "number":
