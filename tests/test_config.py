@@ -201,4 +201,5 @@ def test_the_template_pairs_order_has_its_own_seed():
 def test_the_secret_scan_ignores_image_data_but_not_an_aws_key_id():
     assert not cf.secret_like('"image/png": "iVBORaKiAp98shQAMG7cY4iMN"')
     assert cf.secret_like("AKIA" + "ABCDEFGHIJKLMNOP")
-    assert cf.secret_like('{"API_KEY": "abcdefgh12345"}')
+    # Joined so this file does not hold the shape it tests for.
+    assert cf.secret_like('{"API_KEY": ' + '"abcdefgh12345"}')
