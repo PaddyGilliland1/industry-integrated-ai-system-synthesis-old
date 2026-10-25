@@ -17,10 +17,16 @@ from ae_escalation import placeholders as ph
 CTX = ph.TextContext(
     hospital="T101H",
     name="Ninewells Hospital",
+    kind="demand",
     level=2,
     origin=date(2021, 6, 13),
     release=date(2021, 6, 22),
     primary="SA-MA",
+)
+# A surge brief at the same hospital and origin: latched, so its forecasts
+# are untrusted.
+SURGE = CTX.model_copy(
+    update={"kind": "surge", "latched_since": date(2021, 6, 6)}
 )
 
 
@@ -147,6 +153,37 @@ def reasons(text, **kw):
 )
 def test_each_figure_is_written_with_its_label(figure, shown):
     assert ph.render("{F1}", [figure], CTX) == shown
+
+
+@pytest.mark.parametrize(
+    "figure",
+    [
+        cite(1120, "point", model="SA-MA", horizon=1),
+        cite(982, "low_80", model="SA-MA", horizon=1),
+        cite(1454, "high_95", model="linear", horizon=3),
+        cite(25.5, "spread", horizon=1),
+    ],
+)
+def test_a_forecast_in_a_latched_brief_is_labelled_untrusted(figure):
+    trusted = ph.render("{F1}", [figure], CTX)
+    assert ph.render("{F1}", [figure], SURGE) == (
+        trusted.removesuffix(")") + ", untrusted)"
+    )
+
+
+@pytest.mark.parametrize(
+    "figure",
+    [
+        cite(24.5, "error", "T2", model="seasonal naive", horizon=1),
+        cite(788, "history", "T5", week=date(2020, 6, 14)),
+        cite(29, "unflagged_busy", "T3"),
+        cite(1, "holidays", "T4", horizon=2),
+    ],
+)
+def test_a_fact_in_a_latched_brief_is_not_marked_untrusted(figure):
+    assert ph.render("{F1}", [figure], SURGE) == (
+        ph.render("{F1}", [figure], CTX)
+    )
 
 
 def test_a_label_leaves_out_what_the_figure_does_not_name():

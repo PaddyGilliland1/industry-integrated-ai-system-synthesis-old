@@ -10,9 +10,10 @@ every problem at once:
 - each cited figure must be what its tool call returned: the same value
   within rounding, the same measure, model, release horizon and week, in
   the measure's unit, for the same hospital and origin;
-- the brief must state its primary model's forecast, its hospital's own
-  back-test error and its track record, each a cited figure that passed,
-  found by its measure and its tool;
+- a demand brief must state its primary model's forecast, and every brief
+  its hospital's own back-test error and its track record, each a cited
+  figure that passed, found by its measure and its tool. A surge or latch
+  brief need state no forecast: its forecasts are untrusted;
 - the level must equal the rule's.
 
 So each number the reader sees is a tool's value, written with its true
@@ -610,15 +611,20 @@ def _stated(texts, fields, figures, failed):
     return [figures[n - 1] for n in sorted(numbers)]
 
 
-def requirement_problems(texts, figures, failed, primary):
-    """What every brief must state and does not: its primary model's
-    forecast, in any field; its hospital's own back-test error, in the
-    back-test error field; its track record, in the track record field.
-    Each is a cited figure that passed, found by its measure, which the
-    figure check has tied to its tool (build spec, section 4)."""
+def requirement_problems(texts, figures, failed, ctx):
+    """What a brief must state and does not: a demand brief, its primary
+    model's forecast, in any field; every brief, its hospital's own
+    back-test error, in the back-test error field, and its track record, in
+    the track record field. Each is a cited figure that passed, found by
+    its measure, which the figure check has tied to its tool (build spec,
+    section 4). A surge or latch brief's forecasts are untrusted, so it is
+    never asked for one."""
     out = []
+    primary = ctx.primary
     every = _stated(texts, texts, figures, failed)
-    if not any(f.measure == "point" and f.model == primary for f in every):
+    if ctx.kind == "demand" and not any(
+        f.measure == "point" and f.model == primary for f in every
+    ):
         out.append(
             Failure(
                 field="summary",
@@ -656,7 +662,7 @@ def check_draft(texts, figures, ledger, ctx):
     """Check a draft's text and cited figures against the tool calls the
     Investigator made, naming every problem at once: each text rule broken,
     each cited figure that is not what its tool returned, and each figure
-    every brief must state and does not.
+    the brief must state and does not.
 
     Parameters
     ----------
@@ -665,7 +671,7 @@ def check_draft(texts, figures, ledger, ctx):
     figures : list of briefs.CitedFigure
     ledger : list of briefs.ToolCall
     ctx : placeholders.TextContext
-        The brief's hospital, origin, level, dates and primary model.
+        The brief's hospital, kind, origin, level, dates and primary model.
 
     Returns
     -------
@@ -687,7 +693,7 @@ def check_draft(texts, figures, ledger, ctx):
                     reason=problem,
                 )
             )
-    failures += requirement_problems(texts, figures, set(failed), ctx.primary)
+    failures += requirement_problems(texts, figures, set(failed), ctx)
     return CheckResult(
         passed=not failures,
         failures=failures,

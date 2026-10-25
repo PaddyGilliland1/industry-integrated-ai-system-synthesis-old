@@ -301,6 +301,7 @@ def entry_context(entry):
     return ph.TextContext(
         hospital=entry.hospital,
         name=entry.name,
+        kind=entry.kind,
         level=entry.level,
         origin=entry.as_of,
         release=entry.release_date,

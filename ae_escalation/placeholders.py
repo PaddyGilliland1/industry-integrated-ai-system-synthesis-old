@@ -25,6 +25,7 @@ import re
 import unicodedata
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -75,14 +76,16 @@ class Failure(BaseModel):
 
 
 class TextContext(BaseModel):
-    """What code knows about a text's brief: its hospital, level, dates and
-    primary model. A notification adds its reply deadline, the weeks its
-    action covers and which of the brief's figures it may state."""
+    """What code knows about a text's brief: its hospital, kind, level,
+    dates and primary model. A notification adds its reply deadline, the
+    weeks its action covers and which of the brief's figures it may
+    state."""
 
     model_config = ConfigDict(frozen=True)
 
     hospital: str
     name: str
+    kind: Literal["demand", "surge", "latch"]
     level: int
     origin: date
     release: date
@@ -91,6 +94,12 @@ class TextContext(BaseModel):
     deadline: datetime | None = None
     weeks: tuple[date, ...] | None = None
     stated: frozenset[int] | None = None
+
+    @property
+    def forecasts_trusted(self):
+        """False in a surge or latch brief, whose forecasts are untrusted
+        until a person approves a latch reset."""
+        return self.kind == "demand"
 
     @property
     def notification(self):
@@ -174,6 +183,8 @@ COUNT_NOUNS = {
     "holidays": ("bank holiday", "bank holidays"),
 }
 NO_WEEK = ("history", "error", "targets")
+# What a forecast gives, which a latched brief's labels mark untrusted.
+FORECAST_MEASURES = ("point", *RANGE_END, "spread")
 
 
 def resolved(fig, ctx):
@@ -204,19 +215,31 @@ def _owner(model):
 def label(fig, ctx=None):
     """What a cited figure is, as code writes it in brackets after the
     value: its measure, model, release horizon and week, leaving out any
-    the figure does not name."""
+    the figure does not name. In a surge or latch brief a forecast, a range
+    end or the spread is marked untrusted, so no sentence can pass one off
+    as a figure to plan on."""
     measure, model = fig.measure, fig.model
     horizon, week = resolved(fig, ctx)
     at = f"release horizon {horizon}" if horizon else ""
     on = week_text(week) if week else ""
+    untrusted = (
+        "untrusted"
+        if measure in FORECAST_MEASURES
+        and ctx is not None
+        and not ctx.forecasts_trusted
+        else ""
+    )
     if measure == "point":
-        return _joined(f"{model} forecast" if model else "forecast", at, on)
+        what = f"{model} forecast" if model else "forecast"
+        return _joined(what, at, on, untrusted)
     if measure in RANGE_END:
         end, cover = RANGE_END[measure]
         owner = _owner(model) if model else "the"
-        return _joined(f"{end} end of {owner} {cover}% range", at, on)
+        what = f"{end} end of {owner} {cover}% range"
+        return _joined(what, at, on, untrusted)
     if measure == "spread":
-        return _joined("spread of the four models' forecasts", at, on)
+        what = "spread of the four models' forecasts"
+        return _joined(what, at, on, untrusted)
     if measure == "history":
         return _joined("actual", on)
     if measure == "error":

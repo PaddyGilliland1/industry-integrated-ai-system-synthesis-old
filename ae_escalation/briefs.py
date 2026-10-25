@@ -126,10 +126,13 @@ class DraftFields(BaseModel):
     summary: str = Field(
         min_length=1,
         description="Two to four sentences: what the forecasts say for the "
-        "weeks ahead and how far to trust them.",
+        "weeks ahead and how far to trust them; in a surge or latch brief, "
+        "what the level comes from and why the forecasts are untrusted.",
     )
     expected_range: str = Field(
-        min_length=1, description="The expected range, with its figures."
+        min_length=1,
+        description="The expected range, with its figures; in a surge or "
+        "latch brief, that no forecast range can be trusted.",
     )
     model_agreement: str = Field(
         min_length=1,
@@ -220,6 +223,7 @@ class DemandBrief(BaseModel):
         return ph.TextContext(
             hospital=self.hospital,
             name=self.name,
+            kind=self.kind,
             level=self.level,
             origin=self.week,
             release=self.release_date,

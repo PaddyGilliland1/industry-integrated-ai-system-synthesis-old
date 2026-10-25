@@ -76,29 +76,26 @@ NATURAL = {
         "2019-10-06",
         "S314H",
         {
-            "summary": "{HOSPITAL} is at {LEVEL} from the latest released "
-            "week, a surge: demand broke above the forecasts in {LATCHED}, "
-            "so they are untrusted until a person approves a latch reset. "
-            "For the record only, {PRIMARY} forecasts {F1} for {WEEK1}.",
-            "expected_range": "No range is trusted while the drift latch is "
-            "set. For the record, the range for {WEEK1} runs from {F2} to "
-            "{F3}.",
-            "model_agreement": "The simple models disagree, with a spread "
-            "of {F4}, and none is trusted after the breach. Trust the model "
-            "with the highest back-test error least: {F5}, against {F6}.",
-            "backtest_error": "Its own back-test error is {F6}.",
-            "track_record": "Of {F7}, {F8}; of {F9}, {F10}.",
+            "summary": "Demand broke above the forecasts in {LATCHED} and is "
+            "still running high, at {F1}. The forecasts are untrusted until "
+            "a person approves a latch reset, so plan from the released "
+            "weeks, not from any forecast.",
+            "expected_range": "No forecast range can be trusted while the "
+            "drift latch is set. Judge cover from each released week "
+            "instead.",
+            "model_agreement": "The simple models disagree by {F2}, and none "
+            "is trusted after the breach.",
+            "backtest_error": "Its own back-test error is {F3}.",
+            "track_record": "Of {F4}, {F5}; of {F6}, {F7}.",
             "watch_points": [
                 "Check whether extra shifts or bank staff are needed this "
                 "week.",
-                "Check each released week before changing staffing again.",
+                "Check each released week against cover before changing "
+                "staffing again.",
             ],
             "cited_figures": [
-                figure(2450, "T1", "point", **h1("linear")),
-                figure(2382, "T1", "low_80", **h1("linear")),
-                figure(2607, "T1", "high_80", **h1("linear")),
+                figure(2559, "T5", "history", week="2019-10-06"),
                 figure(16.0, "T1", "spread", horizon=1),
-                figure(5.0, "T2", "error", **h1("seasonal naive")),
                 figure(3.5, "T2", "error", **h1("linear")),
                 figure(4, "T3", "flags"),
                 figure(4, "T3", "borne_out"),
@@ -111,27 +108,28 @@ NATURAL = {
         "2020-03-22",
         "Scotland",
         {
-            "summary": "{HOSPITAL} is held at {LEVEL}: the drift alarm was "
-            "set in {LATCHED} after demand broke below the forecasts, so "
-            "they are untrusted until a person approves a latch reset. For "
-            "the record only, {PRIMARY} forecasts {F1} for {WEEK1}. Good "
-            "Friday falls in {WEEK2}.",
-            "expected_range": "No range is trusted while the drift latch is "
-            "set. For the record, the range for {WEEK1} runs from {F2} to "
-            "{F3}.",
-            "model_agreement": "The simple models disagree, with a spread "
-            "of {F4}, and none is trusted after the breach.",
-            "backtest_error": "Its own back-test error is {F5}.",
-            "track_record": "Of {F6}, {F7}; of {F8}, {F9}.",
+            "summary": "Demand fell sharply, from {F1} to {F2}, far below "
+            "every forecast for the weeks ahead, and the drift alarm set the "
+            "latch. The forecasts are untrusted until a person approves a "
+            "latch reset, and the level stays held meanwhile.",
+            "expected_range": "No forecast range can be trusted while the "
+            "drift latch is set. Judge cover from each released week "
+            "instead.",
+            "model_agreement": "The simple models disagree by {F3}, from {F4} "
+            "to {F5}. Trust the highest least: it sits furthest from the "
+            "latest released week.",
+            "backtest_error": "Its own back-test error is {F6}.",
+            "track_record": "Of {F7}, {F8}; of {F9}, {F10}.",
             "watch_points": [
                 "Check each released week before changing staffing.",
                 "Check cover around Good Friday in {WEEK2}.",
             ],
             "cited_figures": [
-                figure(26968, "T1", "point", **h1("linear")),
-                figure(25889, "T1", "low_80", **h1("linear")),
-                figure(28357, "T1", "high_80", **h1("linear")),
+                figure(23950, "T5", "history", week="2020-03-15"),
+                figure(16394, "T5", "history", week="2020-03-22"),
                 figure(14.1, "T1", "spread", horizon=1),
+                figure(23164, "T1", "point", **h1("SA-MA")),
+                figure(26968, "T1", "point", **h1("linear")),
                 figure(3.5, "T2", "error", **h1("linear")),
                 figure(9, "T3", "flags"),
                 figure(5, "T3", "borne_out"),
@@ -140,6 +138,12 @@ NATURAL = {
             ],
         },
     ),
+}
+# The calls each brief makes after CALLS, as T5 onwards.
+NATURAL_EXTRA = {
+    "demand": [],
+    "surge": [("get_history", {"weeks": 2})],
+    "latch": [("get_history", {"weeks": 2})],
 }
 
 SHOWN = {
@@ -187,24 +191,15 @@ SHOWN = {
         " It is not pressure, need or priority.\n"
         "Drift alarm: latched since w/e 29 Sep 2019, after an upward "
         "breach; surge: forecasts untrusted.\n"
-        "Summary: Royal Infirmary of Edinburgh at Little France is at "
-        "demand level 2 from the latest released week, a surge: demand "
-        "broke above the forecasts in w/e 29 Sep 2019, so they are "
-        "untrusted until a person approves a latch reset. For the record "
-        "only, linear (the primary model) forecasts 2,450 attendances "
-        "(linear forecast, release horizon 1, w/e 20 Oct 2019) for w/e 20 "
-        "Oct 2019.\n"
-        "Expected range: No range is trusted while the drift latch is set. "
-        "For the record, the range for w/e 20 Oct 2019 runs from 2,382 "
-        "attendances (low end of linear's 80% range, release horizon 1, w/e"
-        " 20 Oct 2019) to 2,607 attendances (high end of linear's 80% "
-        "range, release horizon 1, w/e 20 Oct 2019).\n"
-        "Model agreement: The simple models disagree, with a spread of 16% "
-        "(spread of the four models' forecasts, release horizon 1, w/e 20 "
-        "Oct 2019), and none is trusted after the breach. Trust the model "
-        "with the highest back-test error least: 5% (seasonal naive "
-        "back-test error, release horizon 1), against 3.5% (linear "
-        "back-test error, release horizon 1).\n"
+        "Summary: Demand broke above the forecasts in w/e 29 Sep 2019 and "
+        "is still running high, at 2,559 attendances (actual, w/e 06 Oct "
+        "2019). The forecasts are untrusted until a person approves a latch "
+        "reset, so plan from the released weeks, not from any forecast.\n"
+        "Expected range: No forecast range can be trusted while the drift "
+        "latch is set. Judge cover from each released week instead.\n"
+        "Model agreement: The simple models disagree by 16% (spread of the "
+        "four models' forecasts, release horizon 1, w/e 20 Oct 2019, "
+        "untrusted), and none is trusted after the breach.\n"
         "Back-test error: Its own back-test error is 3.5% (linear back-test"
         " error, release horizon 1).\n"
         "Track record: Of 4 flagged outlooks (track record), 4 flagged "
@@ -212,7 +207,8 @@ SHOWN = {
         " record), 20 unflagged outlooks that turned busy (track record).\n"
         "Watch points:\n"
         "- Check whether extra shifts or bank staff are needed this week.\n"
-        "- Check each released week before changing staffing again."
+        "- Check each released week against cover before changing staffing "
+        "again."
     ),
     "latch": (
         "Demand brief: Scotland, week ending 22 Mar 2020, released Tue 31 "
@@ -223,20 +219,20 @@ SHOWN = {
         " It is not pressure, need or priority.\n"
         "Drift alarm: latched since w/e 22 Mar 2020, after a downward "
         "breach; held: forecasts untrusted.\n"
-        "Summary: Scotland is held at demand level 1: the drift alarm was "
-        "set in w/e 22 Mar 2020 after demand broke below the forecasts, so "
-        "they are untrusted until a person approves a latch reset. For the "
-        "record only, linear (the primary model) forecasts 26,968 "
-        "attendances (linear forecast, release horizon 1, w/e 05 Apr 2020) "
-        "for w/e 05 Apr 2020. Good Friday falls in w/e 12 Apr 2020.\n"
-        "Expected range: No range is trusted while the drift latch is set. "
-        "For the record, the range for w/e 05 Apr 2020 runs from 25,889 "
-        "attendances (low end of linear's 80% range, release horizon 1, w/e"
-        " 05 Apr 2020) to 28,357 attendances (high end of linear's 80% "
-        "range, release horizon 1, w/e 05 Apr 2020).\n"
-        "Model agreement: The simple models disagree, with a spread of "
-        "14.1% (spread of the four models' forecasts, release horizon 1, "
-        "w/e 05 Apr 2020), and none is trusted after the breach.\n"
+        "Summary: Demand fell sharply, from 23,950 attendances (actual, w/e "
+        "15 Mar 2020) to 16,394 attendances (actual, w/e 22 Mar 2020), far "
+        "below every forecast for the weeks ahead, and the drift alarm set "
+        "the latch. The forecasts are untrusted until a person approves a "
+        "latch reset, and the level stays held meanwhile.\n"
+        "Expected range: No forecast range can be trusted while the drift "
+        "latch is set. Judge cover from each released week instead.\n"
+        "Model agreement: The simple models disagree by 14.1% (spread of "
+        "the four models' forecasts, release horizon 1, w/e 05 Apr 2020, "
+        "untrusted), from 23,164 attendances (SA-MA forecast, release "
+        "horizon 1, w/e 05 Apr 2020, untrusted) to 26,968 attendances "
+        "(linear forecast, release horizon 1, w/e 05 Apr 2020, untrusted). "
+        "Trust the highest least: it sits furthest from the latest released"
+        " week.\n"
         "Back-test error: Its own back-test error is 3.5% (linear back-test"
         " error, release horizon 1).\n"
         "Track record: Of 9 flagged outlooks (track record), 5 flagged "
@@ -283,9 +279,8 @@ def test_a_natural_brief_of_each_kind_passes_and_reads_plainly(
         model="m",
         model_digest=None,
     )
-    result = check_brief(
-        brief, ledger_for(replay_run, holidays, entry), entry.level
-    )
+    ledger = ledger_for(replay_run, holidays, entry, NATURAL_EXTRA[kind])
+    result = check_brief(brief, ledger, entry.level)
     assert result.passed, result.failures
     assert brief.text(written_by=False) == SHOWN[kind]
 

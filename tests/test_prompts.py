@@ -113,6 +113,27 @@ def test_the_investigator_is_told_every_token_and_measure():
         assert measure in system, measure
 
 
+def test_only_a_demand_brief_is_asked_for_the_primary_forecast():
+    system = PROMPTS["investigator"]["SYSTEM"]
+    assert "Every brief states the primary model's forecast" not in system
+    assert "A demand brief states the primary model's forecast" in system
+
+
+def test_a_surge_or_latch_brief_is_told_its_forecasts_are_untrusted():
+    system = PROMPTS["investigator"]["SYSTEM"]
+    assert (
+        "In a surge or latch brief the forecasts are untrusted until a "
+        "person approves a latch reset." in system
+    )
+    assert "Never give a forecast as what to plan on." in system
+    assert "code marks its label untrusted" in system
+
+
+def test_the_reviewer_refuses_an_untrusted_forecast_given_as_guidance():
+    system = PROMPTS["reviewer"]["SYSTEM"]
+    assert "an untrusted forecast something to plan on" in system
+
+
 @pytest.fixture
 def notified(replay_run):
     """The example notification's action: Ninewells' hold-leave action

@@ -518,6 +518,45 @@ def test_a_brief_missing_a_figure_every_brief_states_fails(fields, named):
     assert named in reasons(result)
 
 
+SURGE = ENTRY.model_copy(
+    update={
+        "kind": "surge",
+        "level_source": "surge",
+        "latched": True,
+        "latched_since": date(2021, 6, 6),
+        "breach_direction": "upward",
+    }
+)
+HELD = SURGE.model_copy(
+    update={
+        "kind": "latch",
+        "level_source": "held",
+        "breach_direction": "downward",
+    }
+)
+
+
+@pytest.mark.parametrize("entry", [SURGE, HELD], ids=["surge", "latch"])
+def test_a_surge_or_latch_brief_need_not_state_an_untrusted_forecast(entry):
+    # I never ask for a forecast the spec marks untrusted, so the check
+    # cannot push the model to quote one as guidance.
+    b = brief(
+        entry=entry,
+        summary="Demand broke from the forecasts in {LATCHED}, so they are "
+        "untrusted until a person approves a latch reset.",
+    )
+    result = check(b, rule_level=entry.level)
+    assert result.passed, reasons(result)
+    assert not b.figures_in("summary")
+
+
+def test_only_a_demand_brief_must_state_the_primary_forecast():
+    words = {"summary": "Demand is forecast unusually high."}
+    assert "SA-MA's forecast" in reasons(check(brief(**words)))
+    surge = brief(entry=SURGE, **words)
+    assert "SA-MA's forecast" not in reasons(check(surge))
+
+
 def test_a_failed_figure_does_not_count_as_stated():
     b = brief(
         backtest_error="It is {F1}.",

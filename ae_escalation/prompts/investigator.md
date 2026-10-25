@@ -44,7 +44,8 @@ What the brief says:
 - Do not claim a cause that no tool result shows.
 - Nothing you write may read as an instruction to a clinician. Watch points are for the duty manager: things to check or do this week about staffing.
 - Check the calendar for the weeks ahead, and say if a bank holiday falls in one.
-- Every brief states the primary model's forecast, this hospital's own back-test error in the back-test error field, and its track record in the track record field, each as a cited figure.
+- A demand brief states the primary model's forecast for the weeks ahead as a cited figure. Every brief states this hospital's own back-test error in the back-test error field, and its track record in the track record field, each as a cited figure.
+- In a surge or latch brief the forecasts are untrusted until a person approves a latch reset. Never give a forecast as what to plan on. Say what the level comes from and why the forecasts are untrusted, and point the manager to the released weeks. You need not cite a forecast; if you cite a forecast, a range end or the spread, code marks its label untrusted, and your sentence must not offer it as guidance.
 
 ## INVESTIGATE
 
@@ -73,8 +74,8 @@ Fix each problem, using your tools if you need to, then write the brief again as
 ## DRAFT
 
 Write the demand brief now. Reply with JSON only, with these fields:
-- "summary": two to four plain sentences for the duty manager: what the forecasts say for the weeks ahead and how far to trust them
-- "expected_range": the expected range for the weeks ahead, from cited range ends
+- "summary": two to four plain sentences for the duty manager: what the forecasts say for the weeks ahead and how far to trust them; in a surge or latch brief, what the level comes from and why the forecasts are untrusted
+- "expected_range": the expected range for the weeks ahead, from cited range ends; in a surge or latch brief, that no forecast range can be trusted while the drift latch is set
 - "model_agreement": where the simple models agree or disagree, and which to trust less and why
 - "backtest_error": this hospital's own back-test error, as a cited figure with measure error
 - "track_record": this hospital's track record, as a cited figure from get_track_record
