@@ -88,13 +88,14 @@ def level_band(level, source):
     usual is level 1 too. Capacity is named by its defined term, with its
     first-use gloss. Each clause says what rules.py does. The flag
     (exceed_prob, any_at_least) gives level 2 when, by the primary's
-    forecasts and their past errors, it flags a week ahead as reaching the
-    first cut times its capacity, and 1 otherwise. The line says "past
-    forecast errors" without naming the primary, since the template brief
-    never names one. A surge level (run_realtime) is the band of the latest
-    released week over the capacity of each week ahead, which is its band
-    over the lowest of them. A held level (demand_level) is the flag's level
-    in the week before the alarm.
+    forecasts and their past errors, it flags a week ahead that may reach
+    the first cut times its capacity, and 1 otherwise. It says "may" since
+    about 28% of flagged weeks turned busy in the steady years. The line
+    says "past forecast errors" without naming the primary, since the
+    template brief never names one. A surge level (run_realtime) is the
+    band of the latest released week over the capacity of each week ahead,
+    which is its band over the lowest of them. A held level (demand_level)
+    is the flag's level in the week before the alarm.
     """
     cuts = [f"{c:.2f}" for c in ru.CUTS]
     top = len(cuts) + 1
@@ -104,7 +105,7 @@ def level_band(level, source):
         "It says nothing about demand below the usual"
     )
     flagged = (
-        f"the rule flagged a week ahead as reaching {cuts[0]} times its "
+        f"the rule flagged a week ahead that may reach {cuts[0]} times its "
         f"{capacity}"
     )
     held = (

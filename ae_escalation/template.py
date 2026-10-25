@@ -24,7 +24,7 @@ downward}" would print "an downward". And the band line after the meaning
 line, which the agent's brief prints too, so the two stay comparable: the
 meaning line alone reads as if level 1 were unusually high. The band line
 says what the level's source means: for the flag, that it flagged a week
-ahead as reaching the first cut of simulated capacity. It never states a
+ahead that may reach the first cut of simulated capacity. It never states a
 chance or names a primary model.
 
 Option A, the comparison's pass rule: in a week, the agent adds value only

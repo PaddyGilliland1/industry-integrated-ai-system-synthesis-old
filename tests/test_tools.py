@@ -258,7 +258,7 @@ NOT_HIGH = (
     "says nothing about demand below the usual"
 )
 FLAGGED = (
-    "the rule flagged a week ahead as reaching 1.05 times its " + CAPACITY
+    "the rule flagged a week ahead that may reach 1.05 times its " + CAPACITY
 )
 SURGE = (
     "Level {} from the surge: the latest released week was {} times "

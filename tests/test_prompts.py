@@ -82,7 +82,7 @@ Demand level 2, from the flag.
 The demand level shows demand unusually high for the time of year. It is not \
 pressure, need or priority.
 Level 2 from the flag: going by past forecast errors, the rule flagged a \
-week ahead as reaching 1.05 times its simulated capacity, a seasonal \
+week ahead that may reach 1.05 times its simulated capacity, a seasonal \
 baseline of past demand.
 Drift alarm: none.
 Summary: Plan for demand above the usual for the time of year, starting at \

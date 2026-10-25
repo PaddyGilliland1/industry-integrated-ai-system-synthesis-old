@@ -118,7 +118,8 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
    the rule's constants. The agent's brief, the template brief and the Investigator's screen all print
    it:
    - flag, level 2: "Level 2 from the flag: going by past forecast errors, the rule flagged a week
-     ahead as reaching 1.05 times its simulated capacity, a seasonal baseline of past demand."
+     ahead that may reach 1.05 times its simulated capacity, a seasonal baseline of past demand."
+     "May", since about 28% of flagged weeks turned busy in the steady years.
    - held, level 1: "Level 1, held: the level the flag gave in the week before the alarm, when the rule
      found no week ahead unusually high for the time of year. It says nothing about demand below the
      usual, and is kept until a person approves a latch reset." Level 1 from the flag says the same
