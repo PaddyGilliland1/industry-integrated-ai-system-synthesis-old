@@ -491,6 +491,18 @@ def edit_reviewer(
     return review
 
 
+def same_act(a, b):
+    """Whether two decisions are the same act on a brief: the same action,
+    initials, time and edited text. The kept one may carry a factual edit
+    that code found since, which the approver's sheet does not."""
+
+    def key(d):
+        edited = None if d.edited is None else d.edited.model_dump(mode="json")
+        return (d.brief_id, d.action, d.initials, d.decided_at, edited)
+
+    return key(a) == key(b)
+
+
 def queue_with_decisions(
     result, paths, log=None, record=False, reviewer=None, settings=None
 ):
@@ -530,7 +542,9 @@ def queue_with_decisions(
     queue.refusals += unread
     for decision in decisions:
         held = queue.items_by_id().get(decision.brief_id)
-        if held is not None and decision in held.decisions:
+        if held is not None and any(
+            same_act(decision, d) for d in held.decisions
+        ):
             continue
         try:
             queue.decide(decision)

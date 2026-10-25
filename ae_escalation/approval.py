@@ -279,8 +279,19 @@ class ApprovalQueue:
                 if event["event"] == "queued":
                     outcome = BriefOutcome.model_validate(event["outcome"])
                     self._add(outcome)
-                else:
-                    self._decide(Decision.model_validate(event["decision"]))
+                    continue
+                # A decision read back keeps the wording check its edit had,
+                # so rebuilding the queue never asks the Reviewer again.
+                wording = event.get("edit_wording")
+                self._decide(
+                    Decision.model_validate(event["decision"]),
+                    recorded=(
+                        WordingResult.model_validate(wording)
+                        if wording
+                        else None
+                    ),
+                    replaying=True,
+                )
 
     def _save(self, event):
         if not self.path:
@@ -360,7 +371,9 @@ class ApprovalQueue:
         )
         return edited, result
 
-    def _decide(self, decision):
+    def _decide(self, decision, recorded=None, replaying=False):
+        """Apply one decision. In a rebuild from the queue file, an edit's
+        wording check is the one recorded with it."""
         if decision.brief_id not in self._items:
             raise UnknownBrief(f"{decision.brief_id} is not in the queue")
         item = self._items[decision.brief_id]
@@ -386,7 +399,14 @@ class ApprovalQueue:
             update["edit"], update["last_edit"] = edited, result
             edits = sum(d.action == "edit" for d in item.decisions) + 1
             wording = None
-            if result.passed:
+            if result.passed and replaying:
+                wording = recorded or WordingResult(
+                    passed=False,
+                    problems=["the edit's recorded wording check is missing"],
+                    by="model",
+                    reviewer_error=True,
+                )
+            elif result.passed:
                 wording = self._wording(edited, f"{item.brief_id}-edit{edits}")
             update["edit_wording"] = wording
             if wording is not None and not wording.passed:
@@ -456,10 +476,18 @@ class ApprovalQueue:
                 reason=str(exc),
             )
             raise
-        # The decision as kept, with any factual edit code found.
+        # The decision as kept, with any factual edit code found, and its
+        # edit's wording check.
         decision = item.decisions[-1]
+        wording = item.edit_wording if decision.action == "edit" else None
         self._save(
-            {"event": "decision", "decision": decision.model_dump(mode="json")}
+            {
+                "event": "decision",
+                "decision": decision.model_dump(mode="json"),
+                "edit_wording": (
+                    None if wording is None else wording.model_dump()
+                ),
+            }
         )
         self.log.write(
             kind="decision",

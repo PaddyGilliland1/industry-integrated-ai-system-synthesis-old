@@ -446,6 +446,73 @@ def test_the_queue_and_each_decision_reach_the_audit_and_queue_files(
     assert paths.queue.read_text() == before
 
 
+def test_a_resumed_notify_skips_each_recorded_decision_and_asks_no_reviewer(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation.agents import WordingResult
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    rp.write_queue(result, paths)
+    first, second = [o for o in result.outcomes if o.status == "verified"][:2]
+    # An edit code finds factual, though the sheet says no: it states one
+    # more figure. And an edit that fails the code check.
+    draft = first.brief.draft()
+    factual = draft.model_copy(
+        update={"summary": f"{draft.summary} Its error is {{F2}}."}
+    )
+    other = second.brief.draft()
+    wrong = other.cited_figures[0].model_copy(
+        update={"value": other.cited_figures[0].value + 50}
+    )
+    bad = other.model_copy(
+        update={"cited_figures": [wrong, *other.cited_figures[1:]]}
+    )
+    (paths.edits / "factual.json").write_text(factual.model_dump_json())
+    (paths.edits / "bad.json").write_text(bad.model_dump_json())
+    rows = [
+        {
+            **approval_row(o.run_id),
+            "action": "edit",
+            "edited_file": f"{paths.edits.name}/{name}",
+        }
+        for o, name in ((first, "factual.json"), (second, "bad.json"))
+    ]
+    decisions_csv(paths, rows)
+    calls = []
+
+    def reviewer(brief, run_id):
+        calls.append(run_id)
+        return WordingResult(passed=True, problems=[], by="model")
+
+    once = rp.queue_with_decisions(
+        result, paths, record=True, reviewer=reviewer
+    )
+    assert once.item(first.run_id).state == "approved with edit"
+    assert once.item(first.run_id).decisions[-1].factual_edit
+    assert once.item(second.run_id).state == "edit failed"
+    assert calls == [f"{first.run_id}-edit1"]
+    again = rp.queue_with_decisions(
+        result, paths, record=True, reviewer=reviewer
+    )
+    assert again.refusals == [] and calls == [f"{first.run_id}-edit1"]
+    assert again.item(first.run_id).state == "approved with edit"
+    assert again.item(second.run_id).state == "edit failed"
+    events = [
+        json.loads(x)["event"] for x in paths.queue.read_text().splitlines()
+    ]
+    assert events.count("decision") == 2
+    assert kinds(paths.audit).count("decision") == 2
+    assert kinds(paths.audit).count("refused") == 0
+    # The queue rebuilt from its file keeps each edit's recorded wording
+    # check, with no Reviewer to ask.
+    rebuilt = ap.ApprovalQueue(paths.queue)
+    assert rebuilt.item(first.run_id).state == "approved with edit"
+    assert rebuilt.item(first.run_id).edit_wording.passed
+
+
 def test_the_run_start_bounds_the_approvers_decisions(
     replay_run, holidays, settings, tmp_path
 ):
