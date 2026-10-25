@@ -26,6 +26,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from . import placeholders as ph
 from . import tools as tl
 from .agents import BriefGraph, BriefOutcome
 from .approval import ApprovalQueue, Criteria, Decision, NotApprovable
@@ -258,7 +259,7 @@ def safeguards(run, holidays, settings):
         when = (
             "{DEADLINE}"
             if deadline is None
-            else f"{deadline:%H:%M} on {deadline:%a %d %b %Y}"
+            else f"{deadline:%H:%M} on {ph.release_text(deadline.date())}"
         )
         return f"{{HOSPITAL}}, {{LEVEL}}: {a.task} Please reply by {when}."
 
@@ -294,5 +295,5 @@ def safeguards(run, holidays, settings):
         refusal=refusal,
         failed_edit=failed,
         notified=coordinator.coordinate(item),
-        planted_date=f"{late:%d %b %Y}",
+        planted_date=ph.day_text(late.date()),
     )

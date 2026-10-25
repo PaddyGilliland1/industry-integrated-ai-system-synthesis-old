@@ -478,3 +478,24 @@ def test_a_figure_for_a_week_the_action_does_not_cover_is_refused():
     got = notice("Expect {F3}.", weeks=two)
     assert got and "not one of the action's weeks" in got[0].reason
     assert not notice("Expect {F1}.", weeks=two)
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "placeholders",
+        "briefs",
+        "agents",
+        "coordinator",
+        "template",
+        "adequacy",
+    ],
+)
+def test_no_rendering_path_names_a_month_or_day_through_the_locale(module):
+    import importlib
+    import inspect
+
+    source = inspect.getsource(
+        importlib.import_module(f"ae_escalation.{module}")
+    )
+    assert "%b" not in source and "%a" not in source

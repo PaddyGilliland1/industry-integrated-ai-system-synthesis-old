@@ -24,6 +24,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from .approval import CRITERIA, Criteria
+from .placeholders import day_text
 
 THRESHOLD_CRITERIA = 5
 THRESHOLD_BRIEFS = 6
@@ -98,7 +99,7 @@ def _brief_block(outcome):
     passed = code_check_passed(outcome)
     lines = [
         f"## {outcome.run_id}: {entry.name}, week ending "
-        f"{entry.as_of:%d %b %Y}, {entry.kind} brief, level {entry.level}",
+        f"{day_text(entry.as_of)}, {entry.kind} brief, level {entry.level}",
         "",
         f"Code figure check: {'passed' if passed else 'failed'}. "
         f"Status: {outcome.status}.",

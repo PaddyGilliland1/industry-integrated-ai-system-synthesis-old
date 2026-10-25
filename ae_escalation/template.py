@@ -37,6 +37,7 @@ from pydantic import BaseModel, ConfigDict
 from . import tools as tl
 from .approval import Criteria
 from .briefs import LEVEL_FROM, ToolCall
+from .placeholders import day_text, release_text, week_text
 
 WEEKS = ("national latch week", "demand week")
 WATCH = {
@@ -85,7 +86,7 @@ def drift_sentence(latched, since, direction):
         return "Drift: none. The forecasts fit recent weeks."
     article = "an" if direction == "upward" else "a"
     return (
-        f"Drift: latched since w/e {since:%d %b %Y}, after {article} "
+        f"Drift: latched since {week_text(since)}, after {article} "
         f"{direction} breach. The forecasts are untrusted until a person "
         "approves a latch reset."
     )
@@ -151,7 +152,7 @@ class TemplateBrief(BaseModel):
         """The template brief as a reader sees it."""
         weeks = sorted({f.week_ending for f in self.forecasts.forecasts})
         heads = [
-            f"Release horizon {k}, w/e {w:%d %b %Y}"
+            f"Release horizon {k}, {week_text(w)}"
             for k, w in enumerate(weeks, 1)
         ]
 
@@ -164,8 +165,8 @@ class TemplateBrief(BaseModel):
             return out
 
         lines = [
-            f"{self.name}, week ending {self.week:%d %b %Y}, released "
-            f"{self.release_date:%a %d %b %Y}",
+            f"{self.name}, week ending {day_text(self.week)}, released "
+            f"{release_text(self.release_date)}",
             "",
             f"Demand level {self.level}, from "
             f"{LEVEL_FROM[self.level_source]}.",

@@ -381,8 +381,8 @@ def investigator_pass(
         prompts["SYSTEM"],
         hospital=entry.hospital,
         origin=entry.as_of.isoformat(),
-        origin_text=f"w/e {entry.as_of:%d %b %Y}",
-        release_text=f"{entry.release_date:%a %d %b %Y}",
+        origin_text=ph.week_text(entry.as_of),
+        release_text=ph.release_text(entry.release_date),
         tool_call_cap=cap,
     )
     messages = [SystemMessage(content=system)]
