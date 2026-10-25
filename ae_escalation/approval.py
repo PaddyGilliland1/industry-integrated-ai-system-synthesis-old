@@ -529,10 +529,16 @@ class ApprovalQueue:
             if i.outcome.status == "not verified"
         ]
         wrongly = sum(i.state in CLOSED[:2] for i in events)
+        causes = {}
+        for i in events:
+            causes[i.outcome.cause] = causes.get(i.outcome.cause, 0) + 1
         return {
             "approved": len(approved),
             "approved_passing_code_check": passing,
             "not_verified": len(events),
+            # A fault in the Reviewer's model call is counted apart from a
+            # brief the checks failed.
+            "not_verified_by_cause": causes,
             "not_verified_approved": wrongly,
             "met": passing == len(approved) and wrongly == 0,
         }

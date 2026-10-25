@@ -241,9 +241,17 @@ def test_g4_every_approved_brief_passes_and_none_not_verified_is_approved(
         "approved": 1,
         "approved_passing_code_check": 1,
         "not_verified": 1,
+        "not_verified_by_cause": {"the code check": 1},
         "not_verified_approved": 0,
         "met": True,
     }
+
+
+def test_g4_counts_the_not_verified_briefs_by_cause(
+    verified, unverified, tmp_path
+):
+    q = queue(tmp_path, verified, unverified)
+    assert q.g4()["not_verified_by_cause"] == {"the code check": 1}
 
 
 def test_g6_counts_approvals_without_a_factual_edit(

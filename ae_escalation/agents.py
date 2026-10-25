@@ -513,10 +513,10 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
     the result and the records of the model calls it made, none when code
     decided.
 
-    A verdict the Reviewer gives in the wrong form is the Reviewer's error,
-    not the brief's (review P3-15): it is logged and the Reviewer is asked
-    once more, with why it could not be read. A second slip, or a failed
-    model call, fails the check closed.
+    A verdict the Reviewer gives in the wrong form, or a model call that
+    fails, is the Reviewer's error, not the brief's: it is logged and the
+    Reviewer is asked once more, with why a verdict could not be read. A
+    second failure of either kind fails the check closed.
     """
     from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -527,7 +527,7 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
         SystemMessage(content=prompts["SYSTEM"]),
         HumanMessage(content=fill(prompts["VERDICT"], brief=brief.text())),
     ]
-    records, slips = [], []
+    records, slips, errors = [], [], []
     for number in (call_number, call_number + 1):
         try:
             reply, record = gateway.call(
@@ -541,21 +541,12 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
         except (ReplayMiss, BudgetExceeded):
             raise
         except Exception as exc:
-            # Fail closed: a wording check that could not run never passes.
+            # A failed call is the Reviewer's fault, not the brief's: it is
+            # asked once more, as after a slip, then fails closed.
             if getattr(exc, "call_record", None) is not None:
                 records.append(exc.call_record)
-            problem = (
-                "the Reviewer's wording check could not run: model error: "
-                f"{error_text(exc)}"
-            )
-            result = WordingResult(
-                passed=False,
-                problems=[problem],
-                by="model",
-                reviewer_error=True,
-                reviewer_slips=slips,
-            )
-            return result, records
+            errors.append(f"model error: {error_text(exc)}")
+            continue
         records.append(record)
         verdict, unread, raw = read_structured(reply, WordingVerdict)
         if verdict is not None:
@@ -576,8 +567,18 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
             ),
         ]
     else:
-        # An unreadable verdict is a failure, never a pass.
-        problem = "the Reviewer gave no readable verdict twice: " + slips[-1]
+        # A wording check that could not run, or an unreadable verdict, is
+        # a failure, never a pass.
+        if errors:
+            problem = "the Reviewer's wording check could not run: " + (
+                "; ".join(
+                    errors + [f"no readable verdict: {s}" for s in slips]
+                )
+            )
+        else:
+            problem = (
+                "the Reviewer gave no readable verdict twice: " + slips[-1]
+            )
         result = WordingResult(
             passed=False,
             problems=[problem],
@@ -659,6 +660,25 @@ class BriefOutcome(BaseModel):
             _number(f.found) == attempt.planted_value
             for f in attempt.check.failures
         )
+
+    @property
+    def cause(self):
+        """Why the brief is not verified, for G4 and the adequacy record;
+        None for a brief that is."""
+        if self.status != "not verified":
+            return None
+        last = self.attempts[-1] if self.attempts else None
+        if last is None:
+            return "no readable draft"
+        if last.wording is not None and last.wording.reviewer_error:
+            return "the Reviewer could not run"
+        if last.wording is not None and not last.wording.passed:
+            return "the wording check"
+        if last.check is not None and not last.check.passed:
+            return "the code check"
+        if last.stop_reason.startswith("model error"):
+            return "the Investigator could not run"
+        return "no readable draft"
 
     @property
     def failures(self):

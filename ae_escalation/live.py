@@ -156,8 +156,12 @@ def _briefs(settings, paths, model, digest, resume):
     )
     for o in result.outcomes:
         print(f"  {o.run_id}: {o.status} after {len(o.attempts)} attempt(s)")
-    events = sum(o.status == "not verified" for o in result.outcomes)
-    print(f"not verified (G4 events): {events}")
+    events = [o.cause for o in result.outcomes if o.status == "not verified"]
+    causes = ", ".join(f"{c}: {events.count(c)}" for c in sorted(set(events)))
+    print(
+        f"not verified (G4 events): {len(events)}"
+        + (f" ({causes})" if causes else "")
+    )
     shown = {True: "yes", False: "NO", None: "NO, no readable draft"}
     print(
         f"planted figure caught: {shown[caught]}"

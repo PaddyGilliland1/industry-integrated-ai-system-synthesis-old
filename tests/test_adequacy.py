@@ -65,6 +65,21 @@ def test_the_form_lists_every_brief_with_its_code_check_and_criteria(
         assert c.name in form and c.test in form
     assert "main session's reviewer" in form
     assert "at least 5 of the 6" in form
+    # The form holds every brief's text, so it stays with the recordings,
+    # out of approvals/, until the record releases the queue.
+    assert paths.adequacy_form.parent == paths.briefs.parent
+    assert paths.adequacy_scores.parent.name == "approvals"
+
+
+def test_the_record_names_why_each_brief_is_not_verified(result, paths):
+    worded = result.outcomes[0].model_copy(update={"status": "not verified"})
+    swapped = result.model_copy(
+        update={"outcomes": [worded, *result.outcomes[1:]]}
+    )
+    record = aq.assess(swapped, scores(swapped), round=1, label="round1")
+    assert record.briefs[0].cause == worded.cause
+    text = aq.write_record(record, paths).read_text(encoding="utf-8")
+    assert f"| not verified: {worded.cause} |" in text
 
 
 def test_the_scores_sheet_is_prefilled_with_the_status_only(result, paths):

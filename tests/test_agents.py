@@ -511,6 +511,7 @@ def test_a_reviewer_error_fails_closed_without_asking_the_investigator(
         DONE,
         reply(good_draft(run)),
         failing(ConnectionError("reset")),
+        failing(ConnectionError("again")),
     ]
     out = graph(run, holidays, settings, script, tmp_path, log=log).run(
         ORIGIN, "T101H", "nw"
@@ -520,11 +521,61 @@ def test_a_reviewer_error_fails_closed_without_asking_the_investigator(
     wording = out.attempts[-1].wording
     assert not wording.passed and wording.reviewer_error
     assert "ConnectionError: reset" in wording.problems[0]
+    assert "ConnectionError: again" in wording.problems[0]
+    assert out.cause == "the Reviewer could not run"
     assert "model error" in [e["kind"] for e in log.entries]
     again = graph(run, holidays, settings, [], tmp_path, live=False).run(
         ORIGIN, "T101H", "nw"
     )
     assert again.status == "not verified"
+
+
+def test_a_reviewer_error_is_retried_once_at_the_reviewer(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        DONE,
+        reply(good_draft(run)),
+        failing(gw.CallTimeout("no reply within 240 s")),
+        WORDING_OK,
+    ]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "verified" and out.route.count("investigate") == 1
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert again.status == "verified"
+
+
+def test_not_verified_says_why(run, holidays, settings, tmp_path):
+    planted = reply(planted_draft(run))
+    out = graph(
+        run,
+        holidays,
+        settings,
+        [TOOLS, DONE, planted, DONE, planted],
+        tmp_path,
+    ).run(ORIGIN, "T101H", "a")
+    assert out.cause == "the code check"
+    worded = [TOOLS, DONE, reply(good_draft(run)), WORDING_BAD, DONE]
+    worded += [reply(good_draft(run)), WORDING_BAD]
+    out = graph(run, holidays, settings, worded, tmp_path).run(
+        ORIGIN, "T101H", "b"
+    )
+    assert out.cause == "the wording check"
+    sorry = AIMessage(content="Sorry, no.")
+    out = graph(
+        run, holidays, settings, [TOOLS, DONE, sorry, DONE, sorry], tmp_path
+    ).run(ORIGIN, "T101H", "c")
+    assert out.cause == "no readable draft"
+    good = [TOOLS, DONE, reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, good, tmp_path).run(
+        ORIGIN, "T101H", "d"
+    )
+    assert out.cause is None
 
 
 # --- an unreadable draft's retry is not blind (review P2-1) ------------------

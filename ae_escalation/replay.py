@@ -265,7 +265,9 @@ class Paths:
 
     @property
     def adequacy_form(self):
-        return self._approvals("adequacy", ".md")
+        """The reviewer's form, which holds every brief's text, so it stays
+        with the recordings until the record releases the queue."""
+        return self._recordings / "adequacy_form.md"
 
     @property
     def adequacy_scores(self):

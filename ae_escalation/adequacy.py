@@ -63,6 +63,9 @@ class BriefAdequacy(BaseModel):
 
     brief_id: str
     verified: bool
+    # Why a brief is not verified: the code check, the wording check, the
+    # Reviewer that could not run, or no readable draft.
+    cause: str | None = None
     criteria_met: int
     unmet: list[str]
     adequate: bool
@@ -120,7 +123,8 @@ def write_form(result, paths):
     for path in (paths.adequacy_form, paths.adequacy_scores):
         if path.exists():
             raise FileExistsError(f"{path} exists; it is never replaced")
-    paths.adequacy_form.parent.mkdir(parents=True, exist_ok=True)
+    for path in (paths.adequacy_form, paths.adequacy_scores):
+        path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"# Adequacy test: {result.backend} backend, {result.model}, "
         f"{paths.label}",
@@ -132,7 +136,8 @@ def write_form(result, paths):
         "least 5 of the 6 approval criteria. Only a verified brief counts, "
         "since only a verified brief can be approved. Code has filled in "
         "each brief's status. Mark each criterion yes or no in the scores "
-        f"sheet, `{paths.adequacy_scores.name}`, one row per brief, then run "
+        f"sheet, `approvals/{paths.adequacy_scores.name}`, one row per "
+        "brief, then run "
         "`python -m ae_escalation.live adequacy --label "
         f"{paths.label}` to record the verdict.",
         "",
@@ -214,6 +219,7 @@ def assess(result, scores, round, label):
             BriefAdequacy(
                 brief_id=o.run_id,
                 verified=ok,
+                cause=o.cause,
                 criteria_met=c.count(),
                 unmet=[x.name for x in CRITERIA if not getattr(c, x.field)],
                 adequate=is_adequate(ok, c),
@@ -262,6 +268,12 @@ def assess(result, scores, round, label):
     )
 
 
+def _status(brief):
+    if brief.verified:
+        return "verified"
+    return f"not verified: {brief.cause}" if brief.cause else "not verified"
+
+
 def write_record(record, paths):
     """Record the adequacy test's result in approvals/, with the briefs
     and criteria that failed; an existing record is never written over."""
@@ -284,7 +296,7 @@ def write_record(record, paths):
         "|---|---|---|---|---|",
     ]
     lines += [
-        f"| {b.brief_id} | {'verified' if b.verified else 'not verified'} "
+        f"| {b.brief_id} | {_status(b)} "
         f"| {b.criteria_met} of 6 | {', '.join(b.unmet) or 'none'} "
         f"| {'yes' if b.adequate else 'no'} |"
         for b in record.briefs

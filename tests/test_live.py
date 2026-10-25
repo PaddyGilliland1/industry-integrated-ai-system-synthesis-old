@@ -68,7 +68,8 @@ def test_the_briefs_command_records_the_set_and_writes_the_form_only(
     assert briefs(tmp_path, pinned) == 0
     rec = tmp_path / "recordings" / "local" / "t1"
     assert (rec / "briefs.jsonl").exists() and (rec / "audit.jsonl").exists()
-    assert (tmp_path / "approvals" / "adequacy_local_t1.md").exists()
+    assert (rec / "adequacy_form.md").exists()
+    assert not (tmp_path / "approvals" / "adequacy_local_t1.md").exists()
     assert not (tmp_path / "approvals" / "queue_local_t1.csv").exists()
     shown = capsys.readouterr().out
     assert "7 briefs" in shown and "planted figure caught: yes" in shown
