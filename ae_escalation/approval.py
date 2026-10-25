@@ -421,9 +421,13 @@ class ApprovalQueue:
             "approved_without_factual_edit": clean,
         }
 
-    def export_csv(self, path):
+    def export_csv(self, path, edit_files=None):
         """Write the queue for the approver: one row per brief, its text as
-        the manager sees it, and empty columns for the decision."""
+        the manager sees it, and empty columns for the decision, with the
+        edit file named where one was written for it. The file is UTF-8
+        with a byte-order mark, so a spreadsheet opens it as UTF-8 (review
+        P3-8)."""
+        edit_files = edit_files or {}
         rows = []
         for i in self._items.values():
             b = i.current or i.outcome.brief
@@ -446,15 +450,34 @@ class ApprovalQueue:
                         else i.outcome.display(written_by=False)
                     ),
                     **{name: "" for name in DECISION_COLUMNS},
+                    "edited_file": edit_files.get(i.brief_id, ""),
                 }
             )
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", newline="", encoding="utf-8") as fh:
+        with open(path, "w", newline="", encoding="utf-8-sig") as fh:
             writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
             writer.writeheader()
             writer.writerows(rows)
         return path
+
+    def write_edit_files(self, folder):
+        """Write each brief's text and cited figures as the JSON an edit
+        replaces, so the approver edits a copy rather than writing one by
+        hand (review P3-8); return each file's name by brief id."""
+        folder = Path(folder)
+        folder.mkdir(parents=True, exist_ok=True)
+        out = {}
+        for i in self._items.values():
+            brief = i.current or i.outcome.brief
+            if brief is None:
+                continue
+            path = folder / f"{i.brief_id}.json"
+            path.write_text(
+                brief.draft().model_dump_json(indent=2), encoding="utf-8"
+            )
+            out[i.brief_id] = path
+        return out
 
 
 DECISION_COLUMNS = (
@@ -488,39 +511,68 @@ def read_decisions(path, refused=None):
     the rest are read (review P3-7)."""
     path = Path(path)
     out = []
-    with open(path, newline="", encoding="utf-8") as fh:
-        for number, row in enumerate(csv.DictReader(fh), 2):
-            if not (row.get("action") or "").strip():
-                continue
-            try:
-                out.append(_decision(row, path.parent))
-            except (ValueError, KeyError, OSError) as exc:
-                reason = f"row {number}, {row.get('brief_id')}: {exc}"
-                if refused is None:
-                    raise ValueError(reason) from exc
-                refused.append(
-                    {
-                        "row": number,
-                        "brief_id": row.get("brief_id"),
-                        "reason": reason,
-                    }
-                )
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            rows = list(csv.DictReader(fh))
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"{path} is not UTF-8: save it from the spreadsheet as CSV UTF-8"
+        ) from exc
+    for number, row in enumerate(rows, 2):
+        if not (row.get("action") or "").strip():
+            continue
+        try:
+            out.append(_decision(row, path.parent))
+        except (ValueError, KeyError, OSError) as exc:
+            reason = f"row {number}, {row.get('brief_id')}: {exc}"
+            if refused is None:
+                raise ValueError(reason) from exc
+            refused.append(
+                {
+                    "row": number,
+                    "brief_id": row.get("brief_id"),
+                    "reason": reason,
+                }
+            )
     return out
 
 
+# How a spreadsheet set to UK dates shows a time it has reformatted.
+SHEET_TIMES = ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S")
+
+
+def _when(text):
+    """A decision time as ISO 8601, or as a UK spreadsheet shows one."""
+    text = text.strip()
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        pass
+    for shape in SHEET_TIMES:
+        try:
+            return datetime.strptime(text, shape)
+        except ValueError:
+            continue
+    raise ValueError(f"{text!r} is not a time; write 2026-10-27T09:30")
+
+
 def _decision(row, folder):
-    """One row of the approver's sheet as a Decision."""
+    """One row of the approver's sheet as a Decision. Only an edit reads
+    its edit file, so the file named in every row stays harmless."""
+    action = row["action"].strip()
     edited = None
-    if (row.get("edited_file") or "").strip():
-        source = folder / row["edited_file"].strip()
+    if action == "edit":
+        name = (row.get("edited_file") or "").strip()
+        if not name:
+            raise ValueError("an edit names its edited file")
         edited = BriefDraft.model_validate_json(
-            source.read_text(encoding="utf-8")
+            (folder / name).read_text(encoding="utf-8")
         )
     return Decision(
         brief_id=row["brief_id"],
-        action=row["action"].strip(),
+        action=action,
         initials=row["initials"].strip(),
-        decided_at=datetime.fromisoformat(row["decided_at"].strip()),
+        decided_at=_when(row["decided_at"]),
         criteria=Criteria(**{c.field: _yes(row[c.field]) for c in CRITERIA}),
         factual_edit=_yes(row["factual_edit"]),
         edited=edited,

@@ -248,6 +248,11 @@ class Paths:
         return self._approvals("decisions", ".csv")
 
     @property
+    def edits(self):
+        """The folder of pre-filled edit files, one per brief."""
+        return self._approvals("edits", "")
+
+    @property
     def adequacy_form(self):
         return self._approvals("adequacy", ".md")
 
@@ -419,8 +424,9 @@ def run_set(
 
 
 def write_queue(result, paths, log=None):
-    """Write the approval queue file and its CSV for the approver, once.
-    An existing queue is never overwritten. Each brief queued goes to the
+    """Write the approval queue file and its CSV for the approver, once,
+    with a pre-filled edit file for each brief (review P3-8). An existing
+    queue is never overwritten. Each brief queued goes to the
     label's audit log (review P2-7). The designed failure is evidence for
     the check, not a brief to approve, so it is not queued."""
     if paths.queue.exists():
@@ -428,7 +434,12 @@ def write_queue(result, paths, log=None):
     queue = ApprovalQueue(paths.queue, log=log or AuditLog(paths.audit))
     for outcome in result.outcomes:
         queue.add(outcome)
-    queue.export_csv(paths.queue_csv)
+    written = queue.write_edit_files(paths.edits)
+    names = {
+        brief_id: f"{paths.edits.name}/{path.name}"
+        for brief_id, path in written.items()
+    }
+    queue.export_csv(paths.queue_csv, edit_files=names)
     return queue
 
 

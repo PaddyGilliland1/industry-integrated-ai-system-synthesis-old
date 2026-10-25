@@ -117,7 +117,7 @@ def test_notify_needs_the_approvers_decisions(tmp_path, pinned, capsys):
     assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 2
     assert "decisions" in capsys.readouterr().out
     queue = tmp_path / "approvals" / "queue_local_t1.csv"
-    with open(queue, newline="", encoding="utf-8") as fh:
+    with open(queue, newline="", encoding="utf-8-sig") as fh:
         rows = list(csv.DictReader(fh))
     first = rows[0]
     first.update(

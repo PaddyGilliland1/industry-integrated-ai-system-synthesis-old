@@ -480,3 +480,46 @@ def test_each_bad_row_is_refused_and_logged_and_the_rest_apply(
     assert "before the run" in reasons and "NOPE" in reasons
     assert "maybe" in reasons
     assert [e["kind"] for e in log.entries].count("refused") == 3
+
+
+# --- the approver's files survive a spreadsheet (review P3-8) ----------------
+
+
+def test_each_brief_gets_a_prefilled_edit_file_named_in_the_sheet(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    rp.write_queue(result, paths)
+    with open(paths.queue_csv, newline="", encoding="utf-8-sig") as fh:
+        rows = list(csv.DictReader(fh))
+    first = result.outcomes[0]
+    edit = paths.queue_csv.parent / rows[0]["edited_file"]
+    assert edit.parent == paths.edits
+    assert br.BriefDraft.model_validate_json(edit.read_text()) == (
+        first.brief.draft()
+    )
+    assert paths.queue_csv.read_bytes().startswith(b"\xef\xbb\xbf")
+    rows[0].update(
+        action="approve",
+        initials="AB",
+        decided_at="27/10/2026 09:30",
+        factual_edit="no",
+        **{c.field: "yes" for c in ap.CRITERIA},
+    )
+    with open(paths.decisions, "w", newline="", encoding="utf-8-sig") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerow(rows[0])
+    (d,) = ap.read_decisions(paths.decisions)
+    assert d.action == "approve" and d.edited is None
+    assert (d.decided_at.hour, d.decided_at.tzname()) == (9, "GMT")
+
+
+def test_a_sheet_saved_in_the_wrong_encoding_is_named(tmp_path):
+    sheet = tmp_path / "decisions.csv"
+    sheet.write_bytes("brief_id,action,note\nx,approve,£5\n".encode("cp1252"))
+    with pytest.raises(ValueError, match="CSV UTF-8"):
+        ap.read_decisions(sheet)

@@ -262,7 +262,7 @@ def test_the_queue_exports_to_csv_and_reads_the_decisions_back(
 ):
     q = queue(tmp_path, verified)
     q.export_csv(tmp_path / "queue.csv")
-    with open(tmp_path / "queue.csv", newline="", encoding="utf-8") as fh:
+    with open(tmp_path / "queue.csv", newline="", encoding="utf-8-sig") as fh:
         (row,) = list(csv.DictReader(fh))
     assert row["brief_id"] == "nw" and row["status"] == "verified"
     assert "Demand level 2" in row["brief"] and row["action"] == ""
