@@ -20,6 +20,7 @@
     "run_budget_s": 840
   },
   "coordinator": {
+    "start_hour": 10,
     "reply_deadline_hours": {"2": 48, "3": 24, "4": 12},
     "acknowledged_share": 0.75,
     "ack_hours": [2, 72]

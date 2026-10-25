@@ -51,3 +51,6 @@ tests/test_agents.py
 ae_escalation/approval.py
 tests/test_approval.py
 tests/scripted.py
+ae_escalation/coordinator.py
+ae_escalation/prompts/coordinator.md
+tests/test_coordinator.py

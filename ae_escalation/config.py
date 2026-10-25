@@ -117,9 +117,11 @@ class AgentSettings(_Frozen):
 
 
 class CoordinatorSettings(_Frozen):
-    """The coordinator's assumed values: each level's reply deadline, and
-    the simulated acknowledgements' share and spread of hours."""
+    """The coordinator's assumed values: the hour the replay's clock starts
+    on release day, each level's reply deadline, and the simulated
+    acknowledgements' share and spread of hours."""
 
+    start_hour: int = Field(ge=0, le=23)
     reply_deadline_hours: dict[int, int]
     acknowledged_share: float = Field(ge=0, le=1)
     ack_hours: tuple[int, int]
