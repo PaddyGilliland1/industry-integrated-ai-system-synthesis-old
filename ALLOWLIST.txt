@@ -36,3 +36,6 @@ tests/test_tools.py
 figures/national_weekly_attendances.png
 figures/drift_march_2020.png
 figures/month_attendances_and_4_hours.png
+config.json
+ae_escalation/config.py
+tests/test_config.py
