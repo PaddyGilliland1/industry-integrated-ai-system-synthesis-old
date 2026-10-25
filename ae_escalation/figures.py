@@ -6,7 +6,8 @@ It runs before any language-model review, and on every edit:
 - each cited figure must equal a tool result within rounding, for the same
   hospital, week, model and horizon;
 - every date in the text must be a date a tool returned for that hospital
-  and week, or one of the brief's own code-set dates;
+  and week, or one of the brief's own code-set dates: its origin, release,
+  latch date and the four weeks ahead;
 - the level must equal the rule's, in the brief's field and in its text.
 
 The same check runs on each drafted staff notification before the outbox:
@@ -31,6 +32,8 @@ from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+from .timing import release_horizon_weeks
 
 MONTHS = {
     "jan": 1,
@@ -444,11 +447,15 @@ def check_brief(brief, ledger, rule_level):
             )
         else:
             good.append(plain(fig.value))
+    # The brief's code-set dates: its origin, release, latch date and the
+    # four weeks ahead, which the screen tells the Investigator.
+    targets = [w.date() for w in release_horizon_weeks(brief.week)]
     known = ledger_dates(ledger, brief.hospital, brief.week) | {
         d
         for d in (brief.week, brief.release_date, brief.latched_since)
         if d is not None
     }
+    known |= set(targets)
     numbers = dates = 0
     for field, text in _texts(brief):
         for t in tokens(text):

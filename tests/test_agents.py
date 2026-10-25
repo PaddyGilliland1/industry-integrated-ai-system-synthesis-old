@@ -1,0 +1,557 @@
+"""The LangGraph flow: the screen leads to the Investigator, whose draft goes
+to the Reviewer's code figure check and then its wording check, with one
+retry before "not verified, do not act". Every model reply here is scripted:
+no test calls a language model."""
+
+import json
+from datetime import date
+
+import pytest
+from langchain_core.messages import AIMessage
+
+from ae_escalation import agents as ag
+from ae_escalation import briefs as br
+from ae_escalation import config as cf
+from ae_escalation import data as dt
+from ae_escalation import design as ds
+from ae_escalation import gateway as gw
+from ae_escalation import tools as tl
+
+from .conftest import DATA, REPO
+
+ORIGIN = "2021-06-13"
+WORDING_OK = AIMessage(content='{"passes": true, "problems": []}')
+WORDING_BAD = AIMessage(
+    content='{"passes": false, "problems": ["\\"because of the heat\\" '
+    'claims a cause no tool shows"]}'
+)
+DONE = AIMessage(content="I have what I need.")
+
+
+@pytest.fixture(scope="module")
+def run(flagged):
+    return ds.run_design(dt.series_from(flagged)[list(ds.REPLAY)])
+
+
+@pytest.fixture(scope="module")
+def holidays():
+    return dt.load_bank_holidays(
+        DATA / "bank-holidays_20261024.json",
+        "538b3482c28b85ecd2db606a0d5ae6ad17248900b6498700ce0a48d26a3ecde6",
+    )
+
+
+@pytest.fixture
+def settings():
+    return cf.load_config(REPO / "config.json")
+
+
+def tc(name, **args):
+    return {"name": name, "args": args, "id": None}
+
+
+TOOLS = AIMessage(
+    content="",
+    tool_calls=[
+        tc("get_forecast", hospital="T101H", as_of=ORIGIN),
+        tc(
+            "get_backtest_error",
+            hospital="T101H",
+            as_of=ORIGIN,
+            model="SA-MA",
+            horizon=1,
+        ),
+        tc("get_track_record", hospital="T101H", as_of=ORIGIN),
+        tc("get_calendar", week="2021-06-27", as_of=ORIGIN),
+    ],
+)
+
+
+def good_draft(run, **changes):
+    """A draft that states only true tool values, each cited."""
+    f = tl.get_forecast(
+        run, tl.ForecastRequest(hospital="T101H", as_of=ORIGIN, horizon=1)
+    )
+    sama = next(x for x in f.forecasts if x.model == "SA-MA")
+    e = tl.get_backtest_error(
+        run,
+        tl.BacktestErrorRequest(
+            hospital="T101H", as_of=ORIGIN, model="SA-MA", horizon=1
+        ),
+    )
+    tr = tl.get_track_record(
+        run, tl.TrackRecordRequest(hospital="T101H", as_of=ORIGIN)
+    )
+    draft = {
+        "summary": (
+            f"SA-MA, the primary model, forecasts {sama.point:,.0f} "
+            "attendances at release horizon 1, the week ending "
+            f"{sama.week_ending:%d %b %Y}."
+        ),
+        "expected_range": (
+            f"Its 80% range is {sama.range_80.low:,.0f} to "
+            f"{sama.range_80.high:,.0f}."
+        ),
+        "model_agreement": (
+            f"The four forecasts spread {f.spread_pct[1]:.1f}% of the "
+            "primary's, so trust seasonal naive less."
+        ),
+        "backtest_error": (
+            f"SA-MA's own back-test error at release horizon 1 is "
+            f"{e.mape:.1f}%."
+        ),
+        "track_record": (
+            "This hospital has no past flag to judge; "
+            f"{tr.unflagged_busy} of its {tr.unflagged} unflagged outlooks "
+            "turned busy."
+        ),
+        "watch_points": [
+            "Check whether extra shifts or bank staff are needed."
+        ],
+        "cited_figures": [
+            {
+                "value": round(sama.point),
+                "tool_call_id": "T1",
+                "model": "SA-MA",
+                "horizon": 1,
+            },
+            {
+                "value": round(sama.range_80.low),
+                "tool_call_id": "T1",
+                "model": "SA-MA",
+                "horizon": 1,
+            },
+            {
+                "value": round(sama.range_80.high),
+                "tool_call_id": "T1",
+                "model": "SA-MA",
+                "horizon": 1,
+            },
+            {
+                "value": round(f.spread_pct[1], 1),
+                "tool_call_id": "T1",
+                "horizon": 1,
+            },
+            {
+                "value": round(e.mape, 1),
+                "tool_call_id": "T2",
+                "model": "SA-MA",
+                "horizon": 1,
+            },
+            {"value": tr.unflagged_busy, "tool_call_id": "T3"},
+            {"value": tr.unflagged, "tool_call_id": "T3"},
+        ],
+    }
+    draft.update(changes)
+    return draft
+
+
+def planted_draft(run):
+    """The designed failure: a figure no tool returned, cited all the
+    same."""
+    d = good_draft(run)
+    d["summary"] += " Linear forecasts 4,321 attendances at release horizon 2."
+    d["cited_figures"].append(
+        {
+            "value": 4321,
+            "tool_call_id": "T1",
+            "model": "linear",
+            "horizon": 2,
+        }
+    )
+    return d
+
+
+def reply(draft):
+    return AIMessage(content=json.dumps(draft))
+
+
+def graph(run, holidays, settings, script, tmp_path, log=None, live=True):
+    store = gw.RecordingStore(tmp_path / "rec.jsonl")
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        store,
+        live=live,
+        chat_model=gw.ScriptedModel(script=script) if live else None,
+        log=log,
+    )
+    return ag.BriefGraph(run, holidays, settings, gateway, log=log)
+
+
+# --- the paths ---------------------------------------------------------------
+
+
+def test_a_good_brief_is_verified_first_time(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "verified", out.attempts
+    assert out.route == [
+        "screen",
+        "investigate",
+        "code_check",
+        "wording_check",
+        "verified",
+    ]
+    b = out.brief
+    assert b.level == 2 and b.level_source == "flag"
+    assert b.level_meaning == tl.LEVEL_MEANING
+    assert (b.backend, b.model) == ("local", settings.local.model)
+    assert b.model_digest == settings.local.digest
+    assert [c.id for c in out.ledger] == ["T1", "T2", "T3", "T4"]
+    assert out.can_approve
+
+
+def test_a_planted_wrong_figure_is_caught_then_fixed_on_the_retry(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        DONE,
+        reply(planted_draft(run)),
+        DONE,
+        reply(good_draft(run)),
+        WORDING_OK,
+    ]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    first = out.attempts[0]
+    assert not first.check.passed
+    assert {f.found for f in first.check.failures} >= {"4321"}
+    assert out.status == "verified" and len(out.attempts) == 2
+    assert out.route.count("investigate") == 2
+
+
+def test_the_retry_names_the_failing_figure_to_the_investigator(
+    run, holidays, settings, tmp_path
+):
+    model = gw.ScriptedModel(
+        script=[
+            TOOLS,
+            DONE,
+            reply(planted_draft(run)),
+            DONE,
+            reply(good_draft(run)),
+            WORDING_OK,
+        ]
+    )
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    ag.BriefGraph(run, holidays, settings, gateway).run(ORIGIN, "T101H", "nw")
+    retry = " ".join(str(m.content) for m in model.seen[3])
+    assert "4321" in retry and "T1" in retry
+
+
+def test_two_failures_end_not_verified_and_never_approvable(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        DONE,
+        reply(planted_draft(run)),
+        DONE,
+        reply(planted_draft(run)),
+    ]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "not verified"
+    assert out.route[-1] == "not_verified"
+    assert not out.can_approve
+    shown = out.display()
+    assert shown.startswith("NOT VERIFIED, DO NOT ACT")
+    assert "[[NOT VERIFIED: 4,321]]" in shown
+
+
+def test_a_draft_that_sets_a_level_is_refused_by_the_schema(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        DONE,
+        reply({**good_draft(run), "level": 3}),
+        DONE,
+        reply(good_draft(run)),
+        WORDING_OK,
+    ]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.attempts[0].stop_reason == "could not read the brief"
+    assert out.status == "verified" and out.brief.level == 2
+
+
+def test_a_wording_failure_retries_then_ends_not_verified(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        DONE,
+        reply(good_draft(run)),
+        WORDING_BAD,
+        DONE,
+        reply(good_draft(run)),
+        WORDING_BAD,
+    ]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "not verified"
+    assert all(a.check.passed for a in out.attempts)
+    assert "heat" in out.attempts[-1].wording.problems[0]
+
+
+def test_device_words_fail_the_wording_check_in_code_first(
+    run, holidays, settings, tmp_path
+):
+    worded = good_draft(run)
+    worded["summary"] = worded["summary"].replace("forecasts", "predicts")
+    script = [
+        TOOLS,
+        DONE,
+        reply(worded),
+        DONE,
+        reply(good_draft(run)),
+        WORDING_OK,
+    ]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    first = out.attempts[0].wording
+    assert not first.passed and first.by == "code"
+    assert out.status == "verified"
+    assert len(out.calls) == 6
+
+
+def test_a_hospital_the_screen_did_not_send_gets_no_brief(
+    run, holidays, settings, tmp_path
+):
+    out = graph(run, holidays, settings, [], tmp_path).run(
+        "2019-12-08", "T101H", "quiet"
+    )
+    assert out.status == "not screened" and out.calls == []
+    assert out.route == ["screen"]
+
+
+def test_a_latch_brief_copies_the_held_level(
+    run, holidays, settings, tmp_path
+):
+    draft = {
+        "summary": "The forecasts are untrusted while the drift latch is set.",
+        "expected_range": "No range is trusted this week.",
+        "model_agreement": "All four models are untrusted.",
+        "backtest_error": "The back-test error no longer applies.",
+        "track_record": "The track record is shown for context only.",
+        "watch_points": ["Check each released week before changing staffing."],
+        "cited_figures": [],
+    }
+    script = [DONE, reply(draft), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        "2020-03-22", "T101H", "latch"
+    )
+    assert out.status == "verified"
+    assert (out.brief.kind, out.brief.level_source) == ("latch", "held")
+    assert out.brief.drift_alarm and not out.brief.forecasts_trusted
+
+
+# --- the tools ---------------------------------------------------------------
+
+
+def test_the_tools_refuse_another_hospital_or_origin(
+    run, holidays, settings, tmp_path
+):
+    ask = AIMessage(
+        content="",
+        tool_calls=[
+            tc("get_history", hospital="G405H", as_of=ORIGIN, weeks=2),
+            tc("get_history", hospital="T101H", as_of="2021-06-06", weeks=2),
+        ],
+    )
+    model = gw.ScriptedModel(
+        script=[
+            ask,
+            DONE,
+            reply(
+                good_draft(
+                    run,
+                    cited_figures=[],
+                    summary="No figures.",
+                    expected_range="None.",
+                    model_agreement="None.",
+                    backtest_error="None.",
+                    track_record="None.",
+                )
+            ),
+            WORDING_OK,
+        ]
+    )
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    out = ag.BriefGraph(run, holidays, settings, gateway).run(
+        ORIGIN, "T101H", "nw"
+    )
+    answers = [m.content for m in model.seen[1] if m.type == "tool"]
+    assert all(a.startswith("refused") for a in answers)
+    assert out.ledger == []
+
+
+def test_calls_past_the_cap_are_not_run(run, holidays, tmp_path):
+    settings = cf.load_config(REPO / "config.json")
+    capped = settings.model_copy(
+        update={
+            "agents": settings.agents.model_copy(update={"tool_call_cap": 2})
+        }
+    )
+    script = [TOOLS, reply(good_draft(run)), WORDING_OK]
+    model = gw.ScriptedModel(script=script)
+    gateway = gw.ModelGateway.for_settings(
+        capped,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    out = ag.BriefGraph(run, holidays, capped, gateway).run(
+        ORIGIN, "T101H", "nw"
+    )
+    answers = [m.content for m in model.seen[1] if m.type == "tool"]
+    assert sum(a.startswith("not run") for a in answers) == 2
+    assert len(out.ledger) == 2
+    assert "used all 2 tool calls" in model.seen[1][-1].content
+
+
+def test_a_tool_result_carries_its_call_id_for_citing(
+    run, holidays, settings, tmp_path
+):
+    model = gw.ScriptedModel(
+        script=[TOOLS, DONE, reply(good_draft(run)), WORDING_OK]
+    )
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    ag.BriefGraph(run, holidays, settings, gateway).run(ORIGIN, "T101H", "nw")
+    first = [m for m in model.seen[1] if m.type == "tool"][0]
+    payload = json.loads(first.content)
+    assert payload["tool_call_id"] == "T1"
+    assert payload["result"]["primary"] == "SA-MA"
+
+
+# --- replay and the audit log ------------------------------------------------
+
+
+def test_a_replay_gives_the_same_brief_without_a_model(
+    run, holidays, settings, tmp_path
+):
+    script = [
+        TOOLS,
+        DONE,
+        reply(planted_draft(run)),
+        DONE,
+        reply(good_draft(run)),
+        WORDING_OK,
+    ]
+    live = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert again.brief == live.brief
+    assert again.status == live.status
+    assert [a.check for a in again.attempts] == [
+        a.check for a in live.attempts
+    ]
+    assert all(c.replayed for c in again.calls)
+
+
+def test_a_replay_with_no_recordings_raises(run, holidays, settings, tmp_path):
+    g = graph(run, holidays, settings, [], tmp_path, live=False)
+    with pytest.raises(gw.ReplayMiss):
+        g.run(ORIGIN, "T101H", "nw")
+
+
+def test_every_tool_call_prompt_reply_and_check_is_logged(
+    run, holidays, settings, tmp_path
+):
+    log = gw.AuditLog(tmp_path / "audit.jsonl")
+    script = [
+        TOOLS,
+        DONE,
+        reply(planted_draft(run)),
+        DONE,
+        reply(good_draft(run)),
+        WORDING_OK,
+    ]
+    graph(run, holidays, settings, script, tmp_path, log=log).run(
+        ORIGIN, "T101H", "nw"
+    )
+    kinds = [e["kind"] for e in log.entries]
+    assert kinds.count("tool") == 4 and kinds.count("model") == 6
+    checks = [e for e in log.entries if e["kind"] == "check"]
+    assert [(c["check"], c["passed"]) for c in checks] == [
+        ("figures", False),
+        ("figures", True),
+        ("wording", True),
+    ]
+    assert log.entries[-1]["kind"] == "outcome"
+    assert log.entries[-1]["status"] == "verified"
+
+
+def test_the_designed_failure_is_planted_by_code_and_caught(
+    run, holidays, settings, tmp_path
+):
+    def plant(draft, ledger):
+        return draft.model_copy(
+            update={
+                "summary": draft.summary + " Expect 9,876 attendances.",
+                "cited_figures": [
+                    *draft.cited_figures,
+                    br.CitedFigure(
+                        value=9876,
+                        tool_call_id="T1",
+                        model="SA-MA",
+                        horizon=1,
+                    ),
+                ],
+            }
+        )
+
+    log = gw.AuditLog()
+    script = [
+        TOOLS,
+        DONE,
+        reply(good_draft(run)),
+        DONE,
+        reply(good_draft(run)),
+        WORDING_OK,
+    ]
+    out = graph(run, holidays, settings, script, tmp_path, log=log).run(
+        ORIGIN, "T101H", "planted", plant=plant
+    )
+    assert out.attempts[0].planted and not out.attempts[0].check.passed
+    assert "9876" in {f.found for f in out.attempts[0].check.failures}
+    assert not out.attempts[1].planted and out.status == "verified"
+    assert any(e["kind"] == "planted" for e in log.entries)
+
+
+def test_the_brief_is_dated_by_the_origin(run, holidays, settings, tmp_path):
+    script = [TOOLS, DONE, reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.brief.week == date(2021, 6, 13)
+    assert out.brief.release_date == date(2021, 6, 22)

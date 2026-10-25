@@ -502,3 +502,10 @@ def test_a_notification_cannot_borrow_another_hospitals_figures():
         message, LEDGER, "T101H", ORIGIN, code_set()
     )
     assert not result.passed
+
+
+def test_the_four_target_weeks_are_code_set_dates_of_the_brief():
+    b = brief(watch_points=["Check staffing for w/e 18 Jul 2021."])
+    assert check(b).passed, reasons(check(b))
+    later = brief(watch_points=["Check staffing for w/e 25 Jul 2021."])
+    assert not check(later).passed
