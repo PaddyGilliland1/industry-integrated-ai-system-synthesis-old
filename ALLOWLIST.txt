@@ -66,6 +66,7 @@ tests/test_adequacy.py
 tests/test_live.py
 docs/reader_b_instructions.md
 docs/reader_b_rating_form.md
+docs/phase_c_notes.md
 tests/test_docs.py
 ae_escalation/demo.py
 tests/test_demo.py
