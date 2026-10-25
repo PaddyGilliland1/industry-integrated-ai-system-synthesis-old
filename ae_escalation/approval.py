@@ -418,6 +418,9 @@ DECISION_COLUMNS = (
     *[c.field for c in CRITERIA],
     "note",
     "edited_file",
+    # "yes" only if the approver opts out and the decisions are simulated
+    # (D-EVAL-19); blank is no (review P3-2).
+    "simulated",
 )
 
 
@@ -458,6 +461,7 @@ def read_decisions(path):
                     factual_edit=_yes(row["factual_edit"]),
                     edited=edited,
                     note=row.get("note", ""),
+                    simulated=_yes(row.get("simulated") or "no"),
                 )
             )
     return out

@@ -304,3 +304,36 @@ def test_the_queue_csv_shows_the_brief_without_its_author(verified, tmp_path):
     assert "Demand level 2" in row["brief"]
     assert "Written by: the local backend" in verified.brief.text()
     assert verified.brief.backend == "local"
+
+
+# --- an opted-out run is labelled simulated (review P3-2) --------------------
+
+
+def test_the_decisions_csv_has_a_simulated_column_read_back(
+    verified, tmp_path
+):
+    q = queue(tmp_path, verified)
+    q.export_csv(tmp_path / "queue.csv")
+    with open(tmp_path / "queue.csv", newline="", encoding="utf-8-sig") as fh:
+        (row,) = list(csv.DictReader(fh))
+    assert "simulated" in row and row["simulated"] == ""
+    row.update(
+        action="approve",
+        initials="AB",
+        decided_at="2026-10-27T09:30:00+00:00",
+        factual_edit="no",
+        simulated="yes",
+        **{name: "yes" for name in ap.Criteria.model_fields},
+    )
+    with open(tmp_path / "f.csv", "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    (d,) = ap.read_decisions(tmp_path / "f.csv")
+    assert d.simulated
+    row["simulated"] = ""
+    with open(tmp_path / "g.csv", "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    assert not ap.read_decisions(tmp_path / "g.csv")[0].simulated
