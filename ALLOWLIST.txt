@@ -44,6 +44,8 @@ tests/test_gateway.py
 ae_escalation/briefs.py
 ae_escalation/figures.py
 tests/test_figures.py
+ae_escalation/placeholders.py
+tests/test_placeholders.py
 ae_escalation/agents.py
 ae_escalation/prompts/investigator.md
 ae_escalation/prompts/reviewer.md
