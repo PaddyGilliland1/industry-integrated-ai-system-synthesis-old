@@ -1,0 +1,6 @@
+# The paths published in this repository, one per line, from the repository root.
+README.md
+.gitignore
+ALLOWLIST.txt
+requirements.txt
+ae_escalation_spot_check.ipynb
