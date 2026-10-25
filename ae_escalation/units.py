@@ -88,6 +88,7 @@ def outlook_measures(act_w, cap_w, fc_w, P):
 
 
 def _total_mean(x, mask):
+    """The total and mean of the values the mask keeps."""
     v = np.asarray(x, dtype=float)[mask]
     return {
         "total": float(v.sum()),
@@ -96,6 +97,7 @@ def _total_mean(x, mask):
 
 
 def _spread(x):
+    """The count, median and quartiles of the known values."""
     x = np.asarray(x, dtype=float)
     x = x[np.isfinite(x)]
     if not len(x):
@@ -262,6 +264,7 @@ def counts_by_origin(origin, repeat, right, n):
 
 
 def _share(num, den):
+    """A share as a percentage, or NaN with nothing to divide by."""
     return 100.0 * num / den if den else np.nan
 
 
@@ -475,6 +478,7 @@ def _frames(design_run):
 
 
 def _olk_summary(x, mask):
+    """The outlook unit's summary for the rows the mask keeps."""
     m = {
         k: x[k].to_numpy()
         for k in (
@@ -491,6 +495,7 @@ def _olk_summary(x, mask):
 
 
 def _wk_summary(x, mask):
+    """The week unit's summary for the rows the mask keeps."""
     m = {k: x[k].to_numpy() for k in ("excess_cap", "excess_fc")}
     scope = (mask & x["in_scope"]).to_numpy()
     o = summarise(x["covered"], x["busy"], m, scope, x["normal"])
@@ -522,6 +527,7 @@ def _wk_summary(x, mask):
 
 
 def _by_scope(x, fn):
+    """A summary by year, for the steady years and for all."""
     yrs = sorted(int(v) for v in x["year"].unique() if 2018 <= v <= 2026)
     out = {"by_year": {y: fn(x, (x["year"] == y).to_numpy()) for y in yrs}}
     out["steady_years"] = fn(x, x["year"].isin(STEADY_YEARS).to_numpy())
@@ -530,6 +536,7 @@ def _by_scope(x, fn):
 
 
 def _plain(o_year, w_year):
+    """A year's counts in plain words, for the typical year."""
     return {
         "busy_weeks": w_year["busy"],
         "given_notice": w_year["given_notice"],
@@ -600,6 +607,7 @@ def value_counts(design_run, names):
 
 
 def _week_tables(design_run):
+    """The week flags, outlook flags, cells and origins."""
     d, weeks = design_run.frame, design_run.weeks
     lead, J, p = ru.LEAD, ru.H - ru.LEAD + 1, ru.FLAG_P
     wk, ol, cl, ao = [], [], [], []
@@ -687,15 +695,18 @@ def repeat_flags(design_run):
     wk, ol, cl, ao = _week_tables(design_run)
 
     def origins(key):
+        """The origins a scope covers."""
         sel = ao["year"].isin(STEADY_YEARS) if key == "steady_years" else None
         return np.unique((ao if sel is None else ao[sel])["t"].to_numpy())
 
     def sel(x, key):
+        """The rows a scope keeps."""
         if key == "steady_years":
             return x["year"].isin(STEADY_YEARS).to_numpy()
         return np.ones(len(x), dtype=bool)
 
     def measure(rows, scope, key):
+        """First against repeated week flags, for one scope."""
         x = rows[scope]
         rep = (x["pos"] >= 2).to_numpy()
         c = counts_by_origin(x["t"].to_numpy(), rep, x["right"].to_numpy(), n)
@@ -739,6 +750,7 @@ def repeat_flags(design_run):
         return out
 
     def unit_lift(x, mask, key):
+        """One unit's lift over its base rate, for one scope."""
         x = x[mask]
         c = cell_counts(
             x["t"].to_numpy(), x["flag"].to_numpy(), x["busy"].to_numpy(), n

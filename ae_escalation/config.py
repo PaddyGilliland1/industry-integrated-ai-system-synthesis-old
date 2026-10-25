@@ -91,6 +91,7 @@ class LocalBackend(_Frozen):
     @field_validator("endpoint")
     @classmethod
     def on_this_machine(cls, value):
+        """The local backend's endpoint must be on this machine."""
         if not is_local_endpoint(value):
             raise ValueError(
                 f"the local backend must run on this machine, not {value}"
@@ -133,6 +134,7 @@ class CoordinatorSettings(_Frozen):
     def raised_levels_only(cls, value):
         # Level 1 sets no staffing action, so only levels 2 to 4 have a
         # reply deadline.
+        """Levels 2 to 4 each need a positive reply deadline."""
         if set(value) != {2, 3, 4} or min(value.values()) <= 0:
             raise ValueError("give a positive deadline for levels 2, 3 and 4")
         return value
@@ -190,6 +192,7 @@ def load_config(path=CONFIG_PATH):
 
 
 def _env_file_value(path, name):
+    """One name's value in the .env file, or None."""
     path = Path(path)
     if not path.is_file():
         return None

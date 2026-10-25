@@ -36,6 +36,7 @@ class GRUForecaster(torch.nn.Module):
     """
 
     def __init__(self, H, hidden=16):
+        """Build the GRU and the head that maps its state to H."""
         super().__init__()
         self.gru = torch.nn.GRU(
             input_size=3, hidden_size=hidden, batch_first=True

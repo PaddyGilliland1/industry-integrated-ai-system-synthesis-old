@@ -41,6 +41,7 @@ GRU_SCOPES = (
 
 
 def _pct(num, den):
+    """A share as a percentage, or None with nothing to divide by."""
     return None if den == 0 else 100.0 * num / den
 
 
@@ -266,6 +267,7 @@ def episode_weeks(run, n):
 
 
 def _targets(design_run, h, score_start):
+    """The scored target weeks at one horizon, shocks left out."""
     weeks = design_run.weeks
     n = len(weeks)
     skip = episode_weeks(design_run.runs[NATIONAL], n)
@@ -294,6 +296,7 @@ def g1(design_run, score_start=SCORE_START):
         tg = _targets(design_run, h, score_start)
 
         def ape(f):
+            """The absolute percentage error of each forecast week."""
             return 100 * np.abs(nat[tg] - f[tg - h, h - 1]) / nat[tg]
 
         apes = {"primary": ape(run["issued"])}
@@ -379,6 +382,7 @@ def g3(design_run):
     on_time = bool(known is not None and known <= pd.Timestamp("2020-03-31"))
 
     def date(i):
+        """A week's index as its date, or None."""
         return None if i is None else str(weeks[i].date())
 
     return {
@@ -577,6 +581,7 @@ def calibration(frame):
     st, base, steady = scopes(d)
 
     def r3(rows):
+        """The rows with each float rounded to three places."""
         return [
             {
                 k: (round(v, 3) if isinstance(v, float) else v)
@@ -699,6 +704,7 @@ def replay_set(
     lv = frame.set_index(["series", "origin"])["brief"]
 
     def briefs_at(o):
+        """Each replay series' brief kind at one origin."""
         return {s: lv.loc[(s, pd.Timestamp(o))] for s in replay}
 
     sixth = next(
@@ -933,6 +939,7 @@ def gru_against_primary(design_run, gru_long, series, score_start=SCORE_START):
                 gf = gh.reindex(weeks[tg]).to_numpy()
 
                 def ape(f):
+                    """The absolute percentage error of each forecast week."""
                     return 100 * np.abs(y[tg] - f) / y[tg]
 
                 apes = {"primary": ape(run["issued"][tg - h, h - 1])}

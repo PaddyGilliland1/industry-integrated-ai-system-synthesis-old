@@ -95,6 +95,7 @@ def linear_forecaster(
     pos = np.asarray(pos, dtype=float)
 
     def design(t):
+        """The trend and seasonal columns for the weeks given."""
         cols = [np.ones(len(t)), t / float(PERIOD)]
         for k in range(1, n_harmonics + 1):
             cols.append(np.sin(2 * np.pi * k * pos[t]))
@@ -102,6 +103,7 @@ def linear_forecaster(
         return np.column_stack(cols)
 
     def forecast(hist, t0, H):
+        """Fit the recent usable weeks and forecast H ahead."""
         start = 0 if count_usable else max(0, t0 - train_window + 1)
         t = np.arange(start, t0 + 1)
         keep = np.isfinite(hist[t])
@@ -324,21 +326,26 @@ def design_models(cal, H=5, blocks=False):
     slot, year_of = iso_slots(cal)
 
     def linear(hist, t, exclude):
+        """The linear model's H forecasts from week t."""
         mask = np.zeros(len(cal), dtype=bool)
         mask[: len(exclude)] = exclude
         model = linear_forecaster(pos, exclude=mask, count_usable=True)
         return model(hist, t, H)
 
     def ma4(hist, t, exclude):
+        """The 4-week moving average's H forecasts from week t."""
         return moving_average(hist, t, H) if t >= 3 else np.full(H, np.nan)
 
     def snaive(hist, t, exclude):
+        """Seasonal naive's H forecasts from week t."""
         return seasonal_naive(hist, t, H) if t >= 52 else np.full(H, np.nan)
 
     def sama_years(hist, t, exclude):
+        """SA-MA's H forecasts, its index over ISO years."""
         return sa_ma(hist, t, exclude, H=H, slot=slot, year_of=year_of)
 
     def sama_blocks(hist, t, exclude):
+        """SA-MA's H forecasts, its index over 52-week blocks."""
         return sa_ma(hist, t, exclude, H=H)
 
     return {

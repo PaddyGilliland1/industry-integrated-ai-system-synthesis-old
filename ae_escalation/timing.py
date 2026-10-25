@@ -70,6 +70,7 @@ def iso_slots(dates):
 
 
 def _sunday(day):
+    """A day as a Timestamp, refused unless it is a Sunday."""
     day = pd.Timestamp(day)
     if day.dayofweek != 6:
         raise ValueError(f"{day.date()} is not a Sunday week ending")

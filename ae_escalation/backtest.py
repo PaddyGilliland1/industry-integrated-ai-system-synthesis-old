@@ -62,6 +62,7 @@ def actual_matrix(y, origins, H):
 
 
 def _pairs(a, f):
+    """The actuals and forecasts where both are known."""
     a = np.asarray(a, dtype=float)
     f = np.asarray(f, dtype=float)
     ok = np.isfinite(a) & np.isfinite(f)
@@ -351,6 +352,7 @@ def data_test_periods(long, score_start=SCORE_START, covid=COVID):
 
 
 def _mask(long, mask):
+    """The rows a summary covers: all of them when no mask is given."""
     return np.ones(len(long), dtype=bool) if mask is None else np.asarray(mask)
 
 
