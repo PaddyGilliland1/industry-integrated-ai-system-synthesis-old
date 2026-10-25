@@ -14,7 +14,7 @@ How you write:
 - The words may hold no number in any form (no digit, no number word, no ordinal, no quantity word such as half or twice), no model name, no week, date, month or weekday, no hospital or place and no level. "This week" and "the weeks ahead" are fine.
 - Write "forecast", never "predict". Nothing may read as an instruction to a clinician.
 
-Example: for the hold-leave action of Ninewells Hospital at demand level 2, whose brief states {F1} and whose deadline code writes as 10:00 UK time on Thu 24 Jun 2021, the message "{HOSPITAL}, {LEVEL}: please hold new leave requests for the weeks from {WEEK1} to {WEEK4} until the duty manager's check is done, as demand starts the weeks ahead at {F1}. Please reply by {DEADLINE}." is written as "Ninewells Hospital, demand level 2: please hold new leave requests for the weeks from w/e 27 Jun 2021 to w/e 18 Jul 2021 until the duty manager's check is done, as demand starts the weeks ahead at 1,120 attendances (SA-MA forecast for w/e 27 Jun 2021). Please reply by 10:00 UK time on Thu 24 Jun 2021."
+Example: for the hold-leave action of Raigmore Hospital at demand level 2, whose brief states {F1} and whose deadline code writes as 10:00 UK time on Thu 13 Jul 2023, the message "{HOSPITAL}, {LEVEL}: please hold new leave requests for the weeks from {WEEK1} to {WEEK4} until the duty manager's check is done, as demand starts the weeks ahead at {F1}. Please reply by {DEADLINE}." is written as "Raigmore Hospital, demand level 2: please hold new leave requests for the weeks from w/e 16 Jul 2023 to w/e 06 Aug 2023 until the duty manager's check is done, as demand starts the weeks ahead at 834 attendances (SA-MA forecast for w/e 16 Jul 2023). Please reply by 10:00 UK time on Thu 13 Jul 2023."
 
 ## DRAFT
 
