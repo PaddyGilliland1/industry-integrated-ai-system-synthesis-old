@@ -12,22 +12,24 @@ from ae_escalation import live as lv
 from ae_escalation import replay as rp
 
 from .conftest import REPO
-from .scripted import stand_in
+from .scripted import LOADED, stand_in
 
 FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
 
 
 def tags(digest, thinking=None):
-    """Ollama's listing with the model at a digest, and its model card. The
-    card lists the reasoning setting config.json names unless thinking
-    gives the values, so the flow runs; the real card's values are tested
-    in test_gateway."""
+    """Ollama's listing with the model at a digest, its model card and its
+    reply to the warm-up's load. The card lists the reasoning setting
+    config.json names unless thinking gives the values, so the flow runs;
+    the real card's values are tested in test_gateway."""
     effort = cf.load_config(REPO / "config.json").local.reasoning_effort
     card = thinking or {"values": [False, True, effort], "default": True}
 
-    def fetch(url, body=None):
+    def fetch(url, body=None, timeout=None):
         if url.endswith("/api/show"):
             return {"thinking": card}
+        if url.endswith("/api/generate"):
+            return LOADED
         return {
             "models": [
                 {"name": "nemotron-3.5-lightning:30b-a3b", "digest": digest}
@@ -169,6 +171,10 @@ def test_notify_needs_the_approvers_decisions(tmp_path, pinned, capsys):
         writer.writerow(first)
     assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 0
     assert (tmp_path / "outbox" / "notifications_local_t1.jsonl").exists()
+    audit = tmp_path / "recordings" / "local" / "t1" / "audit.jsonl"
+    entries = [json.loads(x) for x in audit.read_text().splitlines()]
+    warmed = [e["step"] for e in entries if e["kind"] == "warm-up"]
+    assert warmed == ["briefs", "notify"]
 
 
 def frontier_config(tmp_path):
@@ -558,3 +564,84 @@ def test_an_edits_wording_check_is_recorded_live_and_replayed(
     result = rp.run_set(run, holidays, settings, paths, live=False)
     again = rp.queue_with_decisions(result, paths, settings=settings)
     assert again.item(row["brief_id"]).state == "approved with edit"
+
+
+# --- the warm-up, outside the recordings and the budget ----------------------
+
+
+def test_a_local_run_warms_the_model_before_its_budget_starts(
+    tmp_path, monkeypatch, capsys
+):
+    events = []
+    plain = tags(cf.load_config(REPO / "config.json").local.digest)
+
+    def fetch(url, body=None, timeout=None):
+        if url.endswith("/api/generate"):
+            events.append("warm-up")
+        return plain(url, body, timeout)
+
+    class Watched(gw.Budget):
+        def __init__(self, *args, **kwargs):
+            events.append("budget")
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(rp, "Budget", Watched)
+    model = stand_in()
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    assert lv.main(args, chat_model=model, fetch=fetch) == 0
+    assert events == ["warm-up", "budget"]
+    rec = tmp_path / "recordings" / "local" / "t1"
+    audit = [
+        json.loads(x) for x in (rec / "audit.jsonl").read_text().splitlines()
+    ]
+    assert audit[0]["kind"] == "warm-up" and audit[0]["step"] == "briefs"
+    assert audit[0]["done_reason"] == "load" and audit[0]["load_s"] >= 0
+    assert sum(e["kind"] == "warm-up" for e in audit) == 1
+    # Every recording is a chat call the model answered; the load is none.
+    records = (rec / "briefs.jsonl").read_text().splitlines()
+    assert len(records) == len(model.seen)
+    assert {json.loads(r)["kind"] for r in records} == {"model"}
+    assert "warm-up: " in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [OSError("connection refused"), {**LOADED, "response": "Hello"}],
+    ids=["unreachable", "generated"],
+)
+def test_a_warm_up_that_fails_stops_the_run_before_any_model_call(
+    tmp_path, pinned, capsys, answer
+):
+    def fetch(url, body=None, timeout=None):
+        if url.endswith("/api/generate"):
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        return pinned(url, body, timeout)
+
+    model = stand_in()
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    assert lv.main(args, chat_model=model, fetch=fetch) == 2
+    assert model.seen == []
+    assert "the warm-up" in capsys.readouterr().out
+    assert not (tmp_path / "recordings" / "local" / "t1").exists()
+    # Nothing ran, so the label is still free.
+    assert briefs(tmp_path, pinned) == 0
+
+
+def test_the_frontier_backend_is_never_warmed(tmp_path, pinned):
+    stated_case(tmp_path, "t1", pinned)
+    asked = []
+
+    def spy(url, body=None, timeout=None):
+        asked.append(url)
+        raise AssertionError("the frontier run asked Ollama")
+
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    args += ["--config", frontier_config(tmp_path)]
+    code = lv.main(
+        args, chat_model=stand_in(), fetch=spy, env_file=key_file(tmp_path)
+    )
+    assert code == 0 and asked == []
+    audit = tmp_path / "recordings" / "frontier" / "t1" / "audit.jsonl"
+    assert '"warm-up"' not in audit.read_text(encoding="utf-8")

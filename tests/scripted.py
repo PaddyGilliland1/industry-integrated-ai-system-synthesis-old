@@ -22,6 +22,16 @@ WORDING_BAD = AIMessage(
     'claims a cause no tool shows"]}'
 )
 DONE = AIMessage(content="I have what I need.")
+# Ollama 0.40.1's reply to /api/generate with an empty prompt: its
+# GenerateHandler returns this once the model is loaded, before it builds a
+# prompt or asks the runner for any completion.
+LOADED = {
+    "model": "nemotron-3.5-lightning:30b-a3b",
+    "created_at": "2026-10-26T09:00:00Z",
+    "response": "",
+    "done": True,
+    "done_reason": "load",
+}
 
 
 def tc(name, **args):

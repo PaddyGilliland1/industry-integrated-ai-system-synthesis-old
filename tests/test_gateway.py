@@ -14,7 +14,7 @@ from ae_escalation import config as cf
 from ae_escalation import gateway as gw
 
 from .conftest import REPO
-from .scripted import ollama_wire, schema_asked
+from .scripted import LOADED, ollama_wire, schema_asked
 
 FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
 
@@ -520,6 +520,66 @@ def test_a_model_that_lists_no_thinking_honours_no_reasoning_setting(
     assert gw.check_local_model(with_effort(settings, None), fetch)
     with pytest.raises(RuntimeError, match="lists no thinking values"):
         gw.check_local_model(with_effort(settings, "none"), fetch)
+
+
+# --- the warm-up: a load that generates nothing ------------------------------
+
+
+def seconds(*readings):
+    """A clock that gives each reading in turn."""
+    it = iter(readings)
+    return lambda: next(it)
+
+
+def test_the_warm_up_asks_ollama_to_load_the_model_and_nothing_more(
+    settings,
+):
+    seen = []
+
+    def fetch(url, body=None, timeout=None):
+        seen.append((url, body, timeout))
+        return LOADED
+
+    warmed = gw.warm_up_local_model(settings, fetch, clock=seconds(5, 17.5))
+    assert seen == [
+        (
+            "http://localhost:11434/api/generate",
+            {
+                "model": settings.local.model,
+                "prompt": "",
+                "stream": False,
+                "keep_alive": gw.WARM_UP_KEEP_ALIVE,
+            },
+            settings.agents.time_limit_s,
+        )
+    ]
+    # A keep_alive of 0 with an empty prompt is Ollama's unload request.
+    assert gw.WARM_UP_KEEP_ALIVE not in (0, "0", "0s")
+    assert warmed["load_s"] == 12.5 and warmed["done_reason"] == "load"
+    assert warmed["model"] == settings.local.model
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        {
+            **LOADED,
+            "done_reason": "stop",
+            "response": "Hello",
+            "eval_count": 2,
+        },
+        {**LOADED, "response": "Hello"},
+        {**LOADED, "eval_count": 1},
+        {**LOADED, "done_reason": "unload"},
+        {"error": "model not found"},
+    ],
+    ids=["generated", "response", "eval_count", "unload", "error"],
+)
+def test_a_warm_up_reply_that_is_not_a_bare_load_is_refused(settings, reply):
+    with pytest.raises(RuntimeError, match="not a load"):
+        gw.warm_up_local_model(
+            settings, lambda url, body=None, timeout=None: reply
+        )
 
 
 def test_the_frontier_backend_asks_for_json_schema_structured_output(

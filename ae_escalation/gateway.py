@@ -773,13 +773,14 @@ def make_chat_model(settings, env_file=ENV_PATH):
     )
 
 
-def _fetch_json(url, body=None):
-    """A URL's JSON, read within ten seconds; a body is posted as JSON."""
+def _fetch_json(url, body=None, timeout=10):
+    """A URL's JSON, read within the timeout in seconds; a body is posted as
+    JSON."""
     data = None if body is None else json.dumps(body).encode("utf-8")
     request = urllib.request.Request(
         url, data=data, headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(request, timeout=10) as reply:
+    with urllib.request.urlopen(request, timeout=timeout) as reply:
         return json.load(reply)
 
 
@@ -842,6 +843,57 @@ def check_local_model(settings, fetch=_fetch_json):
     if why:
         raise RuntimeError(why)
     return found[name]
+
+
+# Long enough to hold the model from the warm-up to the run's first call;
+# from then on each call keeps it loaded at Ollama's own default. A
+# keep_alive of 0 with an empty prompt would unload it instead.
+WARM_UP_KEEP_ALIVE = "10m"
+
+
+def warm_up_local_model(settings, fetch=_fetch_json, clock=time.monotonic):
+    """Load the local model into memory before a live run, so its first
+    call does not spend the run's budget on the load; return what the audit
+    log records, the load time included.
+
+    The request is the one Ollama documents for loading a model without
+    generating: /api/generate with an empty prompt. Ollama 0.40.1's
+    GenerateHandler answers it with done_reason "load" once the model is
+    loaded, before it builds a prompt or asks for any completion, so it is
+    no model call and nothing is recorded.
+
+    Raises
+    ------
+    RuntimeError
+        If the reply is not a bare load, so a warm-up that generated
+        anything never passes as one.
+    """
+    parts = urlparse(settings.local.endpoint)
+    url = f"{parts.scheme}://{parts.netloc}/api/generate"
+    body = {
+        "model": settings.local.model,
+        "prompt": "",
+        "stream": False,
+        "keep_alive": WARM_UP_KEEP_ALIVE,
+    }
+    started = clock()
+    reply = fetch(url, body, timeout=settings.agents.time_limit_s)
+    load_s = clock() - started
+    if (
+        reply.get("done_reason") != "load"
+        or reply.get("response")
+        or reply.get("eval_count")
+    ):
+        raise RuntimeError(
+            f"the warm-up's reply is not a load without generation: {reply}"
+        )
+    return {
+        "model": settings.local.model,
+        "request": url,
+        "keep_alive": WARM_UP_KEEP_ALIVE,
+        "done_reason": "load",
+        "load_s": round(load_s, 2),
+    }
 
 
 # --- the scripted stand-in ---------------------------------------------------

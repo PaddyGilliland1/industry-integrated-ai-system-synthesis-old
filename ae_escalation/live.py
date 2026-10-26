@@ -32,7 +32,10 @@ machine holds the model at its pinned digest and lists the reasoning
 setting config.json names among its thinking values, and it prints
 nvidia-smi; for
 frontier, that a key is set in the git-ignored .env, never the shell's
-environment, and it names that file but never prints the key.
+environment, and it names that file but never prints the key. A local run
+then warms the model with Ollama's load-only request, which generates
+nothing, before its budget starts, outside the recordings, and logs the
+load time in the audit log as a warm-up.
 A label already recorded is never run again, so no recording is replaced;
 the set after the one prompt-tuning round takes a new label. The frontier
 backend runs the set only with the stated case: the local set's adequacy
@@ -64,6 +67,7 @@ from .adequacy import (
 from .approval import CRITERIA
 from .config import CONFIG_PATH, ENV_PATH, REPO, frontier_key, load_config
 from .gateway import _fetch_json, check_local_model, make_chat_model
+from .gateway import warm_up_local_model
 from .gateway import AuditLog, Budget, BudgetExceeded
 from .replay import (
     Paths,
@@ -153,8 +157,31 @@ def _stopped(exc, paths):
     return 3
 
 
-def _briefs(settings, paths, model, digest, resume):
+def _warm_up(settings, paths, step, fetch):
+    """Load the local model before the step's budget starts, with Ollama's
+    load-only request, and log its load time; return an exit code if it
+    failed, else None. The frontier model needs no loading here."""
+    if settings.llm_backend != "local":
+        return None
+    try:
+        warmed = warm_up_local_model(settings, fetch)
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"stopped before any model call: the warm-up failed: {exc}")
+        return 2
+    AuditLog(paths.audit).write(kind="warm-up", step=step, **warmed)
+    print(
+        f"warm-up: {warmed['model']} loaded in {warmed['load_s']:g} s by "
+        "Ollama's load-only request, which generates nothing, outside the "
+        "recordings and before the budget starts"
+    )
+    return None
+
+
+def _briefs(settings, paths, model, digest, resume, fetch):
     """Run the set live, write the form and say what happened."""
+    stopped = _warm_up(settings, paths, "briefs", fetch)
+    if stopped is not None:
+        return stopped
     run, holidays = load_run(settings)
     try:
         result = run_set(
@@ -382,11 +409,14 @@ def _choose(settings, out, label, chosen, initials):
     return 0
 
 
-def _notify(settings, paths, model, digest, resume):
+def _notify(settings, paths, model, digest, resume, fetch):
     """Apply the decisions and draft the notifications, live."""
     if not paths.decisions.exists():
         print(f"no decisions yet: Paddy's go in {paths.decisions}")
         return 2
+    stopped = _warm_up(settings, paths, "notify", fetch)
+    if stopped is not None:
+        return stopped
     run, holidays = load_run(settings)
     result = run_set(run, holidays, settings, paths, live=False)
     # One budget for the whole step, edits' wording checks and drafts
@@ -494,8 +524,8 @@ def main(
         print(line)
     model = chat_model or make_chat_model(settings, env_file)
     if step == "briefs":
-        return _briefs(settings, paths, model, digest, args.resume)
-    return _notify(settings, paths, model, digest, args.resume)
+        return _briefs(settings, paths, model, digest, args.resume, fetch)
+    return _notify(settings, paths, model, digest, args.resume, fetch)
 
 
 if __name__ == "__main__":
