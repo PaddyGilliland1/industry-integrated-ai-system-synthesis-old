@@ -1,0 +1,48 @@
+{
+  "summary": "{LEVEL} for {HOSPITAL} comes from the latest released actual, {F1}, and not from any forecast. The drift latch has been set since {LATCHED} after an upward breach, so all forecasts are untrusted until a person approves a latch reset. Use the released weeks as the guide for staffing.",
+  "expected_range": "No forecast range can be trusted while the drift latch is set. The released weeks ran from {F2} to {F3} in the latest weeks.",
+  "model_agreement": "All forecasts are untrusted while the drift latch is set, so no forecast is offered as guidance. The back-test error in this brief is historical and does not establish current forecast reliability while the latch is set.",
+  "watch_points": [
+    "Compare the released weeks, {F4} and {F1}, with the rota already set from {WEEK1} to {WEEK4}.",
+    "Check whether extra shifts, bank staff or holding leave are needed from {WEEK1} to {WEEK4}, judged on the released actuals.",
+    "Ask for the latch to be reviewed after the next scheduled data release; a person approves a latch reset once the documented reset criteria are met."
+  ],
+  "cited_figures": [
+    {
+      "value": 2559.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2019-10-06",
+      "unit": "attendances"
+    },
+    {
+      "value": 2417.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2019-09-08",
+      "unit": "attendances"
+    },
+    {
+      "value": 2688.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2019-09-22",
+      "unit": "attendances"
+    },
+    {
+      "value": 2633.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2019-09-29",
+      "unit": "attendances"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "summary": "{LEVEL} is held from the week before the alarm, not from any forecast. The drift latch has been set since {LATCHED} after a downward breach, and the released weeks show attendances at {F1} and then {F2}. All forecasts are untrusted until a person approves a latch reset, so none is offered as guidance.",
+  "expected_range": "No forecast range can be trusted while the drift latch is set. For context only, the released weeks ran at {F3} and {F4} before the fall.",
+  "model_agreement": "All forecasts are untrusted while the drift latch is set, so none is offered as guidance and none is singled out to trust less. The back-test error in this brief is historical and does not restore trust in the forecasts while the latch is set.",
+  "watch_points": [
+    "Compare the released weeks of attendances for {HOSPITAL} with current rota cover before changing any shifts.",
+    "Ask for the latch to be reviewed, noting that the fall to {F2} alone cannot establish a lasting change or justify a reset; a person approves a latch reset once the documented reset criteria are met.",
+    "Review extra shifts and leave using released actuals and current operational information; do not use untrusted forecasts to determine changes."
+  ],
+  "cited_figures": [
+    {
+      "value": 1736.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-15",
+      "unit": "attendances"
+    },
+    {
+      "value": 1072.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-22",
+      "unit": "attendances"
+    },
+    {
+      "value": 1905.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-08",
+      "unit": "attendances"
+    },
+    {
+      "value": 1938.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-01",
+      "unit": "attendances"
+    }
+  ]
+}

@@ -49,3 +49,10 @@ Thumbs.db
 !data/weekly_ae_activity_20261011.csv
 !data/bank-holidays_20261024.json
 !data/MANIFEST.tsv
+
+# The approval sheets of the frontier set, the approver's decisions and the adequacy scores,
+# published as the replay's evidence.
+!approvals/decisions_frontier_round2.csv
+!approvals/queue_frontier_round2.csv
+!approvals/adequacy_frontier_round2.csv
+!approvals/adequacy_local_round2.csv

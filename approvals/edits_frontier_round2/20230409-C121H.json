@@ -1,0 +1,84 @@
+{
+  "summary": "{HOSPITAL} is at {LEVEL}, set by the flag. Demand is forecast to start at {F1} and climb to {F2}. The forecasts fit recent weeks, so they can be used for planning, but the range widens further out.",
+  "expected_range": "The expected range runs from {F3} at the low end to {F4} at the high end.",
+  "model_agreement": "The simple models disagree more as the weeks go on, by {F5} at the furthest week. The lowest forecast there is {F6}, which stays flat and does not follow the upward drift. Trust least the model with the highest back-test error, {F7}. The model with {F8} is also weaker than {PRIMARY}.",
+  "watch_points": [
+    "Check whether extra shifts or bank staff are needed from {WEEK1} to {WEEK4}, allowing for the upward drift in the forecasts.",
+    "Review leave and rota cover for {WEEK3} and {WEEK4}, when the bank holidays fall and the forecasts are highest.",
+    "Compare each newly released week with the forecast range and revisit staffing if actual attendances move outside it."
+  ],
+  "cited_figures": [
+    {
+      "value": 185.0,
+      "tool_call_id": "T4",
+      "measure": "point",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 202.0,
+      "tool_call_id": "T4",
+      "measure": "point",
+      "model": "SA-MA",
+      "horizon": 4,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 164.0,
+      "tool_call_id": "T4",
+      "measure": "low_80",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 242.0,
+      "tool_call_id": "T4",
+      "measure": "high_80",
+      "model": "SA-MA",
+      "horizon": 4,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 18.2,
+      "tool_call_id": "T4",
+      "measure": "spread",
+      "model": null,
+      "horizon": 4,
+      "week": null,
+      "unit": "%"
+    },
+    {
+      "value": 165.0,
+      "tool_call_id": "T4",
+      "measure": "point",
+      "model": "4-week moving average",
+      "horizon": 4,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 18.7,
+      "tool_call_id": "T5",
+      "measure": "error",
+      "model": "seasonal naive",
+      "horizon": 1,
+      "week": null,
+      "unit": "%"
+    },
+    {
+      "value": 16.1,
+      "tool_call_id": "T5",
+      "measure": "error",
+      "model": "linear",
+      "horizon": 1,
+      "week": null,
+      "unit": "%"
+    }
+  ]
+}

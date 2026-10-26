@@ -1,0 +1,39 @@
+{
+  "summary": "{HOSPITAL} is at {LEVEL}, held from the level given before the alarm. In the week before the alarm, the rule found no week ahead unusually high for the time of year; the held level is not a current forecast assessment. The drift latch has been set since {LATCHED} after a downward breach, so the forecasts are untrusted until a person approves a latch reset. Attendances fell from {F1} to {F2} in the latest released weeks, so read those released weeks rather than any forecast.",
+  "expected_range": "No forecast range can be trusted while the drift latch is set. Use the released weeks, from {F3} down to {F2}, as the guide to current demand.",
+  "model_agreement": "All forecasts are untrusted while the drift latch is set, so no model is ranked above another here. Do not plan on any of them until a person approves a latch reset. The back-test error in this brief is historical and cannot establish current forecast reliability.",
+  "watch_points": [
+    "Check the latest released weeks of attendances against the rota, as {ORIGIN} is far below the weeks before it.",
+    "Ask for the drift latch to be reviewed; a person approves a latch reset once the documented reset criteria are met.",
+    "Keep the current rota and leave arrangements under review rather than relying on any forecast from {WEEK1} to {WEEK4}."
+  ],
+  "cited_figures": [
+    {
+      "value": 2175.0,
+      "tool_call_id": "T1",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-15",
+      "unit": "attendances"
+    },
+    {
+      "value": 1542.0,
+      "tool_call_id": "T1",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-22",
+      "unit": "attendances"
+    },
+    {
+      "value": 2425.0,
+      "tool_call_id": "T1",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-08",
+      "unit": "attendances"
+    }
+  ]
+}

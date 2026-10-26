@@ -1,0 +1,147 @@
+{
+  "summary": "{HOSPITAL} is at {LEVEL}. The forecasts start at {F1} and ease slightly to {F2}. Recent weeks have been rising, reaching {F3}, and the forecasts fit them with no drift. Trust them moderately, because the simple models are fairly far apart.",
+  "expected_range": "For {WEEK1}, the narrower range runs from {F4} to {F5}. The wider range runs from {F6} to {F7}.",
+  "model_agreement": "The simple models disagree by {F8} at the nearest week. The lowest forecast, {F9}, has the weakest back-test error at {F10}, so trust it least. The model forecasting {F12} is also weaker, with an error of {F11}. {PRIMARY} has the lowest error at {F13}, and the model with an error of {F14} is close behind.",
+  "watch_points": [
+    "Check whether extra shifts or bank staff are needed for {WEEK1}, since recent actual demand reached {F15}.",
+    "Review rota cover from {WEEK2} to {WEEK4} and hold leave decisions open until more weeks are released.",
+    "Compare each newly released week with the forecast range and revisit staffing if actuals pass the top of the range."
+  ],
+  "cited_figures": [
+    {
+      "value": 1120.0,
+      "tool_call_id": "T4",
+      "measure": "point",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 1085.0,
+      "tool_call_id": "T4",
+      "measure": "point",
+      "model": "SA-MA",
+      "horizon": 2,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 1194.0,
+      "tool_call_id": "T6",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2021-06-13",
+      "unit": "attendances"
+    },
+    {
+      "value": 982.0,
+      "tool_call_id": "T4",
+      "measure": "low_80",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 1291.0,
+      "tool_call_id": "T4",
+      "measure": "high_80",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 714.0,
+      "tool_call_id": "T4",
+      "measure": "low_95",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 1454.0,
+      "tool_call_id": "T4",
+      "measure": "high_95",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 25.5,
+      "tool_call_id": "T4",
+      "measure": "spread",
+      "model": null,
+      "horizon": 1,
+      "week": null,
+      "unit": "%"
+    },
+    {
+      "value": 835.0,
+      "tool_call_id": "T4",
+      "measure": "point",
+      "model": "seasonal naive",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 24.5,
+      "tool_call_id": "T5",
+      "measure": "error",
+      "model": "seasonal naive",
+      "horizon": 1,
+      "week": null,
+      "unit": "%"
+    },
+    {
+      "value": 16.8,
+      "tool_call_id": "T5",
+      "measure": "error",
+      "model": "linear",
+      "horizon": 1,
+      "week": null,
+      "unit": "%"
+    },
+    {
+      "value": 898.0,
+      "tool_call_id": "T4",
+      "measure": "point",
+      "model": "linear",
+      "horizon": 1,
+      "week": null,
+      "unit": "attendances"
+    },
+    {
+      "value": 11.5,
+      "tool_call_id": "T5",
+      "measure": "error",
+      "model": "SA-MA",
+      "horizon": 1,
+      "week": null,
+      "unit": "%"
+    },
+    {
+      "value": 11.9,
+      "tool_call_id": "T5",
+      "measure": "error",
+      "model": "4-week moving average",
+      "horizon": 1,
+      "week": null,
+      "unit": "%"
+    },
+    {
+      "value": 1194.0,
+      "tool_call_id": "T6",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2021-06-13",
+      "unit": "attendances"
+    }
+  ]
+}
