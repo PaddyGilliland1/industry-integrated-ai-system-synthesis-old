@@ -157,6 +157,11 @@ each box names the prior project it comes from or says it is new. The weekly flo
 9. **Audit.** Every tool call, draft, check and decision is logged, with the backend that wrote
    each brief, and can be replayed.
 
+![Figure 3: one week, from the week's end to the duty manager's decision](figures/fig3_weekly_cycle.png)
+
+*Figure 3. One week: Tuesday release to approved brief.* The dates illustrate the release timing for
+one replay week, Ninewells Hospital's demand week ending 13 Jun 2021; that week's brief was rejected.
+
 ## Prior project artefacts reused
 
 Each pattern is adapted for this project, never copied in as a file, and each module names the
