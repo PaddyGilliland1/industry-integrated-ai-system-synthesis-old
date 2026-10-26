@@ -472,6 +472,16 @@ def test_the_summary_says_why_there_is_no_draft(approved, settings, tmp_path):
     assert "no draft was written for this action: model error" in shown
 
 
+def test_a_brief_with_no_action_says_nothing_reaches_the_outbox():
+    # Level 1 sets no staffing action, so its summary must not say anything
+    # was written to the outbox.
+    shown = co.CoordinationResult(
+        brief_id="x", actions=[], drafts=[]
+    ).summary()
+    assert shown == co.NO_ACTION_LABEL
+    assert co.OUTBOX_LABEL not in shown
+
+
 # --- a notification states the brief's figures for its own weeks only --------
 
 

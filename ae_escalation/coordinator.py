@@ -68,6 +68,9 @@ ESCALATE_TO = {
     "unscheduled-care lead": None,
 }
 OUTBOX_LABEL = "Written to the outbox file, never sent."
+NO_ACTION_LABEL = (
+    "Level 1 sets no staffing action, so nothing reaches the outbox."
+)
 SIMULATED_LABEL = (
     "Simulated: the acknowledgements are seeded stand-ins, not real replies, "
     "and the clock is the replay's."
@@ -330,6 +333,8 @@ class CoordinationResult(BaseModel):
         """A short table of the actions, for the notebook and the live
         command, with each held action's draft as the manager sees it, its
         failing figures marked."""
+        if not self.actions:
+            return NO_ACTION_LABEL
         lines = []
         for a in self.actions:
             lines.append(

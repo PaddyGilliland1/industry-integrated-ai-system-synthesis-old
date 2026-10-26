@@ -645,6 +645,15 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
 # --- the graph ---------------------------------------------------------------
 
 
+# The client that recorded label round1 checked the typed reply against
+# BriefDraft inside the call, so a draft the text rules refused was recorded
+# as a model error. The client reads the reply in code, after the call, but
+# round1 must replay as it ran.
+REFUSED_IN_CALL = re.compile(
+    r"^model error: ValidationError: \d+ validation errors? for BriefDraft\b"
+)
+
+
 class Attempt(BaseModel):
     """One attempt at the brief: the Investigator's draft and the
     Reviewer's two checks."""
@@ -662,6 +671,24 @@ class Attempt(BaseModel):
     planted_value: float | None = None
     check: CheckResult | None = None
     wording: WordingResult | None = None
+
+    @property
+    def refused_by(self):
+        """What refused this attempt, in the words G4 counts causes in;
+        None when it passed both checks."""
+        if self.wording is not None and self.wording.reviewer_error:
+            return "the Reviewer could not run"
+        if self.wording is not None:
+            return None if self.wording.passed else "the wording check"
+        if self.check is not None and not self.check.passed:
+            return "the code check"
+        if self.cut:
+            return "the draft reply was cut at the output cap"
+        if REFUSED_IN_CALL.match(self.stop_reason):
+            return "the code check"
+        if self.stop_reason.startswith("model error"):
+            return "the Investigator could not run"
+        return "no readable draft"
 
 
 class BriefOutcome(BaseModel):
@@ -717,17 +744,7 @@ class BriefOutcome(BaseModel):
         last = self.attempts[-1] if self.attempts else None
         if last is None:
             return "no readable draft"
-        if last.wording is not None and last.wording.reviewer_error:
-            return "the Reviewer could not run"
-        if last.wording is not None and not last.wording.passed:
-            return "the wording check"
-        if last.check is not None and not last.check.passed:
-            return "the code check"
-        if last.cut:
-            return "the draft reply was cut at the output cap"
-        if last.stop_reason.startswith("model error"):
-            return "the Investigator could not run"
-        return "no readable draft"
+        return last.refused_by or "no readable draft"
 
     @property
     def failures(self):

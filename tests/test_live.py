@@ -529,7 +529,7 @@ def cutting():
 def test_a_completed_set_with_no_brief_verified_is_recorded_unscored(
     tmp_path, pinned, capsys
 ):
-    # Round 2 as it ran: a first round sent to tuning, then a second whose
+    # Label round2 as it ran: a first round sent to tuning, then a second whose
     # every draft met the cap. No brief needs marks, the summary and the
     # record name the cap, and the frontier case opens the frontier run.
     assert briefs(tmp_path, pinned, "t1") == 0

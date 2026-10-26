@@ -14,6 +14,7 @@ from ae_escalation import approval as ap
 from ae_escalation import briefs as br
 from ae_escalation import demo as dm
 from ae_escalation import gateway as gw
+from ae_escalation import replay as rp
 
 from .scripted import (
     DONE,
@@ -263,6 +264,63 @@ def test_g6_counts_approvals_without_a_factual_edit(
     q.decide(decide("nw", "approve"))
     q.decide(decide("nw2", "edit", edited=good, factual=True))
     assert q.g6() == {"decided": 2, "approved_without_factual_edit": 1}
+
+
+def test_g4_as_worded_also_needs_the_planted_figure_caught(
+    replay_run, holidays, settings, verified, unverified, tmp_path
+):
+    q = queue(tmp_path, verified, unverified)
+    q.decide(decide("nw", "approve"))
+    good = reply(good_draft(replay_run))
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "planted.jsonl"),
+        live=True,
+        chat_model=gw.ScriptedModel(
+            script=[TOOLS, DONE, good, DONE, good, WORDING_OK]
+        ),
+    )
+    planted = ag.BriefGraph(replay_run, holidays, settings, gateway).run(
+        ORIGIN, "T101H", "nw-planted", plant=rp.plant_figure
+    )
+    out = ap.g4_verdict(q, planted)
+    assert out == {**q.g4(), "planted_caught": True, "met": True}
+    never = ap.g4_verdict(q, None)
+    assert never["planted_caught"] is None and never["met"] is False
+
+
+def test_g5_holds_when_every_brief_written_carries_the_rules_level(verified):
+    assert ap.g5_verdict([verified]) == {
+        "briefs": 1,
+        "level_is_rules": 1,
+        "met": True,
+    }
+    tampered = verified.model_copy(
+        update={"brief": verified.brief.model_copy(update={"level": 3})}
+    )
+    assert ap.g5_verdict([verified, tampered])["met"] is False
+    unwritten = verified.model_copy(update={"brief": None})
+    assert ap.g5_verdict([unwritten]) == {
+        "briefs": 0,
+        "level_is_rules": 0,
+        "met": None,
+    }
+
+
+def test_g6_as_worded_needs_all_but_one_and_three_of_reader_bs_four(
+    verified, tmp_path
+):
+    q = queue(tmp_path, verified)
+    q.decide(decide("nw", "approve"))
+    out = ap.g6_verdict(q, built=2)
+    assert out["needed"] == 1 and out["approver_met"] is True
+    # Reader B has not read yet, so the verdict waits on the reading.
+    assert out["reader_b_agreeing"] is None and out["met"] is None
+    assert ap.g6_verdict(q, built=2, reader_b_agreeing=3)["met"] is True
+    assert ap.g6_verdict(q, built=2, reader_b_agreeing=2)["met"] is False
+    # 1 of 3 approved cleanly where 2 are needed fails whatever Reader B says.
+    short = ap.g6_verdict(q, built=3, reader_b_agreeing=4)
+    assert short["approver_met"] is False and short["met"] is False
 
 
 def test_the_queue_exports_to_csv_and_reads_the_decisions_back(

@@ -8,6 +8,7 @@ from datetime import date
 
 import pytest
 from langchain_core.messages import AIMessage
+from pydantic import ValidationError
 
 from ae_escalation import agents as ag
 from ae_escalation import briefs as br
@@ -617,6 +618,66 @@ def test_not_verified_says_why(run, holidays, settings, tmp_path):
     assert out.cause is None
 
 
+def test_each_attempt_names_what_refused_it(run, holidays, settings, tmp_path):
+    # The cause is the last attempt's; the notebook shows each attempt's, so
+    # a brief refused first by the code check and then by the wording check
+    # says both.
+    script = [TOOLS, DONE, reply(planted_draft(run)), DONE]
+    script += [reply(good_draft(run)), WORDING_BAD]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "a"
+    )
+    assert [a.refused_by for a in out.attempts] == [
+        "the code check",
+        "the wording check",
+    ]
+    assert out.cause == "the wording check"
+    good = [TOOLS, DONE, reply(good_draft(run)), WORDING_OK]
+    out = graph(run, holidays, settings, good, tmp_path).run(
+        ORIGIN, "T101H", "b"
+    )
+    assert [a.refused_by for a in out.attempts] == [None]
+
+
+def test_a_draft_the_rules_refused_inside_the_call_names_the_code_check(
+    run, holidays, settings, tmp_path
+):
+    # Label round1's client checked the typed reply against BriefDraft
+    # inside the call, so a draft the text rules refused was recorded as a
+    # model error. The Investigator did run: the code check refused its draft.
+    try:
+        br.BriefDraft.model_validate(
+            good_draft(run, summary="Expect 1,120 attendances.")
+        )
+    except ValidationError as exc:
+        refused = exc
+    script = [TOOLS, DONE, failing(refused), DONE, failing(refused)]
+    live = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "r1"
+    )
+    assert live.status == "not verified"
+    assert [a.refused_by for a in live.attempts] == ["the code check"] * 2
+    assert live.cause == "the code check"
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "r1"
+    )
+    assert again.cause == "the code check"
+
+
+def test_another_validation_error_is_still_a_model_that_could_not_run(
+    run, holidays, settings, tmp_path
+):
+    try:
+        ag.WordingVerdict.model_validate({"passes": "perhaps"})
+    except ValidationError as exc:
+        other = exc
+    script = [TOOLS, DONE, failing(other), DONE, failing(other)]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "v"
+    )
+    assert out.cause == "the Investigator could not run"
+
+
 # --- an unreadable draft's retry is not blind --------------------------------
 
 
@@ -786,7 +847,7 @@ CUT_CAUSE = "the draft reply was cut at the output cap"
 def test_a_brief_whose_drafts_are_cut_at_the_cap_names_the_cut_as_its_cause(
     run, holidays, settings, tmp_path, cut
 ):
-    # Round 2's every draft met the cap; G4 and the adequacy record name
+    # Label round2's every draft met the cap; G4 and the adequacy record name
     # that, not a model that could not run.
     script = [TOOLS, DONE, cut, DONE, cut]
     live = graph(run, holidays, settings, script, tmp_path).run(

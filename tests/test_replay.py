@@ -525,6 +525,51 @@ def test_a_label_that_completed_replays_whole_with_no_stop(
     assert all(c.replayed for o in result.outcomes for c in o.calls)
 
 
+def recorded(store, run_id, calls, agent="investigator"):
+    first = 1 + sum(r["run_id"] == run_id for r in store.records())
+    for n, (purpose, digest) in enumerate(calls, first):
+        store.put(
+            {
+                "key": f"local|m|{run_id}|c{n:03d}",
+                "run_id": run_id,
+                "call_number": n,
+                "agent": agent,
+                "purpose": purpose,
+                "request_hash": digest,
+            }
+        )
+
+
+def test_a_retry_that_repeats_the_first_request_went_out_blind(tmp_path):
+    # Label round1's retries sent the first attempt's request again, byte
+    # for byte, so they never saw the problems they were refused for.
+    paths = rp.Paths.under(tmp_path, "local", "round1")
+    store = gw.RecordingStore(paths.briefs)
+    loop, draft = "tool loop", "draft"
+    recorded(store, "blind", [(loop, "a"), (draft, "b"), (loop, "a")])
+    recorded(store, "told", [(loop, "a"), (draft, "b"), (loop, "c")])
+    recorded(store, "told", [("wording", "d")], agent="reviewer")
+    recorded(store, "once", [(loop, "a"), (draft, "b")])
+    assert rp.blind_retries(paths) == {"blind": True, "told": False}
+
+
+def test_a_retry_after_a_refused_draft_is_told_its_problems(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round2")
+    rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    blind = rp.blind_retries(paths)
+    assert "20210613-T101H-planted" in blind
+    assert not any(blind.values())
+
+
 def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
     replay_run, holidays, settings, tmp_path
 ):

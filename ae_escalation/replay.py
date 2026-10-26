@@ -652,6 +652,26 @@ def replay_label(run, holidays, settings, paths):
     return result, None if stopped is None else stop_of(run, stopped)
 
 
+def blind_retries(paths):
+    """For each recorded run with a retry, whether the retry went out blind:
+    its first request the same, by hash, as the first attempt's, so it
+    carried none of the problems the first draft was refused for. Each
+    attempt's draft call ends it, so the next Investigator call is the
+    retry's first."""
+    calls = {}
+    for r in RecordingStore(paths.briefs).records():
+        if r["agent"] == "investigator":
+            calls.setdefault(r["run_id"], []).append(r)
+    blind = {}
+    for run_id, held in calls.items():
+        held.sort(key=lambda r: r["call_number"])
+        drafts = [i for i, r in enumerate(held) if r["purpose"] == "draft"]
+        if drafts and drafts[0] + 1 < len(held):
+            retry = held[drafts[0] + 1]
+            blind[run_id] = retry["request_hash"] == held[0]["request_hash"]
+    return blind
+
+
 def write_queue(result, paths, log=None):
     """Write the approval queue file and its CSV for the approver, once,
     with a pre-filled edit file for each brief. An existing

@@ -622,6 +622,65 @@ class ApprovalQueue:
         return out
 
 
+# --- G4, G5 and G6 as the build spec's section 1a words them -----------------
+
+# G6's second reader reads four briefs and must agree with the approver on at
+# least three of them.
+READER_B_AGREES = 3
+
+
+def g4_verdict(queue, planted):
+    """G4: every approved brief passes the code check again, no "not
+    verified" brief is approved, and the planted wrong figure is caught at
+    that figure. With no planted run, the plant was never shown caught, so
+    G4 is not met."""
+    counts = queue.g4()
+    caught = None if planted is None else planted.planted_caught
+    return {
+        **counts,
+        "planted_caught": caught,
+        "met": counts["met"] and caught is True,
+    }
+
+
+def g5_verdict(outcomes):
+    """G5, the invariant: the level in every brief written equals the
+    rule's. None when no brief was written, since there is nothing to
+    hold it to."""
+    written = [o for o in outcomes if o.brief is not None]
+    same = sum(o.brief.level == o.rule_level for o in written)
+    return {
+        "briefs": len(written),
+        "level_is_rules": same,
+        "met": None if not written else same == len(written),
+    }
+
+
+def g6_verdict(queue, built, reader_b_agreeing=None):
+    """G6: all but one of the built briefs approved by the approver
+    without a factual edit, and the second reader agreeing on at least
+    three of the four. A short count fails it whatever the second reader
+    decides; otherwise it waits on the reading, None until it is
+    recorded."""
+    counts = queue.g6()
+    needed = built - 1
+    approver = counts["approved_without_factual_edit"] >= needed
+    if not approver:
+        met = False
+    elif reader_b_agreeing is None:
+        met = None
+    else:
+        met = reader_b_agreeing >= READER_B_AGREES
+    return {
+        **counts,
+        "built": built,
+        "needed": needed,
+        "approver_met": approver,
+        "reader_b_agreeing": reader_b_agreeing,
+        "met": met,
+    }
+
+
 DECISION_COLUMNS = (
     "action",
     "initials",
