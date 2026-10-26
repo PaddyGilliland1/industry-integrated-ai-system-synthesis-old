@@ -277,3 +277,27 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
 22. **Every test helper, fixture and test-class method has a docstring** (P3-9). Every function in
     the package already had one. The test functions themselves keep their descriptive names in place
     of a docstring.
+
+## The fact-check fix batch (26 Oct 2026)
+
+Corrections from the stage 5.1 fact-check, applied to the notebook's text, the README and the case
+study. Two change what a code cell prints; the rest change words only.
+
+23. **September's borne-out share is one count.** The notebook printed 40.5% beside a by-month table
+    that gives 40.4% for the same 89 flagged outlooks: the line came from the units module, whose
+    shares are rounded to two places before the cell rounds them to one. The line now reads the same
+    eligible steady-year outlooks as the table, rounded once: 40.4% borne out against 14.9% of
+    unflagged September outlooks.
+24. **No probe, decision or build-spec reference ships.** The decision log, the probes and the build
+    spec stay private, so their ids and section numbers are gone from the notebook, the README and the
+    case study, and the repeated-flags line says "the rule stated before it was tested". Where an AI
+    assistant session ran or scored something, the text says so.
+25. **The GRU's comparison is given in both scopes.** Outside each series' drift episodes no release
+    horizon favoured the GRU and 16 of 20 favoured the primary; outside March 2020 to March 2022 one
+    did, the Queen Elizabeth at release horizon 4, and 7 favoured the primary.
+26. **The notebook numbers all six figures.** Figures 1 and 2 are shown in section 1 and Figures 4 to
+    6 carry captions, so each case study caption can give the figure's notebook number; the case
+    study numbers its own figures in the order they first appear.
+27. **The AI in the approvals is disclosed** in the case study and the README: an AI independent
+    judge read the seven briefs before the approver decided, its five edits were adopted with the
+    reset wording corrected, and an AI reviewer scored the adequacy test.
