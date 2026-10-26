@@ -3,6 +3,7 @@ text that code fills from the same tool results the Investigator uses, with
 the seven fields the build spec lists in section 1b, and the comparison's
 pass rule."""
 
+import csv
 import re
 from datetime import date
 
@@ -291,3 +292,80 @@ def test_the_raters_view_of_the_agents_brief_hides_its_author(
     assert "Written by" not in shown
     assert shown == outcome.display(written_by=False)
     assert "Written by" in outcome.display()
+
+
+# --- the raters' sheet -------------------------------------------------------
+
+RATING_COLUMNS = [
+    "rater",
+    "week",
+    "text",
+    *(c.field for c in ap.CRITERIA),
+    "factual_error",
+]
+SEED = 20261025
+
+
+def ratings_sheet(path, rows):
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=RATING_COLUMNS)
+        writer.writeheader()
+        for rater, week, text, unmet, factual in rows:
+            writer.writerow(
+                {
+                    "rater": rater,
+                    "week": week,
+                    "text": text,
+                    **{
+                        c.field: "no" if c.field in unmet else "yes"
+                        for c in ap.CRITERIA
+                    },
+                    "factual_error": "yes" if factual else "no",
+                }
+            )
+    return path
+
+
+def marked(rater, factual_on=None):
+    """Both weeks' texts, marked as the raters see them: the template's
+    text misses one criterion the agent's meets."""
+    rows = []
+    for week in tp.WEEKS:
+        for text, who in zip("AB", tp.blind_order(week, seed=SEED)):
+            unmet = ("disagreement_named",) if who == "template" else ()
+            rows.append((rater, week, text, unmet, who == factual_on))
+    return rows
+
+
+def test_each_text_is_read_back_as_the_agents_or_the_templates(tmp_path):
+    path = ratings_sheet(tmp_path / "r.csv", marked("Reader B"))
+    ratings = tp.read_ratings(path, seed=SEED)
+    assert sorted(r.week for r in ratings) == sorted(tp.WEEKS)
+    assert all(r.rater == "Reader B" for r in ratings)
+    assert all(r.agent == crit() and r.template == TEMPLATE for r in ratings)
+    assert tp.comparison_verdict(ratings)["Reader B"]["overall"] is True
+
+
+def test_only_a_factual_error_in_the_agents_text_counts(tmp_path):
+    on_agent = ratings_sheet(tmp_path / "a.csv", marked("approver", "agent"))
+    assert all(
+        r.agent_factual_error for r in tp.read_ratings(on_agent, seed=SEED)
+    )
+    on_template = ratings_sheet(
+        tmp_path / "t.csv", marked("approver", "template")
+    )
+    assert not any(
+        r.agent_factual_error for r in tp.read_ratings(on_template, seed=SEED)
+    )
+
+
+def test_a_rater_marks_both_texts_of_a_week_once_each(tmp_path):
+    half = [("approver", "demand week", "A", (), False)]
+    with pytest.raises(ValueError, match="both texts"):
+        tp.read_ratings(ratings_sheet(tmp_path / "h.csv", half), seed=SEED)
+    twice = marked("approver") + [("approver", "demand week", "A", (), False)]
+    with pytest.raises(ValueError, match="twice"):
+        tp.read_ratings(ratings_sheet(tmp_path / "d.csv", twice), seed=SEED)
+    odd = [("approver", "demand week", "C", (), False)]
+    with pytest.raises(ValueError, match="row 2"):
+        tp.read_ratings(ratings_sheet(tmp_path / "o.csv", odd), seed=SEED)

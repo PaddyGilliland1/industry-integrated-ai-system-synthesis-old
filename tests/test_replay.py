@@ -525,6 +525,15 @@ def test_a_label_that_completed_replays_whole_with_no_stop(
     assert all(c.replayed for o in result.outcomes for c in o.calls)
 
 
+def test_reader_bs_sheet_and_the_raters_sheet_sit_in_approvals(tmp_path):
+    paths = rp.Paths.under(tmp_path, "frontier", "round2")
+    approvals = tmp_path / "approvals"
+    assert paths.reader_b == approvals / "reader_b_frontier_round2.csv"
+    assert paths.template_ratings == (
+        approvals / "template_ratings_frontier_round2.csv"
+    )
+
+
 def recorded(store, run_id, calls, agent="investigator"):
     first = 1 + sum(r["run_id"] == run_id for r in store.records())
     for n, (purpose, digest) in enumerate(calls, first):

@@ -546,3 +546,104 @@ def test_an_edit_with_no_reviewer_to_check_it_fails_closed(
     )
     assert item.state == "edit failed"
     assert "wording check could not run" in item.display()
+
+
+# --- Reader B's four ---------------------------------------------------------
+
+READER_B_COLUMNS = [
+    "brief_id",
+    "action",
+    *(c.field for c in ap.CRITERIA),
+    "factual_edit",
+    "note",
+]
+
+
+def reader_b_sheet(path, rows):
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=READER_B_COLUMNS)
+        writer.writeheader()
+        for brief_id, action, *unmet in rows:
+            marks = {c.field: c.field not in unmet for c in ap.CRITERIA}
+            writer.writerow(
+                {
+                    "brief_id": brief_id,
+                    "action": action,
+                    **{f: "yes" if ok else "no" for f, ok in marks.items()},
+                    "factual_edit": "no",
+                    "note": "",
+                }
+            )
+    return path
+
+
+def reading(brief_id, action):
+    return ap.ReaderBDecision(brief_id=brief_id, action=action, criteria=met())
+
+
+def test_reader_bs_sheet_is_read_with_no_name_and_no_time(tmp_path):
+    path = reader_b_sheet(
+        tmp_path / "reader_b.csv",
+        [("nw", "approve"), ("pl", "reject", "figures_correct")],
+    )
+    got = ap.read_reader_b(path)
+    assert [(d.brief_id, d.action) for d in got] == [
+        ("nw", "approve"),
+        ("pl", "reject"),
+    ]
+    assert got[1].criteria.count() == 5
+    assert not {"initials", "decided_at"} & set(
+        ap.ReaderBDecision.model_fields
+    )
+
+
+def test_a_reader_b_row_that_cannot_be_read_is_named(tmp_path):
+    path = reader_b_sheet(tmp_path / "reader_b.csv", [("nw", "maybe")])
+    with pytest.raises(ValueError, match="row 2, nw"):
+        ap.read_reader_b(path)
+
+
+def test_only_reader_bs_edit_can_be_factual():
+    with pytest.raises(ValidationError):
+        ap.ReaderBDecision(
+            brief_id="nw", action="approve", criteria=met(), factual_edit=True
+        )
+
+
+def test_reader_b_agrees_when_the_decision_is_the_same(
+    verified, unverified, good, tmp_path
+):
+    q = queue(tmp_path, verified, unverified)
+    q.decide(decide("nw", "edit", edited=good))
+    q.decide(decide("pl", "reject"))
+    out = ap.reader_b_agreement(
+        q, [reading("nw", "edit"), reading("pl", "approve")], four=["nw", "pl"]
+    )
+    assert (out["read"], out["agreeing"], out["complete"]) == (2, 1, True)
+    assert out["by_brief"]["pl"] == {
+        "reader_b": "approve",
+        "approver": "reject",
+        "agree": False,
+    }
+
+
+def test_reader_b_reads_the_four_by_the_rule_once_each(
+    verified, unverified, tmp_path
+):
+    q = queue(tmp_path, verified, unverified)
+    q.decide(decide("nw", "approve"))
+    with pytest.raises(ValueError, match="not one of the four"):
+        ap.reader_b_agreement(q, [reading("xx", "approve")], four=["nw"])
+    twice = [reading("nw", "approve"), reading("nw", "reject")]
+    with pytest.raises(ValueError, match="twice"):
+        ap.reader_b_agreement(q, twice, four=["nw", "pl"])
+    part = ap.reader_b_agreement(
+        q, [reading("nw", "approve")], four=["nw", "pl"]
+    )
+    assert (part["read"], part["agreeing"], part["complete"]) == (1, 1, False)
+    # A brief the approver has not decided cannot be agreed with.
+    open_one = ap.reader_b_agreement(
+        q, [reading("pl", "reject")], four=["nw", "pl"]
+    )
+    assert open_one["by_brief"]["pl"]["approver"] is None
+    assert open_one["agreeing"] == 0

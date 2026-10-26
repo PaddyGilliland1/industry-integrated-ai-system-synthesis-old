@@ -695,12 +695,31 @@ DECISION_COLUMNS = (
 )
 
 
-def _yes(value):
+def yes_no(value):
     """A yes or no cell as True or False; anything else fails."""
     text = (value or "").strip().lower()
     if text not in ("yes", "no"):
         raise ValueError(f"write yes or no, not {value!r}")
     return text == "yes"
+
+
+def criteria_from(row):
+    """The six criteria from a sheet row's yes or no cells."""
+    return Criteria(**{c.field: yes_no(row[c.field]) for c in CRITERIA})
+
+
+def sheet_rows(path):
+    """A filled-in sheet's rows, each a dict by column. A spreadsheet's
+    CSV UTF-8 starts with a byte-order mark, which is read past; any other
+    encoding is refused by name."""
+    path = Path(path)
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            return list(csv.DictReader(fh))
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"{path} is not UTF-8: save it from the spreadsheet as CSV UTF-8"
+        ) from exc
 
 
 def read_decisions(path, refused=None):
@@ -713,14 +732,7 @@ def read_decisions(path, refused=None):
     the rest are read."""
     path = Path(path)
     out = []
-    try:
-        with open(path, newline="", encoding="utf-8-sig") as fh:
-            rows = list(csv.DictReader(fh))
-    except UnicodeDecodeError as exc:
-        raise ValueError(
-            f"{path} is not UTF-8: save it from the spreadsheet as CSV UTF-8"
-        ) from exc
-    for number, row in enumerate(rows, 2):
+    for number, row in enumerate(sheet_rows(path), 2):
         if not (row.get("action") or "").strip():
             continue
         try:
@@ -775,9 +787,100 @@ def _decision(row, folder):
         action=action,
         initials=row["initials"].strip(),
         decided_at=_when(row["decided_at"]),
-        criteria=Criteria(**{c.field: _yes(row[c.field]) for c in CRITERIA}),
-        factual_edit=_yes(row["factual_edit"]),
+        criteria=criteria_from(row),
+        factual_edit=yes_no(row["factual_edit"]),
         edited=edited,
         note=row.get("note", ""),
-        simulated=_yes(row.get("simulated") or "no"),
+        simulated=yes_no(row.get("simulated") or "no"),
     )
+
+
+# --- Reader B, the second reader (D-EVAL-19) ---------------------------------
+
+
+class ReaderBDecision(BaseModel):
+    """Reader B's decision on one of the four briefs, made without seeing
+    the approver's. Reader B is anonymous, so it carries no initials and no
+    time."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    brief_id: str = Field(min_length=1)
+    action: Literal["approve", "edit", "reject"]
+    criteria: Criteria
+    factual_edit: bool = False
+    note: str = ""
+
+    @model_validator(mode="after")
+    def consistent(self):
+        """Only an edit can be a factual edit."""
+        if self.factual_edit and self.action != "edit":
+            raise ValueError("only an edit can be a factual edit")
+        return self
+
+
+def read_reader_b(path):
+    """Reader B's decisions from the sheet the returned form is typed into,
+    one row per brief read. A row that cannot be read raises ValueError
+    naming it."""
+    out = []
+    for number, row in enumerate(sheet_rows(path), 2):
+        try:
+            out.append(
+                ReaderBDecision(
+                    brief_id=row["brief_id"].strip(),
+                    action=row["action"].strip(),
+                    criteria=criteria_from(row),
+                    factual_edit=yes_no(row["factual_edit"]),
+                    note=row.get("note") or "",
+                )
+            )
+        except (ValueError, KeyError) as exc:
+            raise ValueError(
+                f"row {number}, {row.get('brief_id')}: {exc}"
+            ) from exc
+    return out
+
+
+def reader_b_agreement(queue, readings, four):
+    """G6's second half: on each of the four briefs the rule picked,
+    whether Reader B made the approver's decision. Agreeing means the same
+    decision, approve, edit or reject, on the same brief; a brief the
+    approver has not decided cannot be agreed with.
+
+    Raises
+    ------
+    ValueError
+        If Reader B decided a brief outside the four, or one brief twice.
+    """
+    four = list(four)
+    seen = {}
+    for r in readings:
+        if r.brief_id not in four:
+            raise ValueError(
+                f"{r.brief_id} is not one of the four briefs Reader B reads"
+            )
+        if r.brief_id in seen:
+            raise ValueError(f"Reader B decided {r.brief_id} twice")
+        seen[r.brief_id] = r.action
+    items = queue.items_by_id()
+    by_brief = {}
+    for brief_id, action in seen.items():
+        item = items.get(brief_id)
+        mine = (
+            item.decisions[-1].action
+            if item is not None and item.decisions
+            else None
+        )
+        by_brief[brief_id] = {
+            "reader_b": action,
+            "approver": mine,
+            "agree": action == mine,
+        }
+    return {
+        "four": four,
+        "read": len(seen),
+        "agreeing": sum(b["agree"] for b in by_brief.values()),
+        "complete": len(seen) == len(four),
+        "by_brief": by_brief,
+    }

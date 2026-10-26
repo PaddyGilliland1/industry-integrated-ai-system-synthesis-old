@@ -41,7 +41,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict
 
 from . import tools as tl
-from .approval import Criteria
+from .approval import Criteria, criteria_from, sheet_rows, yes_no
 from .briefs import LEVEL_FROM, ToolCall, track_line
 from .placeholders import day_text, release_text, week_text
 
@@ -278,6 +278,61 @@ def comparison_verdict(ratings):
         if len({out[rater][w] for w in WEEKS if w in out[rater]}) > 1:
             split.append(f"between weeks for {rater}")
     out["split"] = split
+    return out
+
+
+RATERS = ("approver", "Reader B")
+
+
+def read_ratings(path, seed):
+    """The raters' marks from the sheet each returned form is typed into:
+    one row per rater, week and text as the rater saw it, A or B. The
+    hidden order, fixed by the seed, says which text was the agent's, so
+    each rater's week becomes one PairRating. Only a factual error in the
+    agent's text counts, as option A reads it.
+
+    Raises
+    ------
+    ValueError
+        Naming a row that cannot be read, a text marked twice, or a week
+        whose two texts were not both marked.
+    """
+    marks = {}
+    for number, row in enumerate(sheet_rows(path), 2):
+        try:
+            rater, week, text = (
+                row[k].strip() for k in ("rater", "week", "text")
+            )
+            if rater not in RATERS:
+                raise ValueError(f"the rater is {RATERS}, not {rater!r}")
+            if week not in WEEKS:
+                raise ValueError(f"the week is one of {WEEKS}, not {week!r}")
+            if text not in ("A", "B"):
+                raise ValueError(f"the text is A or B, not {text!r}")
+            if (rater, week, text) in marks:
+                raise ValueError(f"{rater} marked {week}, Text {text} twice")
+            marks[(rater, week, text)] = (
+                criteria_from(row),
+                yes_no(row["factual_error"]),
+            )
+        except (ValueError, KeyError) as exc:
+            raise ValueError(f"row {number}: {exc}") from exc
+    out = []
+    for rater, week in dict.fromkeys((r, w) for r, w, _ in marks):
+        if not all((rater, week, t) in marks for t in "AB"):
+            raise ValueError(f"{rater} must mark both texts of the {week}")
+        shown = dict(zip(blind_order(week, seed), "AB"))
+        agent, factual = marks[(rater, week, shown["agent"])]
+        template, _ = marks[(rater, week, shown["template"])]
+        out.append(
+            PairRating(
+                rater=rater,
+                week=week,
+                agent=agent,
+                template=template,
+                agent_factual_error=factual,
+            )
+        )
     return out
 
 

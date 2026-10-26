@@ -277,6 +277,18 @@ class Paths:
         return self._approvals("edits", "")
 
     @property
+    def reader_b(self):
+        """Reader B's decisions on the four briefs, typed from the returned
+        form."""
+        return self._approvals("reader_b", ".csv")
+
+    @property
+    def template_ratings(self):
+        """Both raters' marks on the two template pairs, typed from the
+        returned forms."""
+        return self._approvals("template_ratings", ".csv")
+
+    @property
     def adequacy_form(self):
         """The reviewer's form, which holds every brief's text, so it stays
         with the recordings until the record releases the queue."""
