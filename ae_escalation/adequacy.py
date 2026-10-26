@@ -67,10 +67,11 @@ class BriefAdequacy(BaseModel):
     brief_id: str
     verified: bool
     # Why a brief is not verified: the code check, the wording check, the
-    # Reviewer that could not run, or no readable draft.
+    # Reviewer that could not run, a draft reply cut at the output cap, the
+    # Investigator that could not run, or no readable draft.
     cause: str | None = None
-    # None when the brief was not scored: a run stopped at its budget
-    # needs no marks for a brief that can never be adequate.
+    # None when the brief was not scored: a brief that can never be
+    # adequate needs no marks.
     criteria_met: int | None
     unmet: list[str]
     adequate: bool
@@ -206,9 +207,10 @@ def write_form(result, paths):
         "A brief is adequate if it passes the code figure check and meets at "
         "least 5 of the 6 approval criteria. Only a verified brief counts, "
         "since only a verified brief can be approved. Code has filled in "
-        "each brief's status. Mark each criterion yes or no in the scores "
-        f"sheet, `approvals/{paths.adequacy_scores.name}`, one row per "
-        "brief, then run "
+        "each brief's status. Mark each verified brief's criteria yes or no "
+        f"in the scores sheet, `approvals/{paths.adequacy_scores.name}`, "
+        "one row per brief. A brief that is not verified needs no marks: "
+        "leave its row blank. Then run "
         "`python -m ae_escalation.live adequacy --label "
         f"{paths.label}` to record the verdict.",
         "",
@@ -246,8 +248,15 @@ def _yes(value):
     return text == "yes"
 
 
+def _unmarked(row):
+    """Whether the reviewer left every criterion of a row blank."""
+    return all(not (row[c.field] or "").strip() for c in CRITERIA)
+
+
 def read_scores(path):
-    """The reviewer's filled-in scores sheet."""
+    """The reviewer's filled-in scores sheet. A row with no criterion
+    marked is a brief not scored, which assess allows only for a brief that
+    is not verified; a row marked in part fails."""
     with open(path, newline="", encoding="utf-8") as fh:
         return [
             BriefScore(
@@ -260,6 +269,7 @@ def read_scores(path):
                 notes=row.get("notes", ""),
             )
             for row in csv.DictReader(fh)
+            if not _unmarked(row)
         ]
 
 
@@ -270,8 +280,8 @@ def assess(result, scores, round, label, stop=None, budget=""):
     ----------
     result : replay.ReplaySetResult
     scores : list of BriefScore
-        One for every brief; after a stop at the budget, one for every
-        verified brief the run completed, since no other can be adequate.
+        One for every verified brief, since no other can be adequate,
+        whether the run completed or stopped at its budget.
     round : 1 or 2
         2 is after the one bounded prompt-tuning round.
     label : str
@@ -289,16 +299,15 @@ def assess(result, scores, round, label, stop=None, budget=""):
     Raises
     ------
     ValueError
-        If a brief that needs a score has none, or a stopped run would go
-        to approval, which needs a ruling, since its designed failure never
+        If a verified brief has no score, or a stopped run would go to
+        approval, which needs a ruling, since its designed failure never
         showed the planted figure caught.
     """
     by_id = {s.brief_id: s for s in scores}
-    need = [o for o in result.outcomes if stop is None or verified(o)]
+    need = [o for o in result.outcomes if verified(o)]
     missing = [o.run_id for o in need if o.run_id not in by_id]
     if missing:
-        which = "brief" if stop is None else "verified brief"
-        raise ValueError(f"score every {which}; missing {missing}")
+        raise ValueError(f"score every verified brief; missing {missing}")
     briefs = []
     for o in result.outcomes:
         ok = verified(o)

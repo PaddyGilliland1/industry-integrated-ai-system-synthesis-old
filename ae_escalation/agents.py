@@ -650,6 +650,9 @@ class Attempt(BaseModel):
 
     number: int
     stop_reason: str = ""
+    # True when the draft's reply stopped at the output cap, so G4 and the
+    # adequacy record can name the cap as the cause.
+    cut: bool = False
     # The draft as written, the plant included, so a draft the rules refuse
     # is still shown to the manager and the adequacy reviewer.
     draft: dict | None = None
@@ -719,6 +722,8 @@ class BriefOutcome(BaseModel):
             return "the wording check"
         if last.check is not None and not last.check.passed:
             return "the code check"
+        if last.cut:
+            return "the draft reply was cut at the output cap"
         if last.stop_reason.startswith("model error"):
             return "the Investigator could not run"
         return "no readable draft"
@@ -879,7 +884,9 @@ class BriefGraph:
             raw=raw,
             cut=state.get("cut", False) if attempt > 1 else False,
         )
-        record = Attempt(number=attempt, stop_reason=out.stop_reason)
+        record = Attempt(
+            number=attempt, stop_reason=out.stop_reason, cut=out.cut
+        )
         draft = (
             None
             if out.draft is None

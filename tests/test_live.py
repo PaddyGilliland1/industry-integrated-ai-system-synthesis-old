@@ -44,10 +44,10 @@ def pinned():
     return tags(cf.load_config(REPO / "config.json").local.digest)
 
 
-def briefs(tmp_path, fetch, label="t1"):
+def briefs(tmp_path, fetch, label="t1", model=None):
     return lv.main(
         ["briefs", "--label", label, "--out", str(tmp_path)],
-        chat_model=stand_in(),
+        chat_model=model or stand_in(),
         fetch=fetch,
     )
 
@@ -506,6 +506,50 @@ def test_a_stopped_set_that_would_go_to_approval_is_not_recorded(
     assert not (
         tmp_path / "approvals" / "adequacy_record_local_t1.md"
     ).exists()
+
+
+# --- a completed set with no brief verified ----------------------------------
+
+CUT_CAUSE = "the draft reply was cut at the output cap"
+
+
+def cutting():
+    """A stand-in whose every draft is cut at the output cap, as round 2's
+    were, so each brief ends not verified after its retry."""
+    from .scripted import answer, last_human, length_error
+
+    def cut(messages):
+        if "Write the demand brief now" in last_human(messages):
+            raise length_error()
+        return answer(messages)
+
+    return gw.ScriptedModel(script=[cut] * 200)
+
+
+def test_a_completed_set_with_no_brief_verified_is_recorded_unscored(
+    tmp_path, pinned, capsys
+):
+    # Round 2 as it ran: a first round sent to tuning, then a second whose
+    # every draft met the cap. No brief needs marks, the summary and the
+    # record name the cap, and the frontier case opens the frontier run.
+    assert briefs(tmp_path, pinned, "t1") == 0
+    score_all(tmp_path, "t1", unmet=2)
+    assert adequacy(tmp_path, "t1") == 0
+    capsys.readouterr()
+    assert briefs(tmp_path, pinned, "t2", model=cutting()) == 1
+    shown = capsys.readouterr().out
+    assert f"not verified (G4 events): 7 ({CUT_CAUSE}: 7)" in shown
+    assert "planted figure caught: NO, no readable draft" in shown
+    assert adequacy(tmp_path, "t2") == 0
+    shown = capsys.readouterr().out
+    assert "0 of 7 adequate after the prompt-tuning round" in shown
+    text = record_text(tmp_path, "t2")
+    assert "Round: 2" in text and "Frontier case: yes" in text
+    assert text.count(f"| not verified: {CUT_CAUSE} |") == 7
+    assert "Investigator could not run" not in text
+    assert not (tmp_path / "approvals" / "queue_local_t2.csv").exists()
+    assert lv.frontier_refusal(str(tmp_path), "t2") is None
+    assert lv.scoring_round(tmp_path, "frontier", "t2") == (2, "")
 
 
 def test_a_stopped_run_resumes_with_the_flag_while_budget_is_left(

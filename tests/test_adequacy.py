@@ -65,6 +65,7 @@ def test_the_form_lists_every_brief_with_its_code_check_and_criteria(
         assert c.name in form and c.test in form
     assert "main session's reviewer" in form
     assert "at least 5 of the 6" in form
+    assert "A brief that is not verified needs no marks" in form
     # The form holds every brief's text, so it stays with the recordings,
     # out of approvals/, until the record releases the queue.
     assert paths.adequacy_form.parent == paths.briefs.parent
@@ -162,9 +163,68 @@ def test_fewer_than_six_after_tuning_is_the_stated_case(result, paths):
     assert path.parent.name == "approvals"
 
 
-def test_every_brief_must_be_scored(result):
-    with pytest.raises(ValueError, match="score every brief"):
+def test_every_verified_brief_must_be_scored(result):
+    with pytest.raises(ValueError, match="score every verified brief"):
         aq.assess(result, scores(result)[:6], round=1, label="round1")
+
+
+def refused(result):
+    """The set with every brief not verified, as round 2 ended."""
+    return result.model_copy(
+        update={
+            "outcomes": [
+                o.model_copy(update={"status": "not verified"})
+                for o in result.outcomes
+            ]
+        }
+    )
+
+
+def test_a_completed_set_needs_no_scores_for_briefs_not_verified(
+    result, paths
+):
+    # A brief that is not verified can never be adequate, so it needs no
+    # marks, whether the run completed or stopped at its budget.
+    record = aq.assess(refused(result), [], round=2, label="round2")
+    assert (record.adequate, record.total) == (0, 7)
+    assert record.frontier_case and not record.to_approval
+    assert record.decided_by_stop is None and not record.stopped
+    text = aq.write_record(record, paths).read_text(encoding="utf-8")
+    assert text.count("| not scored, not verified | n/a | no |") == 7
+    assert aq.record_says(paths.adequacy_record)["frontier_case"]
+
+
+def rewrite(path, rows):
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def read_rows(path):
+    with open(path, newline="", encoding="utf-8") as fh:
+        return list(csv.DictReader(fh))
+
+
+def test_a_row_left_blank_on_the_sheet_reads_as_unscored(result, paths):
+    aq.write_form(refused(result), paths)
+    assert aq.read_scores(paths.adequacy_scores) == []
+
+
+def test_a_verified_brief_left_blank_is_still_asked_for(result, paths):
+    aq.write_form(result, paths)
+    got = aq.read_scores(paths.adequacy_scores)
+    with pytest.raises(ValueError, match="score every verified brief"):
+        aq.assess(result, got, round=1, label="round1")
+
+
+def test_a_row_marked_in_part_is_refused(result, paths):
+    aq.write_form(result, paths)
+    rows = read_rows(paths.adequacy_scores)
+    rows[0]["figures_correct"] = "yes"
+    rewrite(paths.adequacy_scores, rows)
+    with pytest.raises(ValueError, match="write yes or no"):
+        aq.read_scores(paths.adequacy_scores)
 
 
 def test_a_brief_that_failed_the_code_check_is_never_adequate(result):

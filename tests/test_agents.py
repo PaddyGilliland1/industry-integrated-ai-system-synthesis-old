@@ -24,6 +24,7 @@ from .scripted import (
     WORDING_OK,
     figure,
     good_draft,
+    length_error,
     ollama_wire,
     planted_draft,
     reply,
@@ -697,38 +698,6 @@ def test_a_reply_with_no_json_is_named_in_the_retry(
 CUT = "cut off at the length limit; write the brief more briefly"
 
 
-def length_error():
-    """The error OpenAI's client raises for a typed answer stopped at the
-    output cap, as a live local draft meets it."""
-    from openai import LengthFinishReasonError
-    from openai.types.chat import ChatCompletion
-
-    completion = ChatCompletion.model_validate(
-        {
-            "id": "c1",
-            "object": "chat.completion",
-            "created": 0,
-            "model": "m",
-            "choices": [
-                {
-                    "index": 0,
-                    "finish_reason": "length",
-                    "message": {
-                        "role": "assistant",
-                        "content": '{"summary": "The',
-                    },
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 1,
-                "completion_tokens": 8192,
-                "total_tokens": 8193,
-            },
-        }
-    )
-    return LengthFinishReasonError(completion=completion)
-
-
 def test_a_draft_cut_at_the_output_cap_is_named_in_the_retry(
     run, holidays, settings, tmp_path
 ):
@@ -789,6 +758,53 @@ def test_a_draft_cut_at_the_output_cap_replays_its_named_retry(
         a.stop_reason for a in live.attempts
     ]
     assert all(c.replayed for c in again.calls)
+
+
+CUT_CAUSE = "the draft reply was cut at the output cap"
+
+
+@pytest.mark.parametrize(
+    "cut",
+    [
+        failing(length_error()),
+        AIMessage(
+            content='{"summary": "The',
+            response_metadata={"finish_reason": "length"},
+        ),
+        AIMessage(
+            content='{"summary": "The',
+            response_metadata={"stop_reason": "max_tokens"},
+        ),
+    ],
+    ids=["openai error", "openai reply", "anthropic reply"],
+)
+def test_a_brief_whose_drafts_are_cut_at_the_cap_names_the_cut_as_its_cause(
+    run, holidays, settings, tmp_path, cut
+):
+    # Round 2's every draft met the cap; G4 and the adequacy record name
+    # that, not a model that could not run.
+    script = [TOOLS, DONE, cut, DONE, cut]
+    live = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "cut"
+    )
+    assert live.status == "not verified"
+    assert live.cause == CUT_CAUSE
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "cut"
+    )
+    assert again.cause == CUT_CAUSE
+
+
+def test_a_brief_whose_retry_meets_another_error_is_not_named_cut(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, failing(length_error()), DONE]
+    script += [failing(ConnectionError("dropped"))]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "cut"
+    )
+    assert out.status == "not verified"
+    assert out.cause == "the Investigator could not run"
 
 
 def test_a_draft_cut_at_the_cap_reaches_the_retry_through_the_local_client(

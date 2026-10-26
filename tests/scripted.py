@@ -197,6 +197,38 @@ def stand_in():
     return gw.ScriptedModel(script=[answer] * 200)
 
 
+def length_error():
+    """The error OpenAI's client raises for a typed answer stopped at the
+    output cap, as a live local draft meets it."""
+    from openai import LengthFinishReasonError
+    from openai.types.chat import ChatCompletion
+
+    completion = ChatCompletion.model_validate(
+        {
+            "id": "c1",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "m",
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "length",
+                    "message": {
+                        "role": "assistant",
+                        "content": '{"summary": "The',
+                    },
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 8192,
+                "total_tokens": 8193,
+            },
+        }
+    )
+    return LengthFinishReasonError(completion=completion)
+
+
 def ollama_wire(monkeypatch, respond):
     """Catch every request the local backend's real chat model sends, before
     it leaves the process, and answer each with respond(body): the reply's
