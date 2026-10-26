@@ -7,14 +7,16 @@
   level by fixed rules.
 - **Where the AI sits:** for a hospital the rules pick out, a language-model Investigator drafts a
   demand brief from read-only tools, and a Reviewer checks every figure in code, then the wording.
-- **Who decides:** a duty manager approves, edits or rejects each brief, and code turns an approved
-  brief into staffing actions and notifications, written to an outbox file and never sent.
+- **Who decides:** a duty manager approves, edits or rejects each brief. Code sets the staffing
+  actions for an approved brief, and the language model drafts each notification, which code checks
+  before writing it to an outbox file, never sent.
 - **What the demand level means:** demand unusually high for the time of year. It is not pressure,
   need or priority.
 - **What is real:** Public Health Scotland's weekly A&E attendances and GOV.UK's Scottish bank
   holidays.
-- **What is simulated:** the seasonal capacity the level is measured against, the bands, the latch
-  resets, the staffing actions and their reply deadlines, and the staff acknowledgements.
+- **What is simulated or my own design:** the seasonal capacity the level is measured against, the
+  latch resets and the staff acknowledgements are simulated; the bands, the staffing actions and
+  their reply deadlines are my design.
 - **The spot check:** `ae_escalation_spot_check.ipynb` runs the design on the real data and replays
   every recorded model call, so it needs no language model and no GPU.
 - **The case study:** `ae_escalation_case_study.md`, rendered to `ae_escalation_case_study.pdf`, sets
@@ -22,14 +24,17 @@
 
 ## Dataset
 
-- **Name:** Weekly accident and emergency activity and waiting times, Public Health Scotland.
+- **Name:** Weekly A&E Activity and Waiting Times, Public Health Scotland, on Scottish Health and
+  Social Care Open Data.
 - **Source:** https://www.opendata.nhs.scot/dataset/weekly-accident-and-emergency-activity-and-waiting-times
 - **Licence:** UK Open Government Licence (OGL).
 - **File:** `data/weekly_ae_activity_20261011.csv`, which ships in this repository, accessed on
   24 Oct 2026. SHA-256: `9ffe7f3364a1592f7c8d2d083df9fe4425d4fd2bd84dfed0a3567bececcd1a38`.
-- **To fetch it again:** download `weekly_ae_activity_20261011.csv` from the source page into
-  `data/`, then check it with `sha256sum data/weekly_ae_activity_20261011.csv`. The notebook stops
-  if the hash differs.
+- **To fetch it again:** the publisher replaces this file each Tuesday, so the copy in `data/` is the
+  one the notebook was run on. Until the next release it can be downloaded from the `source_url` in
+  `data/MANIFEST.tsv` into `data/` and checked with
+  `sha256sum data/weekly_ae_activity_20261011.csv`. A newer file will not match the hash, and the
+  notebook stops if the hash differs.
 - **Bank holidays:** `data/bank-holidays_20261024.json`, GOV.UK's bank-holidays JSON
   (https://www.gov.uk/bank-holidays.json), OGL, frozen on 24 Oct 2026 and never fetched again.
   SHA-256: `538b3482c28b85ecd2db606a0d5ae6ad17248900b6498700ce0a48d26a3ecde6`.
@@ -39,7 +44,7 @@
 ## Python version
 
 Python 3.12 or higher. The pinned packages in `requirements.txt` need 3.12, which meets the 3.9 or
-higher the Environment Setup asks for. The notebook's first cell prints the version it ran on,
+higher the Environment Setup asks for. The notebook's first code cell prints the version it ran on,
 Python 3.12.3.
 
 ## How to run
@@ -122,7 +127,9 @@ It holds no key, token or password.
 ### How `requirements.txt` was created
 
 The notebook was run top to bottom in a fresh virtual environment, and the file was then written
-from that environment with `pip freeze > requirements.txt`.
+from that environment with `pip freeze > requirements.txt`. I added one line by hand at the top,
+`--extra-index-url https://download.pytorch.org/whl/cpu`, so that pip finds the CPU build of torch
+the freeze pins.
 
 ## How the components interact
 
@@ -142,8 +149,8 @@ each box names the prior project it comes from or says it is new. The weekly flo
    reaching 1.05 times its simulated capacity, and flags an outlook when one week's chance is at
    least 50%. The drift alarm fires when actuals fall outside the drift interval two weeks running,
    and sets the drift latch.
-4. **Screen.** Code sends on only a hospital that is flagged, at a surge or held level of 2 or more,
-   or latched. Nothing else reaches the agents.
+4. **Screen.** Code sends on only a hospital that is flagged, or latched, which covers a surge or
+   held level of 2 or more. Nothing else reaches the agents.
 5. **Investigator.** It drafts the demand brief through five read-only tools: forecast, history,
    back-test error, track record and calendar. Code writes every figure with its label, and the
    level is the rule's.
@@ -160,7 +167,7 @@ each box names the prior project it comes from or says it is new. The weekly flo
 
 ![Figure 3: one week, from the week's end to the duty manager's decision](figures/fig3_weekly_cycle.png)
 
-*Figure 3. One week: Tuesday release to approved brief.* The dates illustrate the release timing for
+*Figure 3. One week: Tuesday release to the duty manager's decision.* The dates illustrate the release timing for
 one replay week, Ninewells Hospital's demand week ending 13 Jun 2021; that week's brief was rejected.
 
 ## Prior project artefacts reused
@@ -185,11 +192,16 @@ coordinator.
   never sends without approval and never sees patient data.
 - **A demand level, not pressure.** The level shows demand for the time of year. The capacity behind
   it is a demand percentile, not beds or staff, so the levels and actions are illustrative.
-- **Weeks, not days.** When drift fires, the forecasts are marked untrusted until a person approves
-  a latch reset.
+- **Weeks, not days.** The forecasts and levels are weekly; the system does not forecast days.
+- **Drift.** When drift fires, the forecasts are marked untrusted until a person approves a latch
+  reset.
 - **In-sample.** The design was tuned on the same 2015 to 2026 data that scores it, so every figure
   is in-sample. Before any live use the frozen design would run in shadow mode on new releases.
-- **The agents.** The local model verified none of the seven replay briefs in either round; the
-  frontier model verified five, and both demand briefs were refused for claims no tool result
-  supports. The notebook's section 9 sets out the limitations in full.
+- **The agents.** The local model verified none of the replay briefs: round 1 finished 3 of the 7
+  before its time budget ran out, and round 2 finished all seven with every draft cut at the output
+  cap. The frontier model verified five, and both demand briefs were refused for claims no tool
+  result supports. The notebook's section 9 sets out the limitations in full.
+- **AI in the approvals.** An AI independent judge read the seven briefs before I decided. I adopted
+  its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
+  test.
 - **Not for these uses.** Ranking hospitals, justifying cuts or monitoring the 4-hour standard.
