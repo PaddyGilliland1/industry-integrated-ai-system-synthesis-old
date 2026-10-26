@@ -114,6 +114,24 @@ class BudgetStop(BaseModel):
         )
 
 
+def budget_line(started):
+    """The record's line on the run's time budget, from the progress file's
+    first start of the briefs step (replay.started_budget), so a budget
+    raised for one run with --budget-s is in the evidence."""
+    if started is None:
+        return (
+            "Run budget: not in the progress file, which this label wrote "
+            "before the budget was recorded there."
+        )
+    shown = f"{started['budget_s']:,g} s"
+    if started["budget_from"] == "--budget-s":
+        return (
+            f"Run budget: {shown}, set by --budget-s over config.json's "
+            f"run_budget_s of {started['config_budget_s']:,g} s."
+        )
+    return f"Run budget: {shown}, config.json's run_budget_s."
+
+
 class AdequacyRecord(BaseModel):
     """The adequacy test's result for one backend's run of the set."""
 
@@ -136,6 +154,8 @@ class AdequacyRecord(BaseModel):
     verdict: str
     # The line on a run stopped at its budget; empty for a run completed.
     stopped: str = ""
+    # The line on the run's time budget and where it came from.
+    budget: str = ""
 
 
 def _brief_block(outcome):
@@ -238,7 +258,7 @@ def read_scores(path):
         ]
 
 
-def assess(result, scores, round, label, stop=None):
+def assess(result, scores, round, label, stop=None, budget=""):
     """Score one run of the set and say what follows.
 
     Parameters
@@ -254,6 +274,8 @@ def assess(result, scores, round, label, stop=None):
         Given when the run stopped at its budget: result holds the briefs
         it completed, scored as they stand, and each unfinished brief
         counts as not adequate.
+    budget : str, optional
+        The record's line on the run's time budget (budget_line).
 
     Returns
     -------
@@ -357,6 +379,7 @@ def assess(result, scores, round, label, stop=None):
         tuning_next=tuning,
         verdict=verdict,
         stopped=stop.line() if stop else "",
+        budget=budget,
     )
 
 
@@ -397,6 +420,7 @@ def write_record(record, paths):
         f"Goes to approval: {'yes' if record.to_approval else 'no'}",
         "Prompt-tuning round next: "
         f"{'yes' if record.tuning_next else 'no'}",
+        *([record.budget] if record.budget else []),
         "",
         "| Brief | Status | Criteria met | Not met | Adequate |",
         "|---|---|---|---|---|",

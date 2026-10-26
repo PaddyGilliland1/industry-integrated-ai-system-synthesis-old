@@ -509,16 +509,23 @@ def test_a_stopped_set_that_would_go_to_approval_is_not_recorded(
 
 
 def test_a_stopped_run_resumes_with_the_flag_while_budget_is_left(
-    tmp_path, pinned
+    tmp_path, pinned, monkeypatch
 ):
-    # A larger budget stands in for a stop that left budget, such as an
-    # error, which --resume takes up.
-    tight = config_with(tmp_path, run_budget_s=1e-9)
+    # A run stopped by an error, not its budget, has budget left, which
+    # --resume takes up.
+    real = rp.BriefGraph.run
+    runs = []
+
+    def crash_in_the_second(self, *args, **kwargs):
+        runs.append(1)
+        if len(runs) == 2:
+            raise RuntimeError("the machine went to sleep")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(rp.BriefGraph, "run", crash_in_the_second)
     args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
-    code = lv.main(
-        [*args, "--config", tight], chat_model=stand_in(), fetch=pinned
-    )
-    assert code == 3
+    with pytest.raises(RuntimeError, match="sleep"):
+        lv.main(args, chat_model=stand_in(), fetch=pinned)
     assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 2
     assert (
         lv.main([*args, "--resume"], chat_model=stand_in(), fetch=pinned) == 0
@@ -585,6 +592,7 @@ def test_a_local_run_warms_the_model_before_its_budget_starts(
             events.append("budget")
             super().__init__(*args, **kwargs)
 
+    monkeypatch.setattr(lv, "Budget", Watched)
     monkeypatch.setattr(rp, "Budget", Watched)
     model = stand_in()
     args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
@@ -645,3 +653,103 @@ def test_the_frontier_backend_is_never_warmed(tmp_path, pinned):
     assert code == 0 and asked == []
     audit = tmp_path / "recordings" / "frontier" / "t1" / "audit.jsonl"
     assert '"warm-up"' not in audit.read_text(encoding="utf-8")
+
+
+# --- a longer budget for one briefs run, recorded where it is used -----------
+
+
+def started(tmp_path, label="t1"):
+    """The briefs step's first start in the label's progress file."""
+    paths = rp.Paths.under(tmp_path, "local", label)
+    return next(e for e in rp.progress(paths) if e["event"] == "started")
+
+
+def test_the_briefs_budget_can_be_raised_for_one_run_and_is_recorded(
+    tmp_path, pinned, monkeypatch, capsys
+):
+    limits = []
+
+    class Watched(gw.Budget):
+        def __init__(self, limit_s, *args, **kwargs):
+            limits.append(limit_s)
+            super().__init__(limit_s, *args, **kwargs)
+
+    monkeypatch.setattr(lv, "Budget", Watched)
+    monkeypatch.setattr(rp, "Budget", Watched)
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    code = lv.main(
+        [*args, "--budget-s", "1200"], chat_model=stand_in(), fetch=pinned
+    )
+    assert code == 0 and limits == [1200]
+    began = started(tmp_path)
+    assert began["budget_s"] == 1200 and began["budget_from"] == "--budget-s"
+    assert began["config_budget_s"] == 840
+    assert "budget: 1,200 s, set by --budget-s" in capsys.readouterr().out
+    score_all(tmp_path)
+    assert adequacy(tmp_path) == 0
+    assert (
+        "Run budget: 1,200 s, set by --budget-s over config.json's "
+        "run_budget_s of 840 s." in record_text(tmp_path, "t1")
+    )
+
+
+def test_a_briefs_run_without_the_flag_records_config_jsons_budget(
+    tmp_path, pinned
+):
+    assert briefs(tmp_path, pinned) == 0
+    began = started(tmp_path)
+    assert began["budget_s"] == 840 and began["budget_from"] == "config.json"
+    score_all(tmp_path)
+    assert adequacy(tmp_path) == 0
+    assert "Run budget: 840 s, config.json's run_budget_s." in record_text(
+        tmp_path, "t1"
+    )
+
+
+def test_the_longest_budget_allowed_is_1800_s(tmp_path, pinned):
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    code = lv.main(
+        [*args, "--budget-s", "1800"], chat_model=stand_in(), fetch=pinned
+    )
+    assert code == 0 and started(tmp_path)["budget_s"] == 1800
+
+
+@pytest.mark.parametrize("value", ["1800.5", "3600", "0", "-5"])
+def test_a_budget_outside_0_to_1800_s_is_refused_before_anything_runs(
+    tmp_path, pinned, capsys, value
+):
+    model = stand_in()
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    assert lv.main([*args, "--budget-s", value], model, pinned) == 2
+    assert model.seen == []
+    assert "1,800" in capsys.readouterr().out
+    assert not (tmp_path / "recordings").exists()
+
+
+@pytest.mark.parametrize("step", ["adequacy", "notify", "choose"])
+def test_the_budget_flag_is_for_the_briefs_step_only(
+    tmp_path, pinned, capsys, step
+):
+    args = [step, "--label", "t1", "--out", str(tmp_path)]
+    model = stand_in()
+    assert lv.main([*args, "--budget-s", "1200"], model, pinned) == 2
+    assert model.seen == []
+    assert "--budget-s is for the briefs step only" in capsys.readouterr().out
+
+
+def test_a_resume_keeps_the_budget_its_run_started_with(
+    tmp_path, pinned, capsys
+):
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    tiny = [*args, "--budget-s", "1e-9"]
+    assert lv.main(tiny, chat_model=stand_in(), fetch=pinned) == 3
+    # Under config.json's 840 s a resume would finish; it keeps the 1e-9 s
+    # the run started with, so it stops again before any live call.
+    model = stand_in()
+    resume = [*args, "--resume"]
+    assert lv.main(resume, chat_model=model, fetch=pinned) == 3
+    assert model.seen == []
+    capsys.readouterr()
+    other = [*resume, "--budget-s", "1200"]
+    assert lv.main(other, chat_model=stand_in(), fetch=pinned) == 2
+    assert "the budget holds across a resume" in capsys.readouterr().out

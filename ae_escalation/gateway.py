@@ -84,14 +84,22 @@ class Budget:
     """A live run's time budget, checked before every live model call, so
     no call starts once it is spent and none runs past it. A resumed run
     carries the time the stopped run spent, so the budget holds for the
-    whole run, resumes and all."""
+    whole run, resumes and all. source says where the limit came from,
+    config.json or the briefs command's --budget-s, for the records."""
 
-    def __init__(self, limit_s, clock=time.monotonic, spent_before=0.0):
+    def __init__(
+        self,
+        limit_s,
+        clock=time.monotonic,
+        spent_before=0.0,
+        source="config.json",
+    ):
         """Start the clock, carrying any seconds spent before a resume."""
         self.limit_s = limit_s
         self.clock = clock
         self.started = clock()
         self.spent_before = spent_before
+        self.source = source
 
     @property
     def spent_s(self):

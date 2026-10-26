@@ -391,6 +391,22 @@ def spent(paths, step):
     return stops[-1]["spent_s"] if stops else 0.0
 
 
+def started_budget(paths, step="briefs"):
+    """The budget the step's live run started with, from its first start in
+    the progress file: its seconds, where they came from and config.json's
+    run_budget_s then; None if it never started, or started before the
+    progress file held its budget."""
+    starts = [
+        e
+        for e in progress(paths)
+        if e.get("step") == step and e["event"] == "started"
+    ]
+    if not starts or "budget_s" not in starts[0]:
+        return None
+    keys = ("budget_s", "budget_from", "config_budget_s")
+    return {k: starts[0].get(k) for k in keys}
+
+
 def _spent(budget):
     """The budget's seconds spent, rounded, or None."""
     return None if budget is None else round(budget.spent_s, 1)
@@ -556,7 +572,15 @@ def run_set(
     if only is not None:
         todo = [t for t in todo if t[1] in only]
     if live:
-        note_progress(paths, "started", step="briefs", resume=resume)
+        note_progress(
+            paths,
+            "started",
+            step="briefs",
+            resume=resume,
+            budget_s=budget.limit_s,
+            budget_from=budget.source,
+            config_budget_s=settings.agents.run_budget_s,
+        )
     outcomes = []
     try:
         for e, rid, plant in todo:

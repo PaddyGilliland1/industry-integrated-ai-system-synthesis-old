@@ -276,3 +276,32 @@ def test_a_stopped_set_never_goes_to_approval_without_a_ruling(result):
     partial, stop = stopped_after(result, 7)
     with pytest.raises(ValueError, match="ruling"):
         aq.assess(partial, scores(partial), round=1, label="round1", stop=stop)
+
+
+# --- the run's time budget ---------------------------------------------------
+
+
+def test_the_record_states_the_run_budget_and_where_it_came_from(
+    result, paths
+):
+    raised = {
+        "budget_s": 1200.0,
+        "budget_from": "--budget-s",
+        "config_budget_s": 840.0,
+    }
+    line = aq.budget_line(raised)
+    assert line == (
+        "Run budget: 1,200 s, set by --budget-s over config.json's "
+        "run_budget_s of 840 s."
+    )
+    record = aq.assess(
+        result, scores(result), round=1, label="round1", budget=line
+    )
+    assert line in aq.write_record(record, paths).read_text(encoding="utf-8")
+    plain = {**raised, "budget_s": 840.0, "budget_from": "config.json"}
+    assert aq.budget_line(plain) == (
+        "Run budget: 840 s, config.json's run_budget_s."
+    )
+    # A label run before the progress file held its budget, as the first
+    # live round was, says so rather than guess.
+    assert "not in the progress file" in aq.budget_line(None)

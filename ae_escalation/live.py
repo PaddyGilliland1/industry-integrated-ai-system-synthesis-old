@@ -1,6 +1,7 @@
 """The live run of the replay set, for the main session.
 
-    python -m ae_escalation.live briefs [--label round1] [--resume]
+    python -m ae_escalation.live briefs [--label round1] [--resume] \\
+        [--budget-s 1200]
     python -m ae_escalation.live adequacy [--label round1]
     python -m ae_escalation.live choose --label round2 --set frontier \\
         --initials PG
@@ -25,7 +26,10 @@ same command with --resume, which replays the calls already recorded, then
 carries on live in the budget left. The budget holds across a resume, so a
 run stopped at its budget has none left, and the set runs again under a new
 label; "adequacy" records such a run from what it completed, each completed
-brief as it stands and each unfinished one counted not adequate.
+brief as it stands and each unfinished one counted not adequate. A briefs
+run's budget is config.json's run_budget_s unless --budget-s sets another
+for that run, at most 1,800 s; the progress file and the adequacy record
+state which, and a resume keeps the budget its run started with.
 
 Before any model call it checks the backend: for local, that Ollama on this
 machine holds the model at its pinned digest and lists the reasoning
@@ -59,6 +63,7 @@ from datetime import datetime, timezone
 from .adequacy import (
     BudgetStop,
     assess,
+    budget_line,
     read_scores,
     record_says,
     write_form,
@@ -80,10 +85,14 @@ from .replay import (
     run_set,
     set_runs,
     spent,
+    started_budget,
     write_queue,
 )
 
 CRITERIA_FIELDS = tuple(c.field for c in CRITERIA)
+# The longest budget --budget-s may set for one briefs run: twice the 15
+# minutes config.json holds run_budget_s under.
+LONGEST_BUDGET_S = 1800
 
 
 def load_run(settings):
@@ -177,12 +186,14 @@ def _warm_up(settings, paths, step, fetch):
     return None
 
 
-def _briefs(settings, paths, model, digest, resume, fetch):
-    """Run the set live, write the form and say what happened."""
+def _briefs(settings, paths, model, digest, resume, fetch, budget):
+    """Run the set live, write the form and say what happened. budget is
+    the run's seconds and where they came from."""
     stopped = _warm_up(settings, paths, "briefs", fetch)
     if stopped is not None:
         return stopped
     run, holidays = load_run(settings)
+    limit, source = budget
     try:
         result = run_set(
             run,
@@ -192,6 +203,11 @@ def _briefs(settings, paths, model, digest, resume, fetch):
             live=True,
             chat_model=model,
             digest=digest,
+            budget=Budget(
+                limit,
+                spent_before=spent(paths, "briefs") if resume else 0.0,
+                source=source,
+            ),
             resume=resume,
         )
     except BudgetExceeded as exc:
@@ -321,8 +337,11 @@ def _adequacy(settings, paths):
         print(f"the scores sheet is not complete: {exc}")
         return 2
     stop = None if stopped is None else _stop_of(run, stopped)
+    budget = budget_line(started_budget(paths))
     try:
-        record = assess(result, scores, round_, paths.label, stop=stop)
+        record = assess(
+            result, scores, round_, paths.label, stop=stop, budget=budget
+        )
     except ValueError as exc:
         print(f"not recorded: {exc}")
         return 2
@@ -489,10 +508,26 @@ def main(
         help="choose: the set the approver chose for approval",
     )
     parser.add_argument("--initials", help="choose: the approver's initials")
+    parser.add_argument(
+        "--budget-s",
+        type=float,
+        help="briefs only: this run's time budget in seconds, in place of "
+        "config.json's run_budget_s, at most 1,800; the progress file and "
+        "the adequacy record state it",
+    )
     args = parser.parse_args(argv)
     settings = load_config(args.config)
     paths = Paths.under(args.out, settings.llm_backend, args.label)
     step = args.command
+    if args.budget_s is not None and step != "briefs":
+        print("--budget-s is for the briefs step only")
+        return 2
+    if args.budget_s is not None and not 0 < args.budget_s <= LONGEST_BUDGET_S:
+        print(
+            f"--budget-s must be above 0 and at most "
+            f"{LONGEST_BUDGET_S:,} s, not {args.budget_s:g}"
+        )
+        return 2
     if step == "adequacy":
         return _adequacy(settings, paths)
     if step == "choose":
@@ -509,6 +544,26 @@ def main(
     if args.resume and not can_resume(paths, step):
         print(f"{step} for {args.label} has nothing to resume")
         return 2
+    budget = (settings.agents.run_budget_s, "config.json")
+    if args.budget_s is not None:
+        budget = (args.budget_s, "--budget-s")
+    if step == "briefs" and args.resume:
+        # The budget holds across a resume: the run takes up the budget it
+        # started with, and a label that predates the progress file's
+        # budget line ran on config.json's.
+        began = started_budget(paths)
+        held = (
+            (began["budget_s"], began["budget_from"])
+            if began
+            else (settings.agents.run_budget_s, "config.json")
+        )
+        if args.budget_s is not None and args.budget_s != held[0]:
+            print(
+                "the budget holds across a resume: this run started with "
+                f"{held[0]:,g} s, so --budget-s cannot change it"
+            )
+            return 2
+        budget = held
     if not args.resume and (recorded.exists() or started):
         print(
             f"{recorded} is already recorded; use a new --label, or "
@@ -524,7 +579,19 @@ def main(
         print(line)
     model = chat_model or make_chat_model(settings, env_file)
     if step == "briefs":
-        return _briefs(settings, paths, model, digest, args.resume, fetch)
+        limit, source = budget
+        print(
+            f"budget: {limit:,g} s, "
+            + (
+                f"set by --budget-s over config.json's "
+                f"{settings.agents.run_budget_s:,g} s"
+                if source == "--budget-s"
+                else "config.json's run_budget_s"
+            )
+        )
+        return _briefs(
+            settings, paths, model, digest, args.resume, fetch, budget
+        )
     return _notify(settings, paths, model, digest, args.resume, fetch)
 
 
