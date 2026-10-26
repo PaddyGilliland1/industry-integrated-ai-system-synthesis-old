@@ -384,6 +384,13 @@ def test_the_frontier_backend_is_the_claude_api_with_the_key_from_env(
     assert model.model == "claude-sonnet-5-5"
     assert model.anthropic_api_key.get_secret_value() == FAKE_KEY
     assert FAKE_KEY not in repr(model)
+    # No temperature, since claude-sonnet-5-5 takes only the default; the
+    # effort goes as output_config alone, which leaves thinking unset; the
+    # client's timeout sits just past the frontier's own call limit.
+    assert model.temperature is None and model.max_tokens == 16000
+    assert model.output_config == {"effort": "medium"}
+    assert model.reasoning_effort is None and model.thinking is None
+    assert model.default_request_timeout == 425
 
 
 def test_no_frontier_model_is_made_without_a_key(frontier, tmp_path):
@@ -608,6 +615,55 @@ def test_the_frontier_backend_asks_for_json_schema_structured_output(
         assert model.structured_kwargs == want
 
 
+def calendar_tool():
+    from langchain_core.tools import StructuredTool
+
+    class CalendarRequest(BaseModel):
+        as_of: str
+
+    return StructuredTool.from_function(
+        func=lambda as_of: "{}",
+        name="get_calendar",
+        description="The bank holidays ahead.",
+        args_schema=CalendarRequest,
+    )
+
+
+def test_a_frontier_answer_after_tools_defines_them_and_local_never(
+    settings, frontier, tmp_path
+):
+    # The frontier draft call's history holds the tool loop's calls, so it
+    # defines those tools with tool_choice none; the local backend sends and
+    # records exactly what it always has, so its recordings still replay.
+    tool = calendar_tool()
+    saved = {}
+    for s in (settings, frontier):
+        g = gw.ModelGateway.for_settings(
+            s,
+            gw.RecordingStore(tmp_path / f"{s.llm_backend}.jsonl"),
+            live=True,
+            chat_model=gw.ScriptedModel(
+                script=[AIMessage(content='{"text": "x"}')]
+            ),
+        )
+        g.call(
+            run_id="r1",
+            call_number=1,
+            agent="investigator",
+            purpose="draft",
+            messages=ask(),
+            schema=Answer,
+            defined_tools=[tool],
+        )
+        store = gw.RecordingStore(tmp_path / f"{s.llm_backend}.jsonl")
+        saved[s.llm_backend] = store.records()[0]["request"]
+    assert (
+        saved["local"]["tools"] == [] and "tool_choice" not in saved["local"]
+    )
+    assert saved["frontier"]["tools"] == [gw.tool_record(tool)]
+    assert saved["frontier"]["tool_choice"] == "none"
+
+
 # --- a failed call is recorded and replayed exactly --------------------------
 
 
@@ -748,8 +804,9 @@ def test_the_request_record_holds_the_backend_settings_and_digest(
     call_once(other)
     saved = gw.RecordingStore(tmp_path / "f.jsonl").records()[0]["request"]
     assert saved["options"] == {
-        "temperature": frontier.frontier.temperature,
-        "max_tokens": frontier.frontier.max_tokens,
+        "temperature": None,
+        "max_tokens": 16000,
+        "effort": "medium",
     }
     assert saved["digest"] is None
 

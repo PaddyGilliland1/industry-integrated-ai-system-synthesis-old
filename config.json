@@ -10,8 +10,10 @@
   },
   "frontier": {
     "model": "claude-sonnet-5-5",
-    "temperature": 0.0,
-    "max_tokens": 4096,
+    "temperature": null,
+    "max_tokens": 16000,
+    "effort": "medium",
+    "time_limit_s": 420,
     "api_key_env": "ANTHROPIC_API_KEY"
   },
   "agents": {

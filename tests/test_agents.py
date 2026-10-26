@@ -22,7 +22,9 @@ from .scripted import (
     TOOLS,
     WORDING_BAD,
     WORDING_OK,
+    anthropic_wire,
     figure,
+    format_asked,
     good_draft,
     length_error,
     ollama_wire,
@@ -31,6 +33,9 @@ from .scripted import (
     schema_asked,
     tc,
 )
+
+# Joined from parts so this file never holds a key-shaped string itself.
+FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
 
 
 @pytest.fixture
@@ -844,6 +849,86 @@ def test_a_draft_cut_at_the_cap_reaches_the_retry_through_the_local_client(
         str(m.get("content")) for m in sent[asked[0] + 1]["messages"]
     )
     assert CUT in retry_ask
+
+
+# --- the frontier backend's requests, built offline --------------------------
+
+
+def test_the_frontier_requests_are_the_ruled_ones_on_the_wire(
+    run, holidays, settings, tmp_path, monkeypatch
+):
+    # A brief through the graph on the frontier backend, with the real
+    # ChatAnthropic and the Anthropic SDK building every request, answered
+    # before it leaves the process: the tool loop's calls, the draft and
+    # the Reviewer's wording check.
+    def respond(body):
+        asked = format_asked(body)
+        if asked == "BriefDraft":
+            return json.dumps(good_draft(run))
+        if asked == "WordingVerdict":
+            return '{"passes": true, "problems": []}'
+        last = body["messages"][-1]["content"]
+        if isinstance(last, list) and last[-1].get("type") == "tool_result":
+            return "I have what I need."
+        return [(c["name"], c["args"]) for c in TOOLS.tool_calls]
+
+    sent = anthropic_wire(monkeypatch, respond)
+    frontier = settings.model_copy(update={"llm_backend": "frontier"})
+    env = tmp_path / ".env"
+    env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
+    log = gw.AuditLog(tmp_path / "audit.jsonl")
+    gateway = gw.ModelGateway.for_settings(
+        frontier,
+        gw.RecordingStore(tmp_path / "rec.jsonl"),
+        live=True,
+        chat_model=gw.make_chat_model(frontier, env_file=env),
+        log=log,
+    )
+    out = ag.BriefGraph(run, holidays, frontier, gateway, log=log).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "verified"
+    bodies = [s["body"] for s in sent]
+    loop = [b for b in bodies if format_asked(b) is None]
+    draft = [b for b in bodies if format_asked(b) == "BriefDraft"]
+    wording = [b for b in bodies if format_asked(b) == "WordingVerdict"]
+    assert (len(loop), len(draft), len(wording)) == (2, 1, 1)
+    for body in bodies:
+        assert "temperature" not in body and "thinking" not in body
+        assert body["max_tokens"] == 16000
+        assert body["model"] == "claude-sonnet-5-5"
+        assert body["output_config"]["effort"] == "medium"
+    names = [t["name"] for t in loop[0]["tools"]]
+    assert names == list(ag.REQUESTS)
+    assert all("tool_choice" not in b for b in loop)
+    # The draft's history holds the loop's tool calls, so it defines the
+    # same tools and may call none of them.
+    assert [t["name"] for t in draft[0]["tools"]] == names
+    assert draft[0]["tool_choice"] == {"type": "none"}
+    assert draft[0]["output_config"]["format"]["type"] == "json_schema"
+    assert "tool_result" in json.dumps(draft[0]["messages"])
+    assert "tools" not in wording[0]
+    assert wording[0]["output_config"]["format"]["type"] == "json_schema"
+    # The key goes in the request's header and nowhere else.
+    assert all(s["headers"]["x-api-key"] == FAKE_KEY for s in sent)
+    assert all(FAKE_KEY not in json.dumps(b) for b in bodies)
+    recorded = gw.RecordingStore(tmp_path / "rec.jsonl").records()
+    asked = next(r for r in recorded if r["purpose"] == "draft")["request"]
+    assert [t["name"] for t in asked["tools"]] == names
+    assert asked["tool_choice"] == "none"
+    for path in (tmp_path / "rec.jsonl", tmp_path / "audit.jsonl"):
+        assert FAKE_KEY not in path.read_text(encoding="utf-8")
+
+
+def test_the_local_draft_request_is_recorded_as_round_2_recorded_it(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, reply(good_draft(run)), WORDING_OK]
+    graph(run, holidays, settings, script, tmp_path).run(ORIGIN, "T101H", "nw")
+    recorded = gw.RecordingStore(tmp_path / "rec.jsonl").records()
+    asked = next(r for r in recorded if r["purpose"] == "draft")["request"]
+    assert asked["tools"] == [] and "tool_choice" not in asked
+    assert asked["schema"]["name"] == "BriefDraft"
 
 
 # --- a Reviewer format slip is the Reviewer's error --------------------------

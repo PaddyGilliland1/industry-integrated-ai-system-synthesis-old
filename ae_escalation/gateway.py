@@ -247,10 +247,13 @@ def backend_options(settings):
         if settings.local.num_predict is not None:
             options["num_predict"] = settings.local.num_predict
         return options
-    return {
+    options = {
         "temperature": settings.frontier.temperature,
         "max_tokens": settings.frontier.max_tokens,
     }
+    if settings.frontier.effort is not None:
+        options["effort"] = settings.frontier.effort
+    return options
 
 
 def request_record(
@@ -405,7 +408,7 @@ class ModelGateway:
             store,
             live,
             chat_model=chat_model,
-            time_limit_s=settings.agents.time_limit_s,
+            time_limit_s=settings.call_time_limit_s,
             log=log,
             options=backend_options(settings),
             budget=budget,
@@ -427,17 +430,32 @@ class ModelGateway:
         messages,
         tools=None,
         schema=None,
+        defined_tools=None,
     ):
-        """One model call; returns the reply and its CallRecord."""
+        """One model call; returns the reply and its CallRecord.
+
+        defined_tools are the tools earlier calls in the messages used. On
+        the frontier backend a structured answer defines them, with
+        tool_choice none, since the Claude API may refuse a request that
+        holds tool calls and results but defines no tools. The local
+        backend neither sends nor records them, so its request is the one
+        its recordings hold."""
+        answer_tools = (
+            list(defined_tools or [])
+            if self.backend == "frontier" and schema is not None and not tools
+            else []
+        )
         request = request_record(
             self.backend,
             self.model_name,
             messages,
-            tools,
+            tools or answer_tools,
             schema,
             options=self.options,
             digest=self.digest,
         )
+        if answer_tools:
+            request["tool_choice"] = "none"
         digest = request_hash(request)
         key = self.key(run_id, call_number)
         started = time.monotonic()
@@ -460,6 +478,23 @@ class ModelGateway:
             runnable = self.chat_model
             if tools:
                 runnable = runnable.bind_tools(tools)
+            elif answer_tools:
+                # with_structured_output binds no tools, so I bind them with
+                # tool_choice none and give the schema as output_config's
+                # json_schema format, which is what its json_schema method
+                # sends for a Pydantic class.
+                from anthropic import transform_schema
+
+                runnable = runnable.bind_tools(
+                    answer_tools, tool_choice={"type": "none"}
+                ).bind(
+                    output_config={
+                        "format": {
+                            "type": "json_schema",
+                            "schema": transform_schema(schema),
+                        }
+                    }
+                )
             elif schema is not None and self.backend == "frontier":
                 # langchain-anthropic does not support forced tool calling
                 # for structured output on claude-sonnet-5-5 and asks for
@@ -771,11 +806,17 @@ def make_chat_model(settings, env_file=ENV_PATH):
     options = {}
     if frontier.temperature is not None:
         options["temperature"] = frontier.temperature
+    if frontier.effort is not None:
+        # langchain-anthropic 1.7.6 sends effort as output_config.effort.
+        # Given as reasoning_effort it would also set the thinking display
+        # to summarized, so I give output_config alone, which a structured
+        # call's output format is merged into.
+        options["output_config"] = {"effort": frontier.effort}
     return ChatAnthropic(
         model=frontier.model,
         api_key=frontier_key(settings, env_file),
         max_tokens=frontier.max_tokens,
-        timeout=settings.agents.time_limit_s + 5,
+        timeout=settings.call_time_limit_s + 5,
         max_retries=0,
         **options,
     )

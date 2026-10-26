@@ -110,6 +110,34 @@ def test_the_shipped_config_holds_no_secret():
     assert cf.secret_like(f'{{"key": "{FAKE_KEY}"}}')
 
 
+def test_the_frontier_settings_are_the_ruled_ones():
+    # claude-sonnet-5-5 takes only the API's default temperature, so none
+    # is sent; its thinking counts against max_tokens and is held to
+    # medium effort; its own call limit lets a reply run to the cap.
+    s = cf.load_config(REPO / "config.json")
+    f = s.frontier
+    assert f.temperature is None and f.max_tokens == 16000
+    assert f.effort == "medium" and f.time_limit_s == 420
+    assert s.call_time_limit_s == s.agents.time_limit_s == 240
+    front = s.model_copy(update={"llm_backend": "frontier"})
+    assert front.call_time_limit_s == 420
+
+
+def test_the_frontier_effort_is_a_level_the_model_lists(raw):
+    for level in ("low", "medium", "high", "xhigh", "max", None):
+        raw["frontier"]["effort"] = level
+        assert cf.Settings.model_validate(raw).frontier.effort == level
+    raw["frontier"]["effort"] = "none"
+    with pytest.raises(ValidationError):
+        cf.Settings.model_validate(raw)
+
+
+def test_a_frontier_without_its_own_call_limit_takes_the_agents(raw):
+    raw["frontier"]["time_limit_s"] = None
+    s = cf.Settings.model_validate({**raw, "llm_backend": "frontier"})
+    assert s.call_time_limit_s == s.agents.time_limit_s
+
+
 def test_every_run_is_held_under_fifteen_minutes(raw):
     raw["agents"]["run_budget_s"] = 901
     with pytest.raises(ValidationError):

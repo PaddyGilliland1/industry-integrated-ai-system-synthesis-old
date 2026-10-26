@@ -146,3 +146,46 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
      to act would otherwise reach the outbox.
    - No amendment: this carries D-DATA-11 ("surge: forecasts untrusted") and D-ARCH-28 into the
      notifications.
+
+## Build deviations, frontier readiness (26 Oct 2026)
+
+The main session's calls on the frontier backend before its first live run, read from the installed
+langchain-anthropic 1.7.6 and anthropic 1.17.0 and checked on requests built offline. The main session
+logs each in the decision log.
+
+7. **No temperature for the frontier model.** `config.json` sets the frontier `temperature` to null, so
+   none is sent. langchain-anthropic refuses any value but the default for `claude-sonnet-5-5` before a
+   request leaves, so temperature 0 would have failed every frontier call and spent the one frontier
+   run on errors.
+   - Reason: the model takes only its default. A run's reproducibility comes from its recordings, which
+     the notebook replays, not from the temperature.
+   - The local backend keeps temperature 0.
+8. **A larger output cap, and medium effort.** The frontier `max_tokens` rises from 4,096 to 16,000,
+   and a new `effort` field sets "medium". `claude-sonnet-5-5` thinks adaptively, which cannot be turned
+   off, and its thinking counts against `max_tokens`, as the local model's did when round 2's drafts were
+   cut at 8,192 tokens.
+   - How effort is sent: as `output_config.effort`, set on the chat model, which langchain-anthropic
+     merges with a structured call's `output_config.format`. Its `reasoning_effort` field sends the same
+     effort but also sets the thinking display to summarized, which no one asked for, so it is not used.
+   - Cost: only the tokens a reply generates are billed, never the cap.
+9. **The frontier's own call limit, 420 s.** The agents' 240 s limit would end any reply generated more
+   slowly than about 67 tokens a second (16,000 / 240). Nothing has measured the frontier model's speed
+   on this account yet. At an assumed floor of 40 tokens a second, 16,000 tokens take 400 s, and 20 s
+   more covers the request and the first token. The client's own timeout is 5 s longer.
+   - Reason: a reply that runs to the cap should end as `stop_reason` max_tokens, which the record names
+     as a cut and the retry answers, not as a time-out, which reads as "the Investigator could not run".
+     Effort changes how many tokens a reply uses, not how fast they come.
+   - The local backend keeps 240 s, and the run's budget still bounds every call.
+10. **The frontier draft call defines the tool loop's tools.** The Investigator's draft call carries the
+    loop's tool calls and results in its history but asked for no tools, and the Claude API may refuse a
+    request that holds tool blocks and defines no tools. On the frontier backend the draft call now
+    defines the same five tools with `tool_choice` none, beside the `json_schema` output format, so the
+    reply is the brief and never a call. Its request record lists the tools and `tool_choice` "none".
+    - Why not flatten the history: the anthropic SDK types `tool_choice` none, langchain-anthropic
+      passes it through, and its only limit for `claude-sonnet-5-5` is on the forced choices, "any" and
+      "tool". Nothing in either refuses `tool_choice` none beside an output format. The live API's
+      acceptance is shown only by a call, so the smoke test's draft shape runs before the frontier run.
+    - The local backend sends and records exactly what it did: rounds 1 and 2 replay with every
+      request matched and their outcomes unchanged.
+
+`effort` and `time_limit_s` join the frontier fields that P3-10 lists.

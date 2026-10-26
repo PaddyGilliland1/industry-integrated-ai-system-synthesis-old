@@ -465,6 +465,7 @@ def investigator_pass(
             purpose="draft",
             messages=messages + [HumanMessage(content=ask)],
             schema=BriefDraft,
+            defined_tools=toolbox.langchain_tools(),
         )
         calls.append(record)
         draft, unread, raw_reply = read_structured(reply, DraftFields)

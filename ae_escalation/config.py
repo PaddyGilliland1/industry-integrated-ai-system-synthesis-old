@@ -38,6 +38,8 @@ CONFIG_PATH = REPO / "config.json"
 ENV_PATH = REPO / ".env"
 # The reasoning efforts Ollama's OpenAI-compatible endpoint names.
 REASONING_EFFORTS = ("none", "low", "medium", "high")
+# The efforts claude-sonnet-5-5 lists, sent as output_config.effort.
+FRONTIER_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 # Shapes that real keys and tokens take, for the secret scan. A config
 # value names a variable, which none of these match. The shapes are case
 # sensitive, as the keys are, so base64 image data in the notebook does not
@@ -108,8 +110,19 @@ class FrontierBackend(_Frozen):
     """The Claude API, behind the same gateway as the local model."""
 
     model: str = Field(default="claude-sonnet-5-5", min_length=1)
-    temperature: float | None = Field(default=0.0, ge=0, le=1)
-    max_tokens: int = Field(default=4096, gt=0)
+    # claude-sonnet-5-5 takes only the API's default temperature, and
+    # langchain-anthropic refuses any other before a request is sent, so
+    # null sends none. The recordings make a run reproducible.
+    temperature: float | None = Field(default=None, ge=0, le=1)
+    # The most tokens one reply may generate, its thinking included: the
+    # model's adaptive thinking cannot be turned off.
+    max_tokens: int = Field(default=16000, gt=0)
+    # How much the model thinks, sent as output_config.effort. Null sends
+    # nothing, so the model keeps its own default.
+    effort: Literal[FRONTIER_EFFORTS] | None = None
+    # The limit on one call to this backend, long enough for a reply to
+    # run to max_tokens. Null keeps the agents' time_limit_s.
+    time_limit_s: float | None = Field(default=None, gt=0)
     api_key_env: str = Field(
         default="ANTHROPIC_API_KEY", pattern=r"^[A-Z_][A-Z0-9_]*$"
     )
@@ -186,6 +199,14 @@ class Settings(_Frozen):
         """The local model's digest; None for the frontier model, which
         cannot be pinned the same way."""
         return self.local.digest if self.llm_backend == "local" else None
+
+    @property
+    def call_time_limit_s(self):
+        """The limit on one model call to the active backend: the
+        frontier's own when it sets one, else the agents'."""
+        if self.llm_backend == "frontier" and self.frontier.time_limit_s:
+            return self.frontier.time_limit_s
+        return self.agents.time_limit_s
 
 
 def load_config(path=CONFIG_PATH):

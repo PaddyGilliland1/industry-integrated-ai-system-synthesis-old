@@ -287,6 +287,66 @@ def ollama_wire(monkeypatch, respond):
     return sent
 
 
+def anthropic_wire(monkeypatch, respond):
+    """Catch every request the frontier backend's real chat model sends,
+    once the Anthropic SDK has built it and before it leaves the process,
+    and answer each with respond(body): the reply's text, or a list of
+    (tool name, arguments) for tool calls. Returns each request's headers
+    and JSON body, in order. No request reaches the Claude API."""
+    import anthropic
+    import httpx2
+    from langchain_anthropic import chat_models
+
+    sent = []
+
+    def answer_request(request):
+        body = json.loads(request.content)
+        sent.append({"headers": dict(request.headers), "body": body})
+        said = respond(body)
+        content = [{"type": "text", "text": said}]
+        stop = "end_turn"
+        if isinstance(said, list):
+            content = [
+                {
+                    "type": "tool_use",
+                    "id": f"toolu_{len(sent)}_{i}",
+                    "name": name,
+                    "input": args,
+                }
+                for i, (name, args) in enumerate(said)
+            ]
+            stop = "tool_use"
+        return httpx2.Response(
+            200,
+            json={
+                "id": f"msg_{len(sent)}",
+                "type": "message",
+                "role": "assistant",
+                "model": body["model"],
+                "content": content,
+                "stop_reason": stop,
+                "stop_sequence": None,
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        )
+
+    def client(base_url=None, **kwargs):
+        return anthropic.DefaultHttpxClient(
+            base_url=base_url or "https://api.anthropic.com",
+            transport=httpx2.MockTransport(answer_request),
+        )
+
+    monkeypatch.setattr(chat_models, "_get_default_httpx_client", client)
+    return sent
+
+
+def format_asked(body):
+    """The title of the schema a frontier request's json_schema output
+    asks for, or None."""
+    found = (body.get("output_config") or {}).get("format") or {}
+    return (found.get("schema") or {}).get("title")
+
+
 def schema_asked(body):
     """The name of the typed answer a request asks for, or None."""
     return (
