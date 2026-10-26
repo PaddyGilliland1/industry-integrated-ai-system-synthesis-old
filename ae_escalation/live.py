@@ -24,7 +24,8 @@ stopped before its budget was spent, such as on an error, is taken up by the
 same command with --resume, which replays the calls already recorded, then
 carries on live in the budget left. The budget holds across a resume, so a
 run stopped at its budget has none left, and the set runs again under a new
-label.
+label; "adequacy" records such a run from what it completed, each completed
+brief as it stands and each unfinished one counted not adequate.
 
 Before any model call it checks the backend: for local, that Ollama on this
 machine holds the model at its pinned digest and lists the reasoning
@@ -53,6 +54,7 @@ from . import design as ds
 from datetime import datetime, timezone
 
 from .adequacy import (
+    BudgetStop,
     assess,
     read_scores,
     record_says,
@@ -65,12 +67,14 @@ from .gateway import _fetch_json, check_local_model, make_chat_model
 from .gateway import AuditLog, Budget, BudgetExceeded
 from .replay import (
     Paths,
+    budget_stop,
     can_resume,
     coordinate_approved,
     edit_reviewer,
     progress,
     queue_with_decisions,
     run_set,
+    set_runs,
     spent,
     write_queue,
 )
@@ -141,6 +145,11 @@ def _stopped(exc, paths):
         "the set again under a new label, python -m ae_escalation.live "
         "briefs --label <new label>"
     )
+    if last.get("step") == "briefs":
+        print(
+            "record what it completed with python -m ae_escalation.live "
+            f"adequacy --label {paths.label}"
+        )
     return 3
 
 
@@ -227,29 +236,69 @@ def scoring_round(out, backend, label):
     return 2, ""
 
 
+def _stop_of(run, stopped):
+    """A run stopped at its budget, as the adequacy record states it."""
+    ids = [run_id for _, run_id, _ in set_runs(run)]
+    failure = ids[-1]
+    done = stopped["completed"]
+    return BudgetStop(
+        reason=stopped["reason"],
+        completed=done,
+        in_progress=stopped["in_progress"],
+        unfinished=[r for r in ids[:-1] if r not in done],
+        designed_failure=None if failure in done else failure,
+    )
+
+
 def _adequacy(settings, paths):
     """Record the adequacy test from the reviewer's scores, in the round
     the records give, and release the approver's queue only when the
-    verdict sends this set to approval. It calls no model."""
+    verdict sends this set to approval. It calls no model.
+
+    A run stopped at its budget is recorded from the briefs it completed,
+    each as it stands, with every unfinished brief counted not adequate.
+    Only a verified brief can be adequate, so the reviewer scores the
+    completed briefs only when one is verified."""
     record_path = paths.adequacy_record
     if record_path.exists():
         print(f"{record_path} exists; it is never replaced")
         return 2
-    if not paths.adequacy_scores.exists():
+    stopped = budget_stop(paths)
+    if stopped is None and not paths.adequacy_scores.exists():
         print(f"no scores yet: the reviewer fills {paths.adequacy_scores}")
         return 2
     round_, why = scoring_round(paths.base, paths.backend, paths.label)
     if round_ is None:
         print(f"not scored: {why}")
         return 2
+    run, holidays = load_run(settings)
+    done = None if stopped is None else stopped["completed"]
+    result = run_set(run, holidays, settings, paths, live=False, only=done)
+    if stopped is not None and not paths.adequacy_scores.exists():
+        if any(o.status == "verified" for o in result.outcomes):
+            if not paths.adequacy_form.exists():
+                write_form(result, paths)
+            print(
+                "no scores yet: the run stopped at its budget, and the "
+                f"reviewer scores the briefs it completed in "
+                f"{paths.adequacy_scores}"
+            )
+            return 2
     try:
-        scores = read_scores(paths.adequacy_scores)
+        scores = (
+            read_scores(paths.adequacy_scores)
+            if paths.adequacy_scores.exists()
+            else []
+        )
     except ValueError as exc:
         print(f"the scores sheet is not complete: {exc}")
         return 2
-    run, holidays = load_run(settings)
-    result = run_set(run, holidays, settings, paths, live=False)
-    record = assess(result, scores, round_, paths.label)
+    stop = None if stopped is None else _stop_of(run, stopped)
+    try:
+        record = assess(result, scores, round_, paths.label, stop=stop)
+    except ValueError as exc:
+        print(f"not recorded: {exc}")
+        return 2
     write_record(record, paths)
     print(record.verdict)
     print(f"record: {record_path}")

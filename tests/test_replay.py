@@ -380,6 +380,116 @@ def test_a_stopped_run_resumes_from_its_recordings_then_runs_live(
     ]
 
 
+def generation(settings, **local):
+    """The settings with other local generation settings."""
+    return settings.model_copy(
+        update={"local": settings.local.model_copy(update=local)}
+    )
+
+
+def test_a_label_replays_with_the_generation_settings_it_ran_with(
+    replay_run, holidays, settings, tmp_path
+):
+    # The tuning round changes the generation settings, as it changes the
+    # prompts; a label recorded before it still replays as it ran.
+    before = generation(settings, num_predict=None, reasoning_effort="low")
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    live = rp.run_set(
+        replay_run, holidays, before, paths, live=True, chat_model=stand_in()
+    )
+    after = generation(settings, num_predict=8192, reasoning_effort="medium")
+    again = rp.run_set(replay_run, holidays, after, paths, live=False)
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]
+    assert rp.label_settings(after, gw.RecordingStore(paths.briefs)) == before
+    # A resume carries on live under config.json's settings, so a recording
+    # made under others is refused, never mixed in.
+    with pytest.raises(rp.ReplayMiss, match="differs"):
+        rp.run_set(
+            replay_run,
+            holidays,
+            after,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            resume=True,
+        )
+
+
+def test_recordings_made_under_two_settings_are_refused(settings, tmp_path):
+    store = gw.RecordingStore(tmp_path / "rec.jsonl")
+    for n, temperature in enumerate((0.0, 0.7)):
+        store.put(
+            {
+                "key": f"k{n}",
+                "request": {"options": {"temperature": temperature}},
+            }
+        )
+    with pytest.raises(rp.ReplayMiss, match="different generation"):
+        rp.label_settings(settings, store)
+
+
+def stopped_at_budget(replay_run, holidays, settings, tmp_path, calls):
+    """A labelled run stopped at its budget after so many model calls."""
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(calls, clock=ticking()),
+        )
+    return paths
+
+
+def test_a_stop_at_the_budget_is_told_from_any_other_stop(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = stopped_at_budget(replay_run, holidays, settings, tmp_path, 9)
+    stop = rp.budget_stop(paths)
+    assert stop["completed"] == ["20191006-S314H", "20200322-Scotland"]
+    other = rp.Paths.under(tmp_path, settings.llm_backend, "round2")
+    rp.note_progress(
+        other,
+        "stopped",
+        step="briefs",
+        reason="Connection refused",
+        completed=[],
+        in_progress="20191006-S314H",
+        spent_s=3.0,
+    )
+    assert rp.budget_stop(other) is None
+    assert rp.budget_stop(rp.Paths.under(tmp_path, "local", "none")) is None
+    # Both of the gateway's budget stops are told as one.
+    for reason in (
+        "the live run passed its budget of 840 s (841 s spent)",
+        "the live run reached its budget of 840 s during model call 4 of "
+        "run 20200322-T101H",
+    ):
+        assert rp.BUDGET_STOP.search(reason)
+
+
+def test_the_runs_a_stopped_set_completed_replay_alone(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = stopped_at_budget(replay_run, holidays, settings, tmp_path, 9)
+    done = rp.budget_stop(paths)["completed"]
+    again = rp.run_set(
+        replay_run, holidays, settings, paths, live=False, only=done
+    )
+    assert [o.run_id for o in again.outcomes] == done
+    assert again.planted is None
+    assert all(c.replayed for o in again.outcomes for c in o.calls)
+    ids = [rid for _, rid, _ in rp.set_runs(replay_run)]
+    assert len(ids) == 8 and ids[-1].endswith("-planted")
+
+
 def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
     replay_run, holidays, settings, tmp_path
 ):

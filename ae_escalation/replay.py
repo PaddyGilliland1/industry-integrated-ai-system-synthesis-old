@@ -27,6 +27,7 @@ RecordingStore, replayed by the notebook without the model).
 """
 
 import json
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -52,6 +53,7 @@ from .gateway import (
     ModelGateway,
     RecordingStore,
     ReplayMiss,
+    backend_options,
 )
 
 # run_set and coordinate_approved raise it from the gateway, and their
@@ -401,14 +403,78 @@ def can_resume(paths, step):
     return bool(mine) and mine[-1]["event"] != "completed"
 
 
+# The reason a stop records when the gateway's budget ended the run, in
+# either of its two forms: before a call, or cutting one short.
+BUDGET_STOP = re.compile(r"\bthe live run (?:passed|reached) its budget of\b")
+
+
+def budget_stop(paths, step="briefs"):
+    """The step's last progress event when the run stopped at its time
+    budget, which a resume cannot take further; None when it completed,
+    never ran or stopped for another reason, such as an error."""
+    mine = [e for e in progress(paths) if e.get("step") == step]
+    if not mine or mine[-1]["event"] != "stopped":
+        return None
+    return mine[-1] if BUDGET_STOP.search(mine[-1].get("reason", "")) else None
+
+
+def label_settings(settings, store):
+    """The settings a label's recordings were made with: config.json's, with
+    the generation settings every recorded request holds. A label replays
+    as it ran after the tuning round changes them, as it does with its own
+    prompts; a store with no recordings keeps config.json's.
+
+    Raises
+    ------
+    ReplayMiss
+        If the recordings hold more than one set of generation settings, or
+        one config.json cannot name.
+    """
+    held = {
+        json.dumps(r["request"]["options"], sort_keys=True)
+        for r in store.records()
+    }
+    if not held:
+        return settings
+    if len(held) > 1:
+        raise ReplayMiss(
+            f"the recordings in {store.path} were made with different "
+            f"generation settings: {', '.join(sorted(held))}"
+        )
+    options = json.loads(held.pop())
+    backend = settings.llm_backend
+    unset = {"num_predict": None} if backend == "local" else {}
+    section = getattr(settings, backend).model_copy(
+        update={**unset, **options}
+    )
+    ran = settings.model_copy(update={backend: section})
+    if backend_options(ran) != options:
+        raise ReplayMiss(
+            f"the generation settings recorded in {store.path}, {options}, "
+            "are not ones config.json can name"
+        )
+    return ran
+
+
 class ReplaySetResult(BaseModel):
-    """The replay set's seven outcomes and the designed failure."""
+    """The replay set's seven outcomes and the designed failure; a replay of
+    only some runs has the outcomes it ran, and no designed failure unless
+    it ran."""
 
     check: dict
     outcomes: list[BriefOutcome]
-    planted: BriefOutcome
+    planted: BriefOutcome | None = None
     backend: str
     model: str
+
+
+def set_runs(run):
+    """The set's runs in order, as (entry, run id, plant): the seven
+    briefs, then the designed failure."""
+    entries = replay_entries(run)
+    target = planted_entry(entries)
+    runs = [(e, run_id(e), None) for e in entries]
+    return runs + [(target, f"{run_id(target)}-planted", plant_figure)]
 
 
 def run_set(
@@ -422,6 +488,7 @@ def run_set(
     digest=None,
     budget=None,
     resume=False,
+    only=None,
 ):
     """Run the replay set: the seven briefs, then the designed failure.
 
@@ -429,8 +496,10 @@ def run_set(
     paths.audit, and the time budget is checked before every model call. A
     stop writes what was completed to paths.progress; resume=True replays
     the calls already recorded, then carries on live. In replay the
-    recordings stand in for the model, and the steps are logged in memory
-    unless a log is given.
+    recordings stand in for the model, with the generation settings they
+    were made with, and the steps are logged in memory unless a log is
+    given; only, a list of run ids, replays those runs alone, such as the
+    ones a run stopped at its budget completed.
 
     Raises
     ------
@@ -442,6 +511,8 @@ def run_set(
         In replay, if a recording is missing, its request has changed or it
         was recorded on another model digest.
     """
+    if live and only is not None:
+        raise ValueError("only some runs can be replayed, never run live")
     check = pre_run_check(run)
     if log is None:
         log = AuditLog(paths.audit) if live else AuditLog()
@@ -459,9 +530,10 @@ def run_set(
             settings.agents.run_budget_s,
             spent_before=spent(paths, "briefs") if resume else 0.0,
         )
+    store = RecordingStore(paths.briefs)
     gateway = ModelGateway.for_settings(
-        settings,
-        RecordingStore(paths.briefs),
+        settings if live else label_settings(settings, store),
+        store,
         live=live,
         chat_model=chat_model,
         log=log,
@@ -479,10 +551,10 @@ def run_set(
         prompts=label_prompts(paths, live),
         log=log,
     )
-    entries = replay_entries(run)
-    target = planted_entry(entries)
-    todo = [(e, run_id(e), None) for e in entries]
-    todo.append((target, f"{run_id(target)}-planted", plant_figure))
+    todo = set_runs(run)
+    planted_id = todo[-1][1]
+    if only is not None:
+        todo = [t for t in todo if t[1] in only]
     if live:
         note_progress(paths, "started", step="briefs", resume=resume)
     outcomes = []
@@ -514,8 +586,8 @@ def run_set(
         )
     return ReplaySetResult(
         check=check,
-        outcomes=outcomes[:-1],
-        planted=outcomes[-1],
+        outcomes=[o for o in outcomes if o.run_id != planted_id],
+        planted=next((o for o in outcomes if o.run_id == planted_id), None),
         backend=gateway.backend,
         model=gateway.model_name,
     )

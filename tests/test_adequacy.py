@@ -203,3 +203,76 @@ def test_the_record_says_whether_the_set_goes_to_approval(result, paths):
     assert not tuning.to_approval and not tuning.frontier_case
     text = aq.write_record(tuning, paths).read_text(encoding="utf-8")
     assert "Frontier case: no" in text and "Goes to approval: no" in text
+
+
+# --- a run stopped at its budget ---------------------------------------------
+
+REASON = (
+    "the live run reached its budget of 840 s during model call 4 of run "
+    "20200322-T101H"
+)
+
+
+def stopped_after(result, n):
+    """The set as a run stopped at its budget during run n + 1 leaves it:
+    the first n briefs completed as they stand, the rest unfinished."""
+    ids = [o.run_id for o in result.outcomes]
+    partial = result.model_copy(
+        update={"outcomes": result.outcomes[:n], "planted": None}
+    )
+    stop = aq.BudgetStop(
+        reason=REASON,
+        completed=ids[:n],
+        in_progress=(ids + [result.planted.run_id])[n],
+        unfinished=ids[n:],
+        designed_failure=result.planted.run_id,
+    )
+    return partial, stop
+
+
+def test_a_stopped_set_counts_its_unfinished_briefs_not_adequate(
+    result, paths
+):
+    partial, stop = stopped_after(result, 3)
+    refused = [
+        o.model_copy(update={"status": "not verified"})
+        for o in partial.outcomes
+    ]
+    partial = partial.model_copy(update={"outcomes": refused})
+    record = aq.assess(partial, [], round=1, label="round1", stop=stop)
+    assert (record.adequate, record.total) == (0, 7)
+    assert record.tuning_next
+    assert not record.to_approval and not record.frontier_case
+    assert "0 of 7 adequate" in record.verdict
+    path = aq.write_record(record, paths)
+    text = path.read_text(encoding="utf-8")
+    assert f"Stopped at its budget: {REASON}." in text
+    assert "Completed: " + ", ".join(stop.completed) + "." in text
+    assert f"Unfinished: {stop.in_progress} (in progress), " in text
+    assert f"and the designed failure, {result.planted.run_id}." in text
+    for o in result.outcomes[3:]:
+        assert f"| {o.run_id} | unfinished at the budget |" in text
+    for o in refused:
+        assert f"| {o.run_id} | not verified" in text
+        assert "| not scored, not verified |" in text
+    said = aq.record_says(path)
+    assert said["round"] == 1 and said["tuning_next"]
+
+
+def test_a_stopped_sets_verified_briefs_must_still_be_scored(result):
+    partial, stop = stopped_after(result, 2)
+    with pytest.raises(ValueError, match="score every verified brief"):
+        aq.assess(partial, [], round=1, label="round1", stop=stop)
+    record = aq.assess(
+        partial, scores(partial), round=1, label="round1", stop=stop
+    )
+    assert (record.adequate, record.total) == (2, 7)
+    assert record.tuning_next
+
+
+def test_a_stopped_set_never_goes_to_approval_without_a_ruling(result):
+    # Every brief done and the stop in the designed failure: 6 of 7 is
+    # reached, but the set never showed the planted figure caught.
+    partial, stop = stopped_after(result, 7)
+    with pytest.raises(ValueError, match="ruling"):
+        aq.assess(partial, scores(partial), round=1, label="round1", stop=stop)

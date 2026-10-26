@@ -42,10 +42,12 @@ live run records.
     retry;
   - `brief.text()` and `brief_text`, and the coordinator's `_figure_lines`, `_date_lines`,
     `_action_lines` and action task texts;
-  - `backend_options`, the generation settings and the model digest.
+  - `backend_options` and the model digest.
 
   The prompt files are safe to edit for a new label, since each label keeps its own copy; a frontier
-  label must keep the local label's copy unchanged.
+  label must keep the local label's copy unchanged. The generation settings in `config.json` are safe
+  to change for a new label too: a replay of a label's set takes them from its own recordings, while
+  a resume, which carries on live, holds them to `config.json`'s.
 
 ## Build deviations, third Phase B batch (25 Oct 2026)
 

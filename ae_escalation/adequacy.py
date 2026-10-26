@@ -67,9 +67,51 @@ class BriefAdequacy(BaseModel):
     # Why a brief is not verified: the code check, the wording check, the
     # Reviewer that could not run, or no readable draft.
     cause: str | None = None
-    criteria_met: int
+    # None when the brief was not scored: a run stopped at its budget
+    # needs no marks for a brief that can never be adequate.
+    criteria_met: int | None
     unmet: list[str]
     adequate: bool
+    # False for a brief the run stopped at its budget before finishing.
+    finished: bool = True
+
+
+class BudgetStop(BaseModel):
+    """What a live run stopped at its time budget left: why it stopped, the
+    runs it completed, the run in progress, the briefs it never finished
+    and the designed failure, when that never ran either."""
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: str
+    completed: list[str]
+    in_progress: str
+    unfinished: list[str]
+    designed_failure: str | None = None
+
+    def line(self):
+        """The record's line on the stop, every unfinished run named."""
+
+        def named(run_id):
+            """A run id, marked when the stop came in it."""
+            return run_id + (
+                " (in progress)" if run_id == self.in_progress else ""
+            )
+
+        parts = [named(r) for r in self.unfinished]
+        if self.designed_failure:
+            failure = f"the designed failure, {named(self.designed_failure)}"
+            parts = (
+                [*parts[:-1], f"{parts[-1]}, and {failure}"]
+                if parts
+                else [failure]
+            )
+        return (
+            f"Stopped at its budget: {self.reason}. Completed: "
+            f"{', '.join(self.completed) or 'none'}. Unfinished: "
+            f"{', '.join(parts)}. Each unfinished brief is counted not "
+            "adequate."
+        )
 
 
 class AdequacyRecord(BaseModel):
@@ -92,6 +134,8 @@ class AdequacyRecord(BaseModel):
     # local set may be scored once more, under a new label.
     tuning_next: bool = False
     verdict: str
+    # The line on a run stopped at its budget; empty for a run completed.
+    stopped: str = ""
 
 
 def _brief_block(outcome):
@@ -194,30 +238,56 @@ def read_scores(path):
         ]
 
 
-def assess(result, scores, round, label):
+def assess(result, scores, round, label, stop=None):
     """Score one run of the set and say what follows.
 
     Parameters
     ----------
     result : replay.ReplaySetResult
     scores : list of BriefScore
-        One for every brief.
+        One for every brief; after a stop at the budget, one for every
+        verified brief the run completed, since no other can be adequate.
     round : 1 or 2
         2 is after the one bounded prompt-tuning round.
     label : str
+    stop : BudgetStop, optional
+        Given when the run stopped at its budget: result holds the briefs
+        it completed, scored as they stand, and each unfinished brief
+        counts as not adequate.
 
     Returns
     -------
     AdequacyRecord
+
+    Raises
+    ------
+    ValueError
+        If a brief that needs a score has none, or a stopped run would go
+        to approval, which needs a ruling, since its designed failure never
+        showed the planted figure caught.
     """
     by_id = {s.brief_id: s for s in scores}
-    missing = [o.run_id for o in result.outcomes if o.run_id not in by_id]
+    need = [o for o in result.outcomes if stop is None or verified(o)]
+    missing = [o.run_id for o in need if o.run_id not in by_id]
     if missing:
-        raise ValueError(f"score every brief; missing {missing}")
+        which = "brief" if stop is None else "verified brief"
+        raise ValueError(f"score every {which}; missing {missing}")
     briefs = []
     for o in result.outcomes:
-        c = by_id[o.run_id].criteria
         ok = verified(o)
+        if o.run_id not in by_id:
+            briefs.append(
+                BriefAdequacy(
+                    brief_id=o.run_id,
+                    verified=ok,
+                    cause=o.cause,
+                    criteria_met=None,
+                    unmet=[],
+                    adequate=False,
+                )
+            )
+            continue
+        c = by_id[o.run_id].criteria
         briefs.append(
             BriefAdequacy(
                 brief_id=o.run_id,
@@ -226,6 +296,17 @@ def assess(result, scores, round, label):
                 criteria_met=c.count(),
                 unmet=[x.name for x in CRITERIA if not getattr(c, x.field)],
                 adequate=is_adequate(ok, c),
+            )
+        )
+    for run_id in stop.unfinished if stop else []:
+        briefs.append(
+            BriefAdequacy(
+                brief_id=run_id,
+                verified=False,
+                criteria_met=None,
+                unmet=[],
+                adequate=False,
+                finished=False,
             )
         )
     adequate = sum(b.adequate for b in briefs)
@@ -256,6 +337,13 @@ def assess(result, scores, round, label):
             "the stated case to run the frontier backend once on the same "
             "replay set."
         )
+    if stop is not None and to_approval:
+        raise ValueError(
+            f"{adequate} of {total} adequate, but the run stopped at its "
+            "budget before the designed failure showed the planted figure "
+            "caught, so whether the set goes to approval needs a ruling; "
+            "nothing is recorded"
+        )
     return AdequacyRecord(
         backend=result.backend,
         model=result.model,
@@ -268,14 +356,27 @@ def assess(result, scores, round, label):
         to_approval=to_approval,
         tuning_next=tuning,
         verdict=verdict,
+        stopped=stop.line() if stop else "",
     )
 
 
 def _status(brief):
     """A brief's status for the record, with why if not verified."""
+    if not brief.finished:
+        return "unfinished at the budget"
     if brief.verified:
         return "verified"
     return f"not verified: {brief.cause}" if brief.cause else "not verified"
+
+
+def _marks(brief):
+    """A brief's criteria met and not met, for the record's table."""
+    if brief.criteria_met is None:
+        why = (
+            "not scored" if not brief.finished else "not scored, not verified"
+        )
+        return why, "n/a"
+    return f"{brief.criteria_met} of 6", ", ".join(brief.unmet) or "none"
 
 
 def write_record(record, paths):
@@ -290,6 +391,7 @@ def write_record(record, paths):
         "",
         record.verdict,
         "",
+        *([record.stopped, ""] if record.stopped else []),
         f"Round: {record.round}",
         f"Frontier case: {'yes' if record.frontier_case else 'no'}",
         f"Goes to approval: {'yes' if record.to_approval else 'no'}",
@@ -300,8 +402,7 @@ def write_record(record, paths):
         "|---|---|---|---|---|",
     ]
     lines += [
-        f"| {b.brief_id} | {_status(b)} "
-        f"| {b.criteria_met} of 6 | {', '.join(b.unmet) or 'none'} "
+        f"| {b.brief_id} | {_status(b)} | {' | '.join(_marks(b))} "
         f"| {'yes' if b.adequate else 'no'} |"
         for b in record.briefs
     ]

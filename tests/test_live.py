@@ -7,7 +7,9 @@ import json
 import pytest
 
 from ae_escalation import config as cf
+from ae_escalation import gateway as gw
 from ae_escalation import live as lv
+from ae_escalation import replay as rp
 
 from .conftest import REPO
 from .scripted import stand_in
@@ -379,11 +381,125 @@ def test_a_run_stopped_at_its_budget_is_sent_to_a_new_label(
         "the set again under a new label, python -m ae_escalation.live "
         "briefs --label <new label>" in out
     )
+    assert (
+        "record what it completed with python -m ae_escalation.live "
+        "adequacy --label t1" in out
+    )
     # Under the same budget a resume replays what was recorded and stops
     # again before any live call, as the message says.
     model = stand_in()
     assert lv.main([*args, "--resume"], chat_model=model, fetch=pinned) == 3
     assert model.seen == []
+
+
+# --- the adequacy record of a run stopped at its budget ----------------------
+
+
+def ticking():
+    """A clock that moves on one second each time it is read."""
+    state = {"t": 0}
+
+    def clock():
+        state["t"] += 1
+        return state["t"]
+
+    return clock
+
+
+def slipping():
+    """A stand-in whose every draft names the primary model in words, which
+    code refuses, so each brief ends not verified after its retry."""
+    from langchain_core.messages import AIMessage
+
+    from .scripted import answer, last_human
+
+    def slip(messages):
+        said = answer(messages)
+        if "Write the demand brief now" in last_human(messages):
+            draft = json.loads(said.content)
+            draft["summary"] = "The primary model forecasts {F1}."
+            return AIMessage(content=json.dumps(draft))
+        return said
+
+    return gw.ScriptedModel(script=[slip] * 200)
+
+
+def stop_at_budget(tmp_path, run, holidays, model, calls, label="t1"):
+    """Run the set live until its budget, counted in clock reads, is spent
+    during model call calls + 1."""
+    settings = cf.load_config(REPO / "config.json")
+    paths = rp.Paths.under(tmp_path, "local", label)
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=model,
+            budget=gw.Budget(calls, clock=ticking()),
+        )
+    return rp.budget_stop(paths)
+
+
+def test_a_run_stopped_at_its_budget_is_recorded_as_it_stands(
+    tmp_path, pinned, replay_run, holidays, capsys
+):
+    # Three briefs completed and refused twice each, six calls a brief, as
+    # the first live round stopped; none can be adequate, so no scores are
+    # asked for.
+    stop = stop_at_budget(tmp_path, replay_run, holidays, slipping(), 19)
+    assert len(stop["completed"]) == 3
+    assert adequacy(tmp_path) == 0
+    text = record_text(tmp_path, "t1")
+    assert "0 of 7 adequate: one bounded prompt-tuning round" in text
+    assert "Round: 1" in text and "Prompt-tuning round next: yes" in text
+    assert f"Stopped at its budget: {stop['reason']}." in text
+    assert f"{stop['in_progress']} (in progress)" in text
+    assert "-planted." in text
+    assert text.count("| unfinished at the budget |") == 4
+    assert text.count("| not verified: the code check |") == 3
+    assert not (tmp_path / "approvals" / "adequacy_local_t1.csv").exists()
+    assert not (tmp_path / "approvals" / "queue_local_t1.csv").exists()
+    # The round after it is the second, from the record.
+    assert briefs(tmp_path, pinned, "t2") == 0
+    score_all(tmp_path, "t2")
+    assert adequacy(tmp_path, "t2") == 0
+    assert "Round: 2" in record_text(tmp_path, "t2")
+
+
+def test_a_stopped_run_asks_the_reviewer_to_score_its_verified_briefs(
+    tmp_path, replay_run, holidays, capsys
+):
+    stop = stop_at_budget(tmp_path, replay_run, holidays, stand_in(), 9)
+    assert len(stop["completed"]) == 2
+    assert adequacy(tmp_path) == 2
+    assert "no scores yet" in capsys.readouterr().out
+    form = tmp_path / "recordings" / "local" / "t1" / "adequacy_form.md"
+    shown = form.read_text(encoding="utf-8")
+    assert all(f"## {r}:" in shown for r in stop["completed"])
+    assert f"## {stop['in_progress']}:" not in shown
+    score_all(tmp_path)
+    assert adequacy(tmp_path) == 0
+    text = record_text(tmp_path, "t1")
+    assert "2 of 7 adequate" in text and "Stopped at its budget" in text
+
+
+def test_a_stopped_set_that_would_go_to_approval_is_not_recorded(
+    tmp_path, replay_run, holidays, capsys
+):
+    # Every brief done, four calls each, and the stop in the designed
+    # failure.
+    stop = stop_at_budget(tmp_path, replay_run, holidays, stand_in(), 29)
+    assert stop["in_progress"].endswith("-planted")
+    assert adequacy(tmp_path) == 2
+    score_all(tmp_path)
+    capsys.readouterr()
+    assert adequacy(tmp_path) == 2
+    assert "needs a ruling" in capsys.readouterr().out
+    assert not (
+        tmp_path / "approvals" / "adequacy_record_local_t1.md"
+    ).exists()
 
 
 def test_a_stopped_run_resumes_with_the_flag_while_budget_is_left(
