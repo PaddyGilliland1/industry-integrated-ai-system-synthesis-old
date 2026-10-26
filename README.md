@@ -17,6 +17,8 @@
   resets, the staffing actions and their reply deadlines, and the staff acknowledgements.
 - **The spot check:** `ae_escalation_spot_check.ipynb` runs the design on the real data and replays
   every recorded model call, so it needs no language model and no GPU.
+- **The case study:** `ae_escalation_case_study.md`, rendered to `ae_escalation_case_study.pdf`, sets
+  out the design, its evaluation and its limits.
 
 ## Dataset
 
