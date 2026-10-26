@@ -13,7 +13,9 @@ stated case for running the frontier backend, once, on the same replay set.
 The result, either way, is recorded in approvals/ with the briefs and
 criteria that failed, before the approver reads any brief; the live
 command releases the approver's queue only once this record sends the set
-to approval.
+to approval. A set stopped at its time budget is recorded from the briefs
+it completed, and its record says plainly whether the stop or the briefs
+decided the verdict.
 """
 
 import csv
@@ -156,6 +158,9 @@ class AdequacyRecord(BaseModel):
     stopped: str = ""
     # The line on the run's time budget and where it came from.
     budget: str = ""
+    # For a local set stopped at its budget, whether the stop, not the
+    # briefs, decided the verdict; None for a run completed.
+    decided_by_stop: bool | None = None
 
 
 def _brief_block(outcome):
@@ -366,6 +371,10 @@ def assess(result, scores, round, label, stop=None, budget=""):
             "caught, so whether the set goes to approval needs a ruling; "
             "nothing is recorded"
         )
+    decided = None
+    if stop is not None and result.backend == "local":
+        decided, why = _decider(adequate, total, stop)
+        verdict = f"{verdict} {why}"
     return AdequacyRecord(
         backend=result.backend,
         model=result.model,
@@ -380,6 +389,36 @@ def assess(result, scores, round, label, stop=None, budget=""):
         verdict=verdict,
         stopped=stop.line() if stop else "",
         budget=budget,
+        decided_by_stop=decided,
+    )
+
+
+def _decider(adequate, total, stop):
+    """Whether the stop, not the briefs, decided a stopped local set's
+    verdict, and the sentence that says so: it did when the unfinished
+    briefs, each counted not adequate, could have lifted the set to the 6
+    the verdict turns on."""
+    left = len(stop.unfinished)
+    best = adequate + left
+    need = f"the {THRESHOLD_BRIEFS} the verdict needs"
+    if best >= THRESHOLD_BRIEFS:
+        were = "brief was" if left == 1 else "briefs were"
+        it = "it" if left == 1 else "they"
+        return True, (
+            "The stop at its budget, not the briefs, decided this verdict: "
+            f"{left} unfinished {were} counted not adequate, and had {it} "
+            f"been adequate the set would have had {best} of {total}, "
+            f"enough for {need}."
+        )
+    if not left:
+        return False, (
+            "The briefs, not the stop, decided this verdict: every brief "
+            f"finished, and {adequate} of {total} is short of {need}."
+        )
+    return False, (
+        "The briefs, not the stop, decided this verdict: had every "
+        "unfinished brief been adequate, the set would have had "
+        f"{best} of {total}, short of {need}."
     )
 
 
@@ -421,6 +460,14 @@ def write_record(record, paths):
         "Prompt-tuning round next: "
         f"{'yes' if record.tuning_next else 'no'}",
         *([record.budget] if record.budget else []),
+        *(
+            []
+            if record.decided_by_stop is None
+            else [
+                "Decided by the stop: "
+                f"{'yes' if record.decided_by_stop else 'no'}"
+            ]
+        ),
         "",
         "| Brief | Status | Criteria met | Not met | Adequate |",
         "|---|---|---|---|---|",

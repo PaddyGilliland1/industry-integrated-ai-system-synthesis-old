@@ -305,3 +305,76 @@ def test_the_record_states_the_run_budget_and_where_it_came_from(
     # A label run before the progress file held its budget, as the first
     # live round was, says so rather than guess.
     assert "not in the progress file" in aq.budget_line(None)
+
+
+# --- whether the stop or the briefs decided the verdict ----------------------
+
+STOP_DECIDED = "The stop at its budget, not the briefs, decided this verdict"
+BRIEFS_DECIDED = "The briefs, not the stop, decided this verdict"
+
+
+@pytest.mark.parametrize("round_", [1, 2])
+def test_a_stop_that_left_six_of_seven_possible_decided_the_verdict(
+    result, paths, round_
+):
+    # Three briefs adequate and four unfinished: had the four been
+    # adequate, 7 of 7 would have sent the set on, so the stop decided.
+    partial, stop = stopped_after(result, 3)
+    record = aq.assess(
+        partial, scores(partial), round=round_, label="round2", stop=stop
+    )
+    assert (record.adequate, record.total) == (3, 7)
+    assert record.decided_by_stop is True
+    assert record.frontier_case is (round_ == 2)
+    assert record.tuning_next is (round_ == 1)
+    assert (
+        f"{STOP_DECIDED}: 4 unfinished briefs were counted not adequate, "
+        "and had they been adequate the set would have had 7 of 7, enough "
+        "for the 6 the verdict needs." in record.verdict
+    )
+    text = aq.write_record(record, paths).read_text(encoding="utf-8")
+    assert STOP_DECIDED in text and "Decided by the stop: yes" in text
+
+
+def test_a_stop_that_left_six_out_of_reach_did_not_decide_the_verdict(
+    result, paths
+):
+    partial, stop = stopped_after(result, 3)
+    refused = [
+        o.model_copy(update={"status": "not verified"})
+        for o in partial.outcomes
+    ]
+    partial = partial.model_copy(update={"outcomes": refused})
+    record = aq.assess(partial, [], round=2, label="round2", stop=stop)
+    assert record.decided_by_stop is False and record.frontier_case
+    assert (
+        f"{BRIEFS_DECIDED}: had every unfinished brief been adequate, the "
+        "set would have had 4 of 7, short of the 6 the verdict needs."
+        in record.verdict
+    )
+    text = aq.write_record(record, paths).read_text(encoding="utf-8")
+    assert "Decided by the stop: no" in text
+
+
+def test_a_stop_in_the_designed_failure_left_the_briefs_to_decide(result):
+    partial, stop = stopped_after(result, 7)
+    four = {
+        o.run_id: ("disagreement_named", "uncertainty_stated")
+        for o in partial.outcomes[:3]
+    }
+    record = aq.assess(
+        partial, scores(partial, four), round=2, label="round2", stop=stop
+    )
+    assert record.adequate == 4 and record.decided_by_stop is False
+    assert (
+        f"{BRIEFS_DECIDED}: every brief finished, and 4 of 7 is short of "
+        "the 6 the verdict needs." in record.verdict
+    )
+
+
+def test_a_completed_run_says_nothing_of_a_stop(result, paths):
+    record = aq.assess(result, scores(result), round=1, label="round1")
+    assert record.decided_by_stop is None
+    text = aq.write_record(record, paths).read_text(encoding="utf-8")
+    assert "Decided by the stop" not in text
+    assert STOP_DECIDED not in text and BRIEFS_DECIDED not in text
