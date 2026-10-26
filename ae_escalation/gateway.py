@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
+from openai import LengthFinishReasonError
 from openai.lib._parsing import type_to_response_format_param
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -632,6 +633,23 @@ def error_text(exc):
     return (
         record.error if record is not None else f"{type(exc).__name__}: {exc}"
     )
+
+
+def reply_cut(message):
+    """Whether a reply stopped at the output cap: finish_reason "length"
+    from OpenAI's client, or stop_reason "max_tokens" from Anthropic's."""
+    meta = message.response_metadata or {}
+    return (
+        meta.get("finish_reason") == "length"
+        or meta.get("stop_reason") == "max_tokens"
+    )
+
+
+def error_cut(exc):
+    """Whether a call failed because its reply stopped at the output cap.
+    OpenAI's client raises LengthFinishReasonError for a typed answer cut
+    there, and the replay rebuilds the recorded error as that same class."""
+    return isinstance(exc, LengthFinishReasonError)
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)

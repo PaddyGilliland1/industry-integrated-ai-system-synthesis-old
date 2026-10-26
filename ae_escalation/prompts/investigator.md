@@ -71,6 +71,12 @@ Your reply was:
 
 Fix each problem when you are asked for the brief, using your tools first if you need to, and write it as JSON only, in the form asked for. Every figure must come from a tool result, be cited with its measure, and appear in the text only as its placeholder; write every model, week, hospital and level as its token.
 
+## RETRY CUT
+
+Your last reply was cut off at the length limit; write the brief more briefly. It could not be read as the brief, once.
+
+Write it when you are asked for the brief, using your tools first if you need to, as JSON only, in the form asked for. Every figure must come from a tool result, be cited with its measure, and appear in the text only as its placeholder; write every model, week, hospital and level as its token.
+
 ## DRAFT
 
 Write the demand brief now. Reply with JSON only, with these fields:

@@ -51,8 +51,10 @@ from .gateway import (
     BudgetExceeded,
     CallRecord,
     ReplayMiss,
+    error_cut,
     error_text,
     read_structured,
+    reply_cut,
 )
 from .timing import release_horizon_weeks
 
@@ -254,6 +256,9 @@ class InvestigatorPass(BaseModel):
     calls: list[CallRecord] = Field(default_factory=list)
     problems: list[str] = Field(default_factory=list)
     raw_reply: str = ""
+    # True when the draft's reply stopped at the output cap, so the retry
+    # can say so rather than ask again in the same words.
+    cut: bool = False
 
 
 def entry_text(entry, facts=None):
@@ -388,10 +393,13 @@ def investigator_pass(
     previous=None,
     problems=(),
     raw=None,
+    cut=False,
 ):
     """One pass of the Investigator: the tool loop, then the draft as
-    typed JSON. A retry first shows the problems and the previous draft,
-    or, when the previous reply could not be read, why and the raw reply.
+    typed JSON. A retry first shows the problems and the previous draft;
+    when the previous reply stopped at the output cap, that it was cut off
+    and to write more briefly; or, when it could not be read, why and the
+    raw reply.
 
     The draft is read here for its shape alone: the word and placeholder
     rules and the figure check run in the code check, which names every
@@ -421,6 +429,8 @@ def investigator_pass(
                 )
             )
         )
+    elif cut:
+        messages.append(HumanMessage(content=prompts["RETRY CUT"]))
     elif raw is not None:
         messages.append(
             HumanMessage(
@@ -459,7 +469,12 @@ def investigator_pass(
         calls.append(record)
         draft, unread, raw_reply = read_structured(reply, DraftFields)
         if draft is None:
-            raise _Stop("could not read the brief: " + "; ".join(unread))
+            cut_off = (
+                ", cut off at the length limit" if reply_cut(reply) else ""
+            )
+            raise _Stop(
+                f"could not read the brief{cut_off}: " + "; ".join(unread)
+            )
     except (ReplayMiss, BudgetExceeded):
         raise
     except _Stop as exc:
@@ -470,6 +485,7 @@ def investigator_pass(
             calls=calls,
             problems=unread,
             raw_reply=raw_reply,
+            cut=reply_cut(reply),
         )
     except Exception as exc:
         # A failed model call is recorded under its own number, so the next
@@ -481,6 +497,7 @@ def investigator_pass(
             stop_reason=f"model error: {error_text(exc)}",
             cap_reached=cap_reached,
             calls=calls,
+            cut=error_cut(exc),
         )
     return InvestigatorPass(
         status="ok",
@@ -785,6 +802,7 @@ class BriefState(TypedDict, total=False):
     attempt: int
     draft: dict | None
     raw: str | None
+    cut: bool
     brief: dict | None
     passed: bool
     problems: list[str]
@@ -859,6 +877,7 @@ class BriefGraph:
             previous=previous,
             problems=state.get("problems", []) if attempt > 1 else [],
             raw=raw,
+            cut=state.get("cut", False) if attempt > 1 else False,
         )
         record = Attempt(number=attempt, stop_reason=out.stop_reason)
         draft = (
@@ -890,6 +909,7 @@ class BriefGraph:
             "model_calls": state.get("model_calls", 0) + len(out.calls),
             "calls": [c.model_dump(mode="json") for c in out.calls],
             "brief": None,
+            "cut": out.cut,
         }
         if draft is None:
             self._attempt = record

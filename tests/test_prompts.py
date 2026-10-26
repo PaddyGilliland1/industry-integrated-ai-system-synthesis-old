@@ -278,7 +278,7 @@ def test_the_investigation_ends_with_a_word_not_a_draft():
     ask = PROMPTS["investigator"]["INVESTIGATE"]
     assert "reply with just the word done" in ask
     assert "do not write the brief yet" in ask
-    for retry in ("RETRY", "RETRY UNREADABLE"):
+    for retry in ("RETRY", "RETRY UNREADABLE", "RETRY CUT"):
         assert "when you are asked for the brief" in (
             PROMPTS["investigator"][retry]
         )

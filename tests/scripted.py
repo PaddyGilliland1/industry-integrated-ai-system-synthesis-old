@@ -190,8 +190,10 @@ def stand_in():
 def ollama_wire(monkeypatch, respond):
     """Catch every request the local backend's real chat model sends, before
     it leaves the process, and answer each with respond(body): the reply's
-    content, or a list of (tool name, arguments) for tool calls. Returns
-    the request bodies, in order. No request reaches Ollama."""
+    content, a list of (tool name, arguments) for tool calls, or a dict of
+    content and finish_reason for a reply stopped some other way, such as
+    at the output cap. Returns the request bodies, in order. No request
+    reaches Ollama."""
     from functools import partial
 
     import httpx
@@ -205,6 +207,9 @@ def ollama_wire(monkeypatch, respond):
         said = respond(body)
         message = {"role": "assistant", "content": said}
         finish = "stop"
+        if isinstance(said, dict):
+            message["content"] = said["content"]
+            finish = said["finish_reason"]
         if isinstance(said, list):
             message["content"] = None
             message["tool_calls"] = [

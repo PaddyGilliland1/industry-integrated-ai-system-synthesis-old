@@ -692,6 +692,144 @@ def test_a_reply_with_no_json_is_named_in_the_retry(
     assert "holds no JSON object" in retry_ask and "Sorry, no." in retry_ask
 
 
+# --- a reply cut at the output cap is named in the retry ---------------------
+
+CUT = "cut off at the length limit; write the brief more briefly"
+
+
+def length_error():
+    """The error OpenAI's client raises for a typed answer stopped at the
+    output cap, as a live local draft meets it."""
+    from openai import LengthFinishReasonError
+    from openai.types.chat import ChatCompletion
+
+    completion = ChatCompletion.model_validate(
+        {
+            "id": "c1",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "m",
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "length",
+                    "message": {
+                        "role": "assistant",
+                        "content": '{"summary": "The',
+                    },
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 8192,
+                "total_tokens": 8193,
+            },
+        }
+    )
+    return LengthFinishReasonError(completion=completion)
+
+
+def test_a_draft_cut_at_the_output_cap_is_named_in_the_retry(
+    run, holidays, settings, tmp_path
+):
+    out, first_ask, retry_ask = retry_text(
+        run, holidays, settings, tmp_path, failing(length_error())
+    )
+    assert out.status == "verified" and len(out.attempts) == 2
+    assert "LengthFinishReasonError" in out.attempts[0].stop_reason
+    assert CUT in retry_ask and CUT not in first_ask
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [{"finish_reason": "length"}, {"stop_reason": "max_tokens"}],
+    ids=["openai", "anthropic"],
+)
+def test_a_reply_cut_at_the_output_cap_is_named_in_the_retry(
+    run, holidays, settings, tmp_path, metadata
+):
+    cut = AIMessage(
+        content='{"summary": "The forecasts', response_metadata=metadata
+    )
+    out, _, retry_ask = retry_text(run, holidays, settings, tmp_path, cut)
+    assert out.status == "verified" and len(out.attempts) == 2
+    assert "cut off at the length limit" in out.attempts[0].stop_reason
+    assert CUT in retry_ask
+
+
+def test_a_retry_after_another_failure_says_nothing_of_the_cap(
+    run, holidays, settings, tmp_path
+):
+    for first in (
+        failing(ConnectionError("dropped")),
+        AIMessage(content="Sorry, no."),
+    ):
+        out, _, retry_ask = retry_text(
+            run, holidays, settings, tmp_path / str(id(first)), first
+        )
+        assert out.status == "verified"
+        assert "length limit" not in retry_ask
+
+
+def test_a_draft_cut_at_the_output_cap_replays_its_named_retry(
+    run, holidays, settings, tmp_path
+):
+    # The replay rebuilds the recorded error as OpenAI's own class, so it
+    # names the cut in the same retry and every recording stands in.
+    script = [TOOLS, DONE, failing(length_error()), DONE]
+    script += [reply(good_draft(run)), WORDING_OK]
+    live = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "cut"
+    )
+    again = graph(run, holidays, settings, [], tmp_path, live=False).run(
+        ORIGIN, "T101H", "cut"
+    )
+    assert again.status == live.status == "verified"
+    assert [a.stop_reason for a in again.attempts] == [
+        a.stop_reason for a in live.attempts
+    ]
+    assert all(c.replayed for c in again.calls)
+
+
+def test_a_draft_cut_at_the_cap_reaches_the_retry_through_the_local_client(
+    run, holidays, settings, tmp_path, monkeypatch
+):
+    # Ollama's reply with finish_reason "length" goes through OpenAI's own
+    # client, which raises for a typed answer cut at the cap.
+    drafts = [
+        {"content": '{"summary": "The', "finish_reason": "length"},
+        json.dumps(good_draft(run)),
+    ]
+
+    def respond(body):
+        asked = schema_asked(body)
+        if asked == "BriefDraft":
+            return drafts.pop(0)
+        if asked == "WordingVerdict":
+            return '{"passes": true, "problems": []}'
+        if body["messages"][-1]["role"] == "tool":
+            return "done"
+        return [(c["name"], c["args"]) for c in TOOLS.tool_calls]
+
+    sent = ollama_wire(monkeypatch, respond)
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "r.jsonl"),
+        live=True,
+        chat_model=gw.make_chat_model(settings),
+    )
+    out = ag.BriefGraph(run, holidays, settings, gateway).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "verified" and len(out.attempts) == 2
+    assert "LengthFinishReasonError" in out.attempts[0].stop_reason
+    asked = [n for n, b in enumerate(sent) if schema_asked(b) == "BriefDraft"]
+    retry_ask = " ".join(
+        str(m.get("content")) for m in sent[asked[0] + 1]["messages"]
+    )
+    assert CUT in retry_ask
+
+
 # --- a Reviewer format slip is the Reviewer's error --------------------------
 
 SLIP = AIMessage(content='{"passes": true, "problems": [], "score": 9}')
