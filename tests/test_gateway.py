@@ -498,6 +498,21 @@ def test_the_reasoning_setting_must_be_one_the_local_model_lists(
     )
 
 
+def test_config_asks_for_the_efficient_mode_the_pinned_model_lists(settings):
+    # "low" was never honoured: the card lists only false, true and
+    # "medium", the renderer's efficient mode, so config.json names that,
+    # with the output cap kept.
+    local = settings.local
+    assert local.reasoning_effort == "medium"
+    assert (
+        gw.reasoning_refusal(
+            local.model, local.reasoning_effort, NEMOTRON_THINKING
+        )
+        is None
+    )
+    assert local.num_predict == 8192
+
+
 def test_a_model_that_lists_no_thinking_honours_no_reasoning_setting(
     settings,
 ):
