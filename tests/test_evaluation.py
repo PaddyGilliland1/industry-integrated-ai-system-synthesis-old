@@ -121,6 +121,7 @@ def test_measures_add_the_flag_rate_to_the_skill_counts():
 
 
 def row(rate, recall, ratio):
+    """One operating point's flag rate, recall and ratio."""
     return {"flag_rate_pct": rate, "recall_pct": recall, "ratio": ratio}
 
 
@@ -168,6 +169,7 @@ def test_the_rate_must_be_under_ten_and_the_ratio_at_least_two():
 
 
 def ratio(s):
+    """The ratio of a pair's first value to its second."""
     return s[0] / s[1]
 
 
@@ -240,6 +242,7 @@ def test_the_real_time_rate_uses_only_origins_whose_weeks_are_released():
 
 @pytest.fixture(scope="module")
 def run():
+    """The design run on the synthetic series."""
     return ds.run_design(synthetic_wide())
 
 

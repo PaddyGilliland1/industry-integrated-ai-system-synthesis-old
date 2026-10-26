@@ -10,6 +10,7 @@ FAST = 15
 
 
 def synthetic():
+    """A seasonal weekly series with noise."""
     dates = tm.complete_weeks("2015-06-07", "2019-06-30")
     n = len(dates)
     rng = np.random.default_rng(11)

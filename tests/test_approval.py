@@ -30,6 +30,7 @@ WHEN = datetime(2026, 10, 27, 9, 30, tzinfo=timezone.utc)
 
 
 def brief_run(replay_run, holidays, settings, tmp_path, script, run_id):
+    """One brief run through the graph on a scripted model."""
     gateway = gw.ModelGateway.for_settings(
         settings,
         gw.RecordingStore(tmp_path / f"{run_id}.jsonl"),
@@ -43,12 +44,14 @@ def brief_run(replay_run, holidays, settings, tmp_path, script, run_id):
 
 @pytest.fixture
 def verified(replay_run, holidays, settings, tmp_path):
+    """A verified brief for Ninewells."""
     script = [TOOLS, DONE, reply(good_draft(replay_run)), WORDING_OK]
     return brief_run(replay_run, holidays, settings, tmp_path, script, "nw")
 
 
 @pytest.fixture
 def unverified(replay_run, holidays, settings, tmp_path):
+    """A brief planted twice, so not verified."""
     bad = reply(planted_draft(replay_run))
     script = [TOOLS, DONE, bad, DONE, bad]
     return brief_run(replay_run, holidays, settings, tmp_path, script, "pl")
@@ -56,16 +59,19 @@ def unverified(replay_run, holidays, settings, tmp_path):
 
 @pytest.fixture
 def good(replay_run):
+    """A good draft, as the approver's edit would carry it."""
     return br.BriefDraft.model_validate(good_draft(replay_run))
 
 
 def met(**unmet):
+    """The six criteria, all met except those named."""
     return ap.Criteria(
         **{name: name not in unmet for name in ap.Criteria.model_fields}
     )
 
 
 def decide(brief_id, action, edited=None, factual=False, **unmet):
+    """A decision by AB at a fixed time."""
     return ap.Decision(
         brief_id=brief_id,
         action=action,
@@ -78,10 +84,12 @@ def decide(brief_id, action, edited=None, factual=False, **unmet):
 
 
 def passing(brief, run_id):
+    """A Reviewer that passes every edit's wording."""
     return ag.WordingResult(passed=True, problems=[], by="model")
 
 
 def queue(tmp_path, *outcomes, log=None, reviewer=passing):
+    """An approval queue holding the given outcomes."""
     q = ap.ApprovalQueue(tmp_path / "queue.jsonl", log=log, reviewer=reviewer)
     for o in outcomes:
         q.add(o)
@@ -443,6 +451,7 @@ def test_a_decision_dated_before_the_run_started_is_refused(verified):
 
 
 def edited_copy(good, **fields):
+    """The good draft with the given fields changed."""
     return br.BriefDraft.model_validate(
         {**good.model_dump(mode="json"), **fields}
     )
@@ -560,6 +569,8 @@ READER_B_COLUMNS = [
 
 
 def reader_b_sheet(path, rows):
+    """Write Reader B's sheet, one row per brief, all criteria met except
+    those named."""
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=READER_B_COLUMNS)
         writer.writeheader()
@@ -578,6 +589,7 @@ def reader_b_sheet(path, rows):
 
 
 def reading(brief_id, action):
+    """Reader B's decision on one brief, every criterion met."""
     return ap.ReaderBDecision(brief_id=brief_id, action=action, criteria=met())
 
 

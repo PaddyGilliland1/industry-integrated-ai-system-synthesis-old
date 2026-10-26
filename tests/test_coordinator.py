@@ -52,6 +52,7 @@ GOOD = {
 
 
 def notes(**messages):
+    """A coordinator reply with one notification per action."""
     return AIMessage(
         content=json.dumps(
             {
@@ -66,6 +67,7 @@ def notes(**messages):
 
 @pytest.fixture
 def approved(replay_run, holidays, settings, tmp_path):
+    """Ninewells' verified brief, approved by AB."""
     script = [TOOLS, DONE, reply(good_draft(replay_run)), WORDING_OK]
     gateway = gw.ModelGateway.for_settings(
         settings,
@@ -91,6 +93,7 @@ def approved(replay_run, holidays, settings, tmp_path):
 
 
 def coordinator(settings, tmp_path, script, log=None, live=True):
+    """A coordinator on a scripted model, writing to a temporary outbox."""
     gateway = gw.ModelGateway.for_settings(
         settings,
         gw.RecordingStore(tmp_path / "notify.jsonl"),
@@ -104,6 +107,7 @@ def coordinator(settings, tmp_path, script, log=None, live=True):
 
 
 def outbox(tmp_path):
+    """Every entry written to the temporary outbox."""
     path = tmp_path / "outbox.jsonl"
     if not path.exists():
         return []
@@ -419,6 +423,8 @@ def test_nothing_in_the_coordinator_can_send():
 
 
 def failing(exc):
+    """A scripted turn that raises the given error."""
+
     def raise_it(messages):
         raise exc
 

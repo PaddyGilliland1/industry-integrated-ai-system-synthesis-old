@@ -10,6 +10,7 @@ from ae_escalation import timing as tm
 
 
 def ma(hist, t, H):
+    """The 4-week moving average as a forecaster, for H weeks."""
     return np.full(H, np.mean(hist[t - 3 : t + 1]))
 
 
@@ -131,6 +132,7 @@ def test_too_few_known_ratios_give_no_range():
 
 
 def synthetic_wide():
+    """Two seasonal series with noise, weekly from June 2015."""
     weeks = tm.complete_weeks("2015-06-07", "2019-12-29")
     n = len(weeks)
     rng = np.random.default_rng(3)
@@ -189,6 +191,7 @@ def test_the_back_test_does_not_change_its_input():
 
 
 def long_frame():
+    """Two models' recorded errors for one series over 2018."""
     targets = tm.complete_weeks("2018-01-07", "2018-12-30")
     rows = []
     for m, err in (("seasonal_naive", 0.10), ("ma4", 0.05)):

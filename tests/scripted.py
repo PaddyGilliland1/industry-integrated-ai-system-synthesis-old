@@ -35,6 +35,7 @@ LOADED = {
 
 
 def tc(name, **args):
+    """One scripted tool call, by name and arguments."""
     return {"name": name, "args": args, "id": None}
 
 
@@ -102,10 +103,12 @@ def planted_draft(run):
 
 
 def reply(draft):
+    """A model reply whose text is the draft as JSON."""
     return AIMessage(content=json.dumps(draft))
 
 
 def last_human(messages):
+    """The text of the last human message sent."""
     return next(m.content for m in reversed(messages) if m.type == "human")
 
 
@@ -194,6 +197,8 @@ def answer(messages):
 
 
 def stand_in():
+    """A scripted model that answers every call in the replay set, for a
+    whole run."""
     return gw.ScriptedModel(script=[answer] * 200)
 
 

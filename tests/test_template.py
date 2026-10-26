@@ -16,11 +16,13 @@ from ae_escalation import tools as tl
 
 
 def entry_at(run, origin, hospital):
+    """The screen's entry for one hospital at one origin."""
     return next(e for e in tl.screen_at(run, origin) if e.hospital == hospital)
 
 
 @pytest.fixture
 def demand(replay_run):
+    """The template brief for Ninewells' demand week."""
     return tp.template_brief(
         replay_run, entry_at(replay_run, "2021-06-13", "T101H")
     )
@@ -28,6 +30,7 @@ def demand(replay_run):
 
 @pytest.fixture
 def latch(replay_run):
+    """The template brief for the national latch week."""
     return tp.template_brief(
         replay_run, entry_at(replay_run, "2020-03-22", "Scotland")
     )
@@ -35,6 +38,7 @@ def latch(replay_run):
 
 @pytest.fixture
 def surge(replay_run):
+    """The template brief for Edinburgh's surge week."""
     return tp.template_brief(
         replay_run, entry_at(replay_run, "2019-10-06", "S314H")
     )
@@ -222,6 +226,7 @@ def test_it_is_built_from_tool_calls_as_of_the_origin(demand):
 
 
 def crit(*unmet):
+    """The six criteria, all met except those named."""
     return ap.Criteria(**{f: f not in unmet for f in ap.Criteria.model_fields})
 
 
@@ -307,6 +312,7 @@ SEED = 20261025
 
 
 def ratings_sheet(path, rows):
+    """Write a raters' sheet, one row per rater, week and text."""
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=RATING_COLUMNS)
         writer.writeheader()

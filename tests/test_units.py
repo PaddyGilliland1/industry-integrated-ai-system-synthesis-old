@@ -88,6 +88,8 @@ class TestOutlookMeasures(unittest.TestCase):
 
 class TestSummarise(unittest.TestCase):
     def setUp(self):
+        """Seven weeks: six in scope, with true and false flags and missed
+        busy weeks."""
         # Six weeks in scope and one out: 2 true flags, 1 false flag, 2 missed
         # busy weeks, 1 quiet unflagged week.
         self.flag = np.array([T, T, T, F, F, F, T])
@@ -177,6 +179,8 @@ class TestSummarise(unittest.TestCase):
 
 class TestDistinctWeeks(unittest.TestCase):
     def setUp(self):
+        """Ten weeks, one of them busy, with forecasts that differ by
+        origin."""
         # Ten weeks, lead 2, H 5: origin t covers target weeks t + 2 to t + 5.
         self.n = 10
         self.y = np.array([100.0, 100, 100, 100, 100, 100, 100, 120, 100, 100])
@@ -190,6 +194,7 @@ class TestDistinctWeeks(unittest.TestCase):
         self.elig = np.ones(self.n, dtype=bool)
 
     def run_(self, flag, elig=None, P=None):
+        """The distinct-weeks count with this case's defaults."""
         return un.distinct_weeks(
             self.y,
             self.cap,
@@ -314,6 +319,7 @@ class TestWeekFlags(unittest.TestCase):
 
 
 def grid(cells, n=6, J=4):
+    """A boolean grid with the given cells set."""
     m = np.zeros((n, J), dtype=bool)
     for t, j in cells:
         m[t, j] = True

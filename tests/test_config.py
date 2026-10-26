@@ -22,6 +22,7 @@ FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
 
 @pytest.fixture
 def raw():
+    """config.json as written, before the code reads it."""
     return json.loads((REPO / "config.json").read_text(encoding="utf-8"))
 
 

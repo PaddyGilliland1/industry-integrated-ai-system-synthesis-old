@@ -30,6 +30,7 @@ CALLS = [
 
 
 def h1(model):
+    """A figure's model at release horizon 1."""
     return {"model": model, "horizon": 1}
 
 
@@ -323,6 +324,7 @@ def ledger_for(run, holidays, entry, extra=()):
 
 
 def screened(run, origin, hospital):
+    """The screen's entry for one hospital at one origin."""
     return next(e for e in tl.screen_at(run, origin) if e.hospital == hospital)
 
 
@@ -1042,6 +1044,7 @@ PROBES = [
 
 @pytest.fixture(scope="module")
 def ninewells(replay_run, holidays):
+    """Ninewells' entry at the demand week, and its ledger."""
     entry = screened(replay_run, ORIGIN, "T101H")
     return entry, ledger_for(replay_run, holidays, entry, EXTRA)
 
@@ -1178,6 +1181,8 @@ NOTICES = [
 
 @pytest.fixture(scope="module")
 def hold_leave(replay_run, holidays):
+    """Ninewells' brief, and the context its hold-leave notification is
+    checked against."""
     from types import SimpleNamespace
 
     from ae_escalation import config as cf

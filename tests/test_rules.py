@@ -20,14 +20,17 @@ class Spy:
     origin."""
 
     def __init__(self):
+        """Start with no masks seen."""
         self.masks = {}
 
     def __call__(self, hist, t, exclude):
+        """Keep the mask the model was given, and forecast the 4-week mean."""
         self.masks[t] = exclude[: t + 1].copy()
         return np.full(5, np.mean(hist[max(0, t - 3) : t + 1]))
 
 
 def series(step_at=None, step=0.0, n=200, seed=4):
+    """A level series with noise and an optional 20-week step."""
     y = 1000 + np.random.default_rng(seed).normal(0, 10, n)
     if step_at is not None:
         y[step_at : step_at + 20] += step
@@ -35,6 +38,7 @@ def series(step_at=None, step=0.0, n=200, seed=4):
 
 
 def run(y, models, cap, **kw):
+    """The real-time run with no re-selection unless asked."""
     kw.setdefault("primary0", next(iter(models)))
     kw.setdefault("reselect", False)
     kw.setdefault("masked", ())
@@ -119,6 +123,7 @@ def test_a_calm_series_never_latches():
 
 class Shock:
     def __init__(self):
+        """Run a spying model through an upward step."""
         self.y = series(step_at=120, step=400.0)
         # At 1,250 the surge week's actual and the lagging forecast fall in
         # different bands.
@@ -195,14 +200,17 @@ def test_nothing_at_an_origin_depends_on_later_weeks():
 
 
 def slow(hist, t, exclude):
+    """A 26-week mean as a forecaster."""
     return np.full(5, np.mean(hist[max(0, t - 25) : t + 1]))
 
 
 def fast(hist, t, exclude):
+    """A 2-week mean as a forecaster."""
     return np.full(5, np.mean(hist[max(0, t - 1) : t + 1]))
 
 
 def stepped():
+    """A series that steps up, with a capacity it stays under."""
     y = 1000 + np.random.default_rng(4).normal(0, 10, 300)
     y[120:] += 400.0
     return y, np.full((300, 5), 2000.0)
@@ -359,6 +367,7 @@ class Flat:
 
     @classmethod
     def fcs(cls, value=100.0):
+        """Forecasts of one value at every origin and horizon."""
         return np.full((cls.n, 5), value)
 
 

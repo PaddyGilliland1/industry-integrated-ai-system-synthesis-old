@@ -16,16 +16,19 @@ NONE = (0.0, 1.0, 0.0)
 
 
 def pattern(seed=2):
+    """A seasonal pattern of P weeks with noise, scaled to average 1."""
     rng = np.random.default_rng(seed)
     p = 1 + 0.2 * np.sin(2 * np.pi * np.arange(P) / P) + rng.normal(0, 0.03, P)
     return p / p.mean()
 
 
 def seasonal_series(n, level=100.0, seed=2):
+    """A series of n weeks repeating the pattern."""
     return level * pattern(seed)[np.arange(n) % P]
 
 
 def no_mask(n):
+    """A mask that leaves out no week."""
     return np.zeros(n, dtype=bool)
 
 
@@ -44,6 +47,7 @@ def test_the_moving_average_is_the_flat_mean_of_the_last_four_weeks():
 
 
 def calendar(start="2015-01-04", end="2021-12-26"):
+    """Complete weeks and their place in the year."""
     dates = tm.complete_weeks(start, end)
     return dates, tm.year_position(dates)
 

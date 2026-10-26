@@ -268,3 +268,12 @@ Build choices recorded for review, not rulings by Paddy. Where one touches a rul
       2's Mermaid source states it word for word.
     - Figure 3 carries a caption in the notebook and the README: its dates illustrate the release
       timing for one replay week, and that week's brief was rejected.
+
+## Build deviations, the clean room and the docstrings (26 Oct 2026)
+
+21. **`requirements.txt` holds pytest.** It is frozen from the clean room's environment after the
+    notebook's run and the tests, so it holds pytest, which the shipped tests need, as well as every
+    package the notebook and the modules import. The README no longer installs pytest separately.
+22. **Every test helper, fixture and test-class method has a docstring** (P3-9). Every function in
+    the package already had one. The test functions themselves keep their descriptive names in place
+    of a docstring.

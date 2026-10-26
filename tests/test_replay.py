@@ -535,6 +535,7 @@ def test_reader_bs_sheet_and_the_raters_sheet_sit_in_approvals(tmp_path):
 
 
 def recorded(store, run_id, calls, agent="investigator"):
+    """Put recordings for one run, numbered after any it holds."""
     first = 1 + sum(r["run_id"] == run_id for r in store.records())
     for n, (purpose, digest) in enumerate(calls, first):
         store.put(
@@ -621,6 +622,7 @@ def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
 
 
 def decisions_csv(paths, rows):
+    """Write the approver's decisions sheet."""
     paths.decisions.parent.mkdir(parents=True, exist_ok=True)
     with open(paths.decisions, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
@@ -629,6 +631,7 @@ def decisions_csv(paths, rows):
 
 
 def approval_row(brief_id):
+    """One approval by AB, every criterion met."""
     return {
         "brief_id": brief_id,
         "action": "approve",
@@ -642,6 +645,7 @@ def approval_row(brief_id):
 
 
 def kinds(path):
+    """The kind of each entry in a JSONL file."""
     return [json.loads(x)["kind"] for x in path.read_text().splitlines()]
 
 

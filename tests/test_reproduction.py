@@ -27,6 +27,7 @@ NAMES = {**dt.HOSPITAL_NAMES, "Scotland": "Scotland"}
 
 @pytest.fixture(scope="module")
 def wide(flagged):
+    """The PHS series, one column per series."""
     return dt.series_from(flagged)
 
 
@@ -44,16 +45,19 @@ def backtest(wide):
 
 @pytest.fixture(scope="module")
 def metrics(backtest):
+    """The back-test's errors by period, as the data test scored them."""
     periods = bt.data_test_periods(backtest)
     return bt.error_summary(backtest, periods, series=["Scotland", *BIG5])
 
 
 @pytest.fixture(scope="module")
 def run(wide):
+    """The design run on the real data."""
     return ds.run_design(wide)
 
 
 def cell(metrics, period, series, model, h):
+    """One row of the error table."""
     row = metrics[
         (metrics["period"] == period)
         & (metrics["series"] == series)
@@ -64,6 +68,7 @@ def cell(metrics, period, series, model, h):
 
 
 def r2(x):
+    """Each value rounded to 2 places."""
     return [round(float(v), 2) for v in x]
 
 

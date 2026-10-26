@@ -18,6 +18,7 @@ ORIGIN = date(2021, 6, 13)
 
 
 def forecast_item(model, k, week, point, r80, r95):
+    """One forecast as get_forecast returns it."""
     return {
         "model": model,
         "release_horizon": k,
@@ -29,10 +30,12 @@ def forecast_item(model, k, week, point, r80, r95):
 
 
 def call(cid, name, request, result):
+    """One tool call in the ledger."""
     return br.ToolCall(id=cid, name=name, request=request, result=result)
 
 
 def calendar(cid, week, holidays):
+    """A get_calendar call with its result."""
     return call(
         cid,
         "get_calendar",
@@ -183,6 +186,7 @@ ENTRY = tl.ScreenEntry(
 
 
 def fig(value, cid, measure, model=None, horizon=None, week=None, unit=None):
+    """A cited figure, its unit taken from its measure unless given."""
     if unit is None:
         unit = tl.MEASURES[measure][1]
     return br.CitedFigure(
@@ -252,6 +256,7 @@ def draft(**fields):
 
 
 def brief(entry=ENTRY, facts=FACTS, **fields):
+    """A demand brief assembled from a draft with the given fields."""
     return br.DemandBrief.assemble(
         entry,
         draft(**fields),
@@ -264,10 +269,12 @@ def brief(entry=ENTRY, facts=FACTS, **fields):
 
 
 def check(b, rule_level=2, ledger=LEDGER):
+    """The code check on a brief against the ledger."""
     return fg.check_brief(b, ledger, rule_level=rule_level)
 
 
 def reasons(result):
+    """Every failure's reason, joined."""
     return " | ".join(f.reason for f in result.failures)
 
 
@@ -285,6 +292,7 @@ def one(figure, ledger=LEDGER):
 
 
 def field_names(model):
+    """Every field name in a model and the models it holds."""
     names = set()
     for name, field in model.model_fields.items():
         names.add(name)
@@ -768,6 +776,7 @@ def test_a_draft_refused_by_the_text_rules_is_checked_in_full():
 
 
 def kinds(text):
+    """Each token's kind and text."""
     return [(t.kind, t.text) for t in fg.tokens(text)]
 
 

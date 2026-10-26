@@ -41,10 +41,12 @@ def tags(digest, thinking=None):
 
 @pytest.fixture
 def pinned():
+    """Ollama's list of models with the pinned digest."""
     return tags(cf.load_config(REPO / "config.json").local.digest)
 
 
 def briefs(tmp_path, fetch, label="t1", model=None):
+    """The live briefs step on the scripted stand-in."""
     return lv.main(
         ["briefs", "--label", label, "--out", str(tmp_path)],
         chat_model=model or stand_in(),
@@ -70,6 +72,7 @@ def score_all(tmp_path, label="t1", unmet=0, backend="local"):
 
 
 def adequacy(tmp_path, label="t1", *extra):
+    """The live adequacy step."""
     return lv.main(
         ["adequacy", "--label", label, "--out", str(tmp_path), *extra]
     )
@@ -178,6 +181,7 @@ def test_notify_needs_the_approvers_decisions(tmp_path, pinned, capsys):
 
 
 def frontier_config(tmp_path):
+    """A copy of config.json with the frontier backend chosen."""
     raw = (REPO / "config.json").read_text(encoding="utf-8")
     config = tmp_path / "frontier.json"
     config.write_text(
@@ -188,6 +192,7 @@ def frontier_config(tmp_path):
 
 
 def key_file(tmp_path):
+    """A .env file holding a fake key."""
     env = tmp_path / ".env"
     env.write_text(f"ANTHROPIC_API_KEY={FAKE_KEY}\n", encoding="utf-8")
     return env
@@ -206,6 +211,7 @@ def stated_case(tmp_path, label, pinned):
 
 
 def frontier(tmp_path, *args, env_file=None):
+    """A live step on the frontier backend, with a fake key."""
     return lv.main(
         [*args, "--out", str(tmp_path), "--config", frontier_config(tmp_path)],
         chat_model=stand_in(),
@@ -272,6 +278,7 @@ def test_the_frontier_backend_runs_once_per_set(tmp_path, capsys, pinned):
 
 
 def record_text(tmp_path, label):
+    """The text of a local label's adequacy record."""
     path = tmp_path / "approvals" / f"adequacy_record_local_{label}.md"
     return path.read_text(encoding="utf-8")
 
@@ -354,6 +361,7 @@ def test_the_digest_preflight_observed_is_in_every_request(
 
 
 def config_with(tmp_path, **agents):
+    """A copy of config.json with the agents' settings changed."""
     raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
     raw["agents"].update(agents)
     path = tmp_path / "config.json"

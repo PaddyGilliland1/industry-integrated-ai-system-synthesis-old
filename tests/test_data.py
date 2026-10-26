@@ -16,6 +16,7 @@ from .conftest import CSV, DATA
 
 
 def small_frame():
+    """A few rows shaped like the PHS file."""
     return pd.DataFrame(
         {
             "WeekEndingDate": pd.to_datetime(
@@ -84,6 +85,7 @@ def test_a_constant_series_has_no_outliers():
 
 
 def write(tmp_path, name, payload):
+    """Write bytes to a file, returning its path and SHA-256."""
     path = tmp_path / name
     path.write_bytes(payload)
     return path, hashlib.sha256(payload).hexdigest()

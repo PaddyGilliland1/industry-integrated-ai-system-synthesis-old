@@ -67,6 +67,7 @@ def test_the_example_is_a_flagged_unlatched_brief_outside_the_replay_set(
 
 
 def example_brief():
+    """The worked example in the Investigator's draft prompt."""
     found = re.search(
         r"to show the form only: (\{.*\})$",
         PROMPTS["investigator"]["DRAFT"],

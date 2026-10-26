@@ -24,16 +24,19 @@ ORIGIN = pd.Timestamp("2021-06-13").date()
 
 @pytest.fixture(scope="module")
 def wide(flagged):
+    """The replay set's series."""
     return dt.series_from(flagged)[list(ds.REPLAY)]
 
 
 @pytest.fixture(scope="module")
 def run(wide):
+    """The design run on the replay set's series."""
     return ds.run_design(wide)
 
 
 @pytest.fixture(scope="module")
 def holidays():
+    """The frozen bank holidays."""
     return dt.load_bank_holidays(
         DATA / "bank-holidays_20261024.json", HOLIDAYS_SHA256
     )
@@ -390,6 +393,7 @@ def test_no_tool_reads_a_week_after_its_origin(wide):
 
 
 def field_names(model):
+    """Every field name in a model and the models it holds."""
     names = set()
     for name, field in model.model_fields.items():
         names.add(name)

@@ -10,6 +10,7 @@ from ae_escalation import timing as tm
 
 
 def synthetic_wide():
+    """Two growing seasonal series with noise."""
     weeks = tm.complete_weeks("2015-06-07", "2021-12-26")
     n = len(weeks)
     rng = np.random.default_rng(8)
@@ -30,6 +31,7 @@ def synthetic_wide():
 
 @pytest.fixture(scope="module")
 def synthetic_run():
+    """The design run on the synthetic series."""
     return ds.run_design(synthetic_wide())
 
 

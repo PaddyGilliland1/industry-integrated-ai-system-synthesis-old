@@ -31,6 +31,7 @@ SURGE = CTX.model_copy(
 
 
 def cite(value, measure, call="T1", model=None, horizon=None, week=None):
+    """A cited figure, its unit taken from its measure."""
     unit = {"%": "%", "count": "count"}.get(
         ph.MEASURE_UNIT[measure], "attendances"
     )
@@ -60,14 +61,17 @@ FIGURES = [
 
 
 def problems(text, figures=FIGURES, ctx=CTX):
+    """The placeholder problems in a summary."""
     return ph.problems({"summary": text}, figures, ctx)
 
 
 def found(text, **kw):
+    """The text each problem found."""
     return [p.found for p in problems(text, **kw)]
 
 
 def reasons(text, **kw):
+    """Every problem's reason, joined."""
     return " | ".join(p.reason for p in problems(text, **kw))
 
 
@@ -496,6 +500,7 @@ def test_a_problem_is_marked_where_it_stands_and_tokens_still_render():
 
 
 def draft(summary, figures=FIGURES, **fields):
+    """A draft with the given summary and figures."""
     return {
         "summary": summary,
         "expected_range": fields.get("expected_range", "From {F6} up."),

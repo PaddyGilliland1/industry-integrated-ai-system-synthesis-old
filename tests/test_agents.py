@@ -41,10 +41,13 @@ FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
 
 @pytest.fixture
 def run(replay_run):
+    """The design run on the replay set's series."""
     return replay_run
 
 
 def graph(run, holidays, settings, script, tmp_path, log=None, live=True):
+    """A brief graph on a scripted model, live, or replaying the same
+    recordings."""
     store = gw.RecordingStore(tmp_path / "rec.jsonl")
     gateway = gw.ModelGateway.for_settings(
         settings,
@@ -487,6 +490,8 @@ def test_the_brief_is_dated_by_the_origin(run, holidays, settings, tmp_path):
 
 
 def failing(exc):
+    """A scripted turn that raises the given error."""
+
     def raise_it(messages):
         raise exc
 
@@ -682,6 +687,8 @@ def test_another_validation_error_is_still_a_model_that_could_not_run(
 
 
 def retry_text(run, holidays, settings, tmp_path, first):
+    """Run a brief whose first reply is the one given; return the outcome
+    and the first and retry requests as text."""
     model = gw.ScriptedModel(
         script=[TOOLS, DONE, first, DONE, reply(good_draft(run)), WORDING_OK]
     )
@@ -700,15 +707,19 @@ def retry_text(run, holidays, settings, tmp_path, first):
 
 
 def extra_key(draft):
+    """The draft with a level it may not set."""
     return {**draft, "level": 3}
 
 
 def horizon_5(draft):
+    """The draft with its first figure at release horizon 5, which does not
+    exist."""
     first = {**draft["cited_figures"][0], "horizon": 5}
     return {**draft, "cited_figures": [first, *draft["cited_figures"][1:]]}
 
 
 def written_out(draft):
+    """The draft with a figure written out in its words."""
     return {**draft, "summary": "Expect 1,120 attendances."}
 
 
@@ -1046,6 +1057,8 @@ def test_two_reviewer_slips_fail_closed_without_the_investigator(
 
 
 def plant_value(value):
+    """A plant that cites the given value, which no tool returned."""
+
     def plant(draft, ledger):
         n = len(draft.cited_figures) + 1
         return draft.model_copy(

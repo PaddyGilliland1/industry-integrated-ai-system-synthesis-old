@@ -12,6 +12,7 @@ from .conftest import REPO
 
 @pytest.fixture(scope="module")
 def shown(replay_run, holidays):
+    """The scripted safeguard demonstrations, run once."""
     from ae_escalation import config as cf
 
     settings = cf.load_config(REPO / "config.json")
@@ -58,6 +59,7 @@ def test_a_planted_date_in_a_notification_is_caught(shown):
 
 
 def files():
+    """Every file in the repository outside the caches and environments."""
     skip = (".git", ".venv", ".pytest_cache", "__pycache__")
     return {
         p

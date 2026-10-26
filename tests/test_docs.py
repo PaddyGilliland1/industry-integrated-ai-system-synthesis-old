@@ -17,10 +17,12 @@ NAMES = ("paddy", "patrick", "gilliland", "pg ")
 
 @pytest.fixture(params=[SHEET, FORM], ids=["sheet", "form"])
 def doc(request):
+    """The text of each Reader B document."""
     return request.param.read_text(encoding="utf-8")
 
 
 def sentences(text):
+    """The prose sentences of a Markdown document."""
     prose = re.sub(r"^\s*(#|\||\[|- \[).*$", "", text, flags=re.M)
     prose = re.sub(r"\s+", " ", prose)
     return [s for s in re.split(r"(?<=[.?!])\s+", prose) if s.strip()]

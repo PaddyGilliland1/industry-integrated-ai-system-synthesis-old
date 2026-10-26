@@ -17,6 +17,7 @@ from .scripted import stand_in
 
 @pytest.fixture
 def result(replay_run, holidays, settings, tmp_path):
+    """Round 1's set, run through the scripted stand-in."""
     paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
     return rp.run_set(
         replay_run,
@@ -30,14 +31,18 @@ def result(replay_run, holidays, settings, tmp_path):
 
 @pytest.fixture
 def paths(settings, tmp_path):
+    """Round 1's paths under a temporary folder."""
     return rp.Paths.under(tmp_path, settings.llm_backend, "round1")
 
 
 def crit(*unmet):
+    """The six criteria, all met except those named."""
     return ap.Criteria(**{f: f not in unmet for f in ap.Criteria.model_fields})
 
 
 def scores(result, unmet=None):
+    """A score for every brief, all criteria met except those named per
+    brief."""
     unmet = unmet or {}
     return [
         aq.BriefScore(
@@ -195,6 +200,7 @@ def test_a_completed_set_needs_no_scores_for_briefs_not_verified(
 
 
 def rewrite(path, rows):
+    """Write rows to a CSV file, with their keys as the header."""
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -202,6 +208,7 @@ def rewrite(path, rows):
 
 
 def read_rows(path):
+    """Every row of a CSV file, as dicts."""
     with open(path, newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
 

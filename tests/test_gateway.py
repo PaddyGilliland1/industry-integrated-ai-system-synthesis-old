@@ -25,19 +25,23 @@ class Answer(BaseModel):
 
 @pytest.fixture
 def settings():
+    """The repository's config.json."""
     return cf.load_config(REPO / "config.json")
 
 
 @pytest.fixture
 def frontier(settings):
+    """The settings with the frontier backend chosen."""
     return settings.model_copy(update={"llm_backend": "frontier"})
 
 
 def ask(text="Say hello."):
+    """A short request for the model."""
     return [SystemMessage(content="You are terse."), HumanMessage(text)]
 
 
 def live_gateway(settings, tmp_path, script, log=None):
+    """A live gateway on a scripted model, recording to a temporary file."""
     return gw.ModelGateway.for_settings(
         settings,
         gw.RecordingStore(tmp_path / "rec.jsonl"),
@@ -428,6 +432,7 @@ def test_the_frontier_key_never_reaches_a_recording_or_the_log(
 
 
 def tags(digest):
+    """Ollama's list of models, with the given digest for ours."""
     return {
         "models": [
             {"name": "nomic-embed-text:latest", "digest": "0" * 64},
@@ -454,6 +459,7 @@ def ollama(digest, thinking):
 
 
 def with_effort(settings, effort):
+    """The settings with the local reasoning effort changed."""
     return settings.model_copy(
         update={
             "local": settings.local.model_copy(
@@ -616,6 +622,7 @@ def test_the_frontier_backend_asks_for_json_schema_structured_output(
 
 
 def calendar_tool():
+    """The calendar tool as a LangChain tool."""
     from langchain_core.tools import StructuredTool
 
     class CalendarRequest(BaseModel):
@@ -672,11 +679,14 @@ class Picky(Exception):
     client errors do."""
 
     def __init__(self, message, *, request):
+        """Hold the message and the request refused."""
         super().__init__(message)
         self.request = request
 
 
 def failing(exc):
+    """A scripted turn that raises the given error."""
+
     def raise_it(messages):
         raise exc
 
@@ -687,6 +697,7 @@ KEY = "local|nemotron-3.5-lightning:30b-a3b|r1|c001"
 
 
 def call_once(g):
+    """One Reviewer call through the gateway."""
     return g.call(
         run_id="r1",
         call_number=1,

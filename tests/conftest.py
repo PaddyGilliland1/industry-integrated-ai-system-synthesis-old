@@ -24,6 +24,7 @@ def raw():
 
 @pytest.fixture(scope="session")
 def flagged(raw):
+    """The PHS file, flagged and kept, once for the session."""
     return dt.flag_and_keep(raw)
 
 
@@ -38,11 +39,13 @@ def replay_run(flagged):
 
 @pytest.fixture(scope="session")
 def holidays():
+    """The frozen bank holidays, loaded and hash-checked."""
     return dt.load_bank_holidays(HOLIDAYS, HOLIDAYS_SHA256)
 
 
 @pytest.fixture
 def settings():
+    """The repository's config.json, as the code reads it."""
     from ae_escalation import config as cf
 
     return cf.load_config(REPO / "config.json")
