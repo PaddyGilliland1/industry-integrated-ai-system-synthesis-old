@@ -962,6 +962,81 @@ PROBES = [
         "refused",
         "SA-MA",
     ),
+    # The forms the live model wrote in the drafts code refused, each as
+    # it wrote it, then as the Investigator's prompt now gives it.
+    (
+        "a unit after a figure, as the live model wrote it",
+        "The models spread {A}%.",
+        [SPREAD],
+        "refused",
+        "{F2}%",
+    ),
+    (
+        "the figure alone, as the prompt gives it",
+        "The models spread {A}.",
+        [SPREAD],
+        "shown",
+        "The models spread 25.5% (spread of the four models' forecasts for "
+        "w/e 27 Jun 2021).",
+    ),
+    (
+        "attendances after a figure, as the live model wrote it",
+        "Demand starts at {A} attendances.",
+        [POINT],
+        "refused",
+        "{F2} attendances",
+    ),
+    (
+        "attendances left to the label, as the prompt gives it",
+        "Demand starts at {A}.",
+        [POINT],
+        "shown",
+        "Demand starts at 1,120 attendances (SA-MA forecast for w/e 27 Jun "
+        "2021).",
+    ),
+    (
+        "a release horizon in the words, as the live model wrote it",
+        "Check cover in release horizon 2.",
+        [],
+        "refused",
+        "release horizon",
+    ),
+    (
+        "the week as its token, as the prompt gives it",
+        "Check cover in {WEEK2}.",
+        [],
+        "shown",
+        "Check cover in w/e 04 Jul 2021.",
+    ),
+    (
+        "bare digits for the weeks, as the live model wrote them",
+        "The forecasts for horizons 1 to 4 broadly agree.",
+        [],
+        "refused",
+        "1",
+    ),
+    (
+        "the weeks as their tokens, as the prompt gives them",
+        "The forecasts from {WEEK1} to {WEEK4} broadly agree.",
+        [],
+        "shown",
+        "from w/e 27 Jun 2021 to w/e 18 Jul 2021 broadly agree.",
+    ),
+    (
+        "primary as a plain word, as the live model wrote it",
+        "The primary forecast is {A}.",
+        [POINT],
+        "refused",
+        "primary",
+    ),
+    (
+        "the primary model as its token, as the prompt gives it",
+        "{PRIMARY} is the model to plan on, and demand starts at {A}.",
+        [POINT],
+        "shown",
+        "SA-MA (the primary model) is the model to plan on, and demand starts "
+        "at 1,120 attendances (SA-MA forecast for w/e 27 Jun 2021).",
+    ),
 ]
 
 

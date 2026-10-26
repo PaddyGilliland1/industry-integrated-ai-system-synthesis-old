@@ -233,6 +233,64 @@ def test_the_investigator_is_told_each_phrase_code_refuses(
     assert named in PROMPTS["investigator"]["SYSTEM"]
 
 
+# A never-write line quotes a form code refuses and the form to write
+# instead: not "wrong", or not "wrong" or "wrong", but "right".
+PAIR = re.compile(r'not "([^"]+)"(?: or "([^"]+)")?, but "([^"]+)"')
+
+
+def never_write_pairs(agent="investigator"):
+    """Each (wrong, right) pair the agent's never-write lines quote."""
+    system = PROMPTS[agent]["SYSTEM"]
+    pairs = []
+    for wrong, other, right in PAIR.findall(system):
+        pairs += [(w, right) for w in (wrong, other) if w]
+    return pairs
+
+
+def found_in(text):
+    """What code refuses in a sentence that cites one forecast as {F1}."""
+    cited = figure(834, "T1", "point", model="SA-MA", horizon=1)
+    figures = [br.CitedFigure.model_validate(cited)]
+    return {p.found for p in ph.problems({"summary": text}, figures)}
+
+
+@pytest.mark.parametrize("wrong, right", never_write_pairs())
+def test_each_never_write_pair_is_refused_wrong_and_passed_right(wrong, right):
+    assert found_in(wrong), wrong
+    assert not found_in(right), right
+
+
+# What code found in the drafts the live model wrote and code refused.
+WRITTEN = ["{F1}%", "{F1} attendances", "release horizon", "primary"]
+
+
+def test_the_never_write_lines_quote_each_form_the_live_model_wrote():
+    found = set().union(*(found_in(w) for w, _ in never_write_pairs()))
+    assert set(WRITTEN) <= found
+    assert any(f.isdigit() for f in found)
+    assert "Never write these" in PROMPTS["investigator"]["SYSTEM"]
+
+
+def test_the_investigation_ends_with_a_word_not_a_draft():
+    # A free-text turn that ends the tool loop costs a whole draft's
+    # thinking, and a draft written there in prose carries its slips into
+    # the brief.
+    ask = PROMPTS["investigator"]["INVESTIGATE"]
+    assert "reply with just the word done" in ask
+    assert "do not write the brief yet" in ask
+    for retry in ("RETRY", "RETRY UNREADABLE"):
+        assert "when you are asked for the brief" in (
+            PROMPTS["investigator"][retry]
+        )
+
+
+def test_the_coordinator_is_told_the_forms_the_investigator_wrote():
+    system = PROMPTS["coordinator"]["SYSTEM"]
+    for form in ('"{F1}%"', '"{F1} attendances"', '"primary"'):
+        assert form in system, form
+    assert '"release horizon"' in system
+
+
 @pytest.mark.parametrize("agent", ["investigator", "coordinator"])
 def test_each_writer_is_told_never_to_echo_what_a_label_names(agent):
     system = PROMPTS[agent]["SYSTEM"]
