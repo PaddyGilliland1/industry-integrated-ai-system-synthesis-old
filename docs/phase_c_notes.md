@@ -189,3 +189,45 @@ logs each in the decision log.
       request matched and their outcomes unchanged.
 
 `effort` and `time_limit_s` join the frontier fields that P3-10 lists.
+
+## Build deviations, the replay cells (26 Oct 2026)
+
+Build choices from running the notebook's replay cells against the live recordings, recorded for
+review, not rulings by Paddy. Where one touches a ruled decision, it says so.
+
+11. **A draft refused inside the model call is named the code check.** Label round1's client
+    checked the typed reply against `BriefDraft` inside the call, so a draft the text rules refused
+    was recorded as a model error, and `BriefOutcome.cause` named it "the Investigator could not
+    run". A recorded `ValidationError` for `BriefDraft` is now named "the code check", the check
+    that refused it; any other model error keeps its old name. The client reads the reply in code,
+    after the call, so only round1's recordings have this shape.
+    - Reason: the Investigator did run, and both drafts in each of round1's three completed briefs
+      were refused by the rules on the text. The replay showed a cause that was not true.
+    - What does not change: round1's adequacy record keeps the wording it was written with, and the
+      notebook explains the two beside each other.
+    - Touches D-EVAL-20: G4's count by cause for round1 reads 3 by the code check, not 3 by a
+      model that could not run.
+12. **Each attempt names what refused it.** `Attempt.refused_by` gives one attempt's cause in the
+    words G4 counts causes in, or none when it passed both checks, and `BriefOutcome.cause` takes
+    the last attempt's. The notebook shows every attempt's, so a brief refused first by the code
+    check and then by the wording check says both.
+    - No amendment: the cause of a brief is unchanged apart from item 11.
+13. **Which retries went out blind.** `replay.blind_retries` reads a label's recordings and says, for
+    each run with a retry, whether the retry's first request has the same hash as the first
+    attempt's. A blind retry carries none of the problems the first draft was refused for.
+    - Reason: the notebook states that round1's retries never saw their problems, and that neither
+      round 2 set's did, so the claim needs an output.
+    - No amendment: it reads the recordings and changes nothing.
+14. **G4, G5 and G6 as section 1a words them.** `approval.g4_verdict` adds the planted figure,
+    caught at that figure, to the queue's G4 counts, so G4 is not met when the plant was never
+    shown caught. `approval.g5_verdict` holds the level to the rule's over the briefs written, and
+    gives no verdict when none was written. `approval.g6_verdict` needs all but one of the built
+    briefs approved without a factual edit and Reader B agreeing on at least three of the four; a
+    short count fails it whatever Reader B decides, and otherwise it waits on the reading.
+    - Reading: an approval with an edit that is not factual counts as approved without a factual
+      edit, as the goal's words read.
+    - No amendment: this implements D-EVAL-20 as ruled.
+15. **A brief with no staffing action says so.** Level 1 sets no staffing action, and the
+    coordinator's summary for such a brief now reads "Level 1 sets no staffing action, so nothing
+    reaches the outbox." It printed the outbox label for a brief that wrote nothing.
+    - No amendment: the actions and the outbox are unchanged.
