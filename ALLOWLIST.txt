@@ -114,3 +114,9 @@ approvals/adequacy_frontier_round2.csv
 figures/fig4_month_chart.png
 figures/fig5_goals_scorecard.png
 figures/fig6_flag_outcomes.png
+diagram/architecture.mmd
+diagram/value_chain.mmd
+diagram/weekly_cycle.mmd
+figures/fig1_architecture.png
+figures/fig2_value_chain.png
+figures/fig3_weekly_cycle.png

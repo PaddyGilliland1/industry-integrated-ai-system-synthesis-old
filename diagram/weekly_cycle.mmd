@@ -1,0 +1,33 @@
+---
+config:
+  theme: base
+  themeVariables:
+    fontSize: 15px
+    fontFamily: "DejaVu Sans, Arial, sans-serif"
+    primaryTextColor: "#0b0b0b"
+    lineColor: "#52514e"
+    edgeLabelBackground: "#ffffff"
+  flowchart:
+    curve: basis
+    htmlLabels: true
+    wrappingWidth: 200
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart LR
+%% Figure 3: one week, from the week's end to the manager's decision. The dates
+%% are the demand week's, w/e 13 Jun 2021, as the notebook prints them; the
+%% reply deadline is the assumed 48 hours at level 2, from 10:00 on release day.
+  W["<b>Week ends</b><br/>Sun 13 Jun 2021,<br/>the origin"]
+  R["<b>PHS release</b><br/>Tue 22 Jun 2021"]
+  F["<b>Forecast release<br/>horizons 1 to 4</b><br/>w/e 27 Jun to<br/>18 Jul 2021"]
+  L["<b>Flag, drift check,<br/>screen</b><br/>code sets the level"]
+  B["<b>Demand brief</b><br/>Investigator drafts,<br/>Reviewer checks"]
+  A["<b>Duty manager</b><br/>approves, edits or<br/>rejects; actions reply<br/>by Thu 24 Jun 2021"]
+  W -->|"9 days"| R --> F --> L --> B --> A
+  classDef code fill:#ffffff,stroke:#0b0b0b,stroke-width:2px
+  classDef agents fill:#fde68a,stroke:#b45309,stroke-width:2px
+  classDef person fill:#fecaca,stroke:#b91c1c,stroke-width:3px
+  class W,R,F,L code
+  class B agents
+  class A person

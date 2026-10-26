@@ -1,0 +1,70 @@
+---
+config:
+  theme: base
+  themeVariables:
+    fontSize: 15px
+    fontFamily: "DejaVu Sans, Arial, sans-serif"
+    primaryTextColor: "#0b0b0b"
+    lineColor: "#52514e"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#f7f7f5"
+    clusterBorder: "#bdbcb6"
+  flowchart:
+    curve: basis
+    htmlLabels: true
+    nodeSpacing: 28
+    rankSpacing: 46
+---
+flowchart TB
+%% Figure 1: code decides, the agents explain, a person approves. Each arrow's
+%% number is its row in the case study's interaction table, and each box names
+%% the prior project it comes from, or says it is new in this project. The
+%% lanes set no direction of their own, since Mermaid then draws a link into a
+%% lane to the lane's edge rather than to its box.
+  subgraph CODE["Code lane: decides, acts and records"]
+    DATA["Weekly PHS data<br/><i>real, OGL</i>"]
+    CLEAN["Clean, flag, keep<br/><i>AI Programming Foundations</i>"]
+    FC["Forecasts and back-test<br/><i>Statistical Analysis; GRU comparator<br/>from Deep Learning Systems, never shown</i>"]
+    CAP["Simulated seasonal capacity<br/><i>new, simulated</i>"]
+    LEVEL["Demand level rule:<br/>flag, surge or held<br/><i>new</i>"]
+    DRIFT["Drift check and latch<br/><i>new</i>"]
+    SCREEN["Screen<br/><i>Agentic AI Systems</i>"]
+    ACT["Assign, notify, track, escalate<br/><i>new; outbox, never sent</i>"]
+    AUDIT["Audit log and replay<br/><i>Agentic AI Systems</i>"]
+  end
+  subgraph AGENTS["Agents lane: explain"]
+    INV["Investigator<br/>language model, five read-only tools<br/><i>Agentic AI Systems</i>"]
+    REV["Reviewer<br/>code figure check, then<br/>language-model wording check<br/><i>Agentic AI Systems, extended</i>"]
+  end
+  subgraph PERSON["Person lane: approves"]
+    MGR["Duty manager<br/>approve, edit or reject<br/><i>approval queue from Agentic AI Systems</i>"]
+  end
+  DATA -->|"1 weeks released by the origin, SHA-256 checked"| CLEAN
+  CLEAN -->|"2 clean series, flags kept"| FC
+  FC -->|"3 primary forecasts, release horizons 1 to 4, released errors"| LEVEL
+  FC -->|"4 one-week-ahead forecast"| DRIFT
+  CAP -->|"5 capacity for each target week"| LEVEL
+  LEVEL -->|"6 flagged, or a surge or held level of 2 or more"| SCREEN
+  DRIFT -->|"7 the alarm sets the drift latch"| SCREEN
+  SCREEN -->|"8 each screened hospital and week"| INV
+  INV -->|"9 draft brief, each figure with its tool-call id"| REV
+  REV -->|"10 failed brief, once, problems named"| INV
+  REV -->|"11 verified brief"| MGR
+  REV -->|"12 not verified, do not act"| MGR
+  MGR -->|"13 edited brief, checked again"| REV
+  MGR -->|"14 approved brief and the level's actions"| ACT
+  MGR -->|"15 rejection, logged; nothing sent"| AUDIT
+  ACT -->|"16 actions, owners, outbox, acknowledgements"| AUDIT
+  classDef data fill:#eeeeee,stroke:#6b7280,stroke-width:2px
+  classDef apf fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+  classDef stat fill:#d1fae5,stroke:#047857,stroke-width:2px
+  classDef agentic fill:#fde68a,stroke:#b45309,stroke-width:2px
+  classDef new fill:#ffffff,stroke:#0b0b0b,stroke-width:2px,stroke-dasharray:5 3
+  classDef person fill:#fecaca,stroke:#b91c1c,stroke-width:3px
+  class DATA data
+  class CLEAN apf
+  class FC stat
+  class CAP,LEVEL,DRIFT,ACT new
+  class SCREEN,INV,REV,AUDIT agentic
+  class MGR person
+  linkStyle 11 stroke:#b91c1c,stroke-width:2.5px,stroke-dasharray:6 4
