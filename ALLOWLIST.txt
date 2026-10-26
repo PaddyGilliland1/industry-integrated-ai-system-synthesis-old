@@ -111,3 +111,6 @@ approvals/queue_frontier_round2.jsonl
 approvals/queue_frontier_round2.csv
 approvals/adequacy_local_round2.csv
 approvals/adequacy_frontier_round2.csv
+figures/fig4_month_chart.png
+figures/fig5_goals_scorecard.png
+figures/fig6_flag_outcomes.png
