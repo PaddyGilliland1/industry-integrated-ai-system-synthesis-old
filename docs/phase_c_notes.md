@@ -231,3 +231,40 @@ review, not rulings by Paddy. Where one touches a ruled decision, it says so.
     coordinator's summary for such a brief now reads "Level 1 sets no staffing action, so nothing
     reaches the outbox." It printed the outbox label for a brief that wrote nothing.
     - No amendment: the actions and the outbox are unchanged.
+
+## Build deviations, the evaluation and the figures (26 Oct 2026)
+
+Build choices recorded for review, not rulings by Paddy. Where one touches a ruled decision, it says so.
+
+16. **Reader B's decisions and the raters' marks are typed into two sheets.** The returned forms are
+    typed into `approvals/reader_b_<backend>_<label>.csv` (`brief_id`, `action`, the six criteria,
+    `factual_edit`, `note`) and `approvals/template_ratings_<backend>_<label>.csv` (`rater`, `week`,
+    `text`, the six criteria, `factual_error`). `approval.read_reader_b` and
+    `approval.reader_b_agreement` give G6's second half: the same decision on each of the four briefs
+    the rule picks, refusing a brief outside the four or one decided twice. `template.read_ratings`
+    maps each rater's Text A and Text B through the seeded hidden order to the agent's and the
+    template's text, and keeps only a factual error in the agent's text, as option A reads it.
+    - Reason: nothing read either form, so G6 could not count Reader B's agreement and Figure 7 had
+      no data.
+    - No amendment: this implements D-EVAL-19, D-EVAL-20 and D-ARCH-27 as ruled. Each sheet needs a
+      `!` line in `.gitignore` and an `ALLOWLIST.txt` line when it is added.
+17. **Tokens are counted on the calls that answered.** A failed call's record holds no token counts,
+    so the notebook's table of calls, tokens and model time labels its token columns "answered
+    calls", while model time covers every call.
+    - No amendment: the recordings are unchanged.
+18. **The README asks for Python 3.12 or higher.** Spec 1f, item 3 says 3.9 or higher, as the
+    Environment Setup tab asks. The pinned packages in `requirements.txt` need 3.12: numpy,
+    contourpy and networkx exclude 3.11. Python 3.12 meets the tab's 3.9 or higher.
+19. **Figure 4 is exported as `figures/fig4_month_chart.png`**, the name spec 1f gives it. The
+    notebook wrote it as `figures/month_attendances_and_4_hours.png` before, and that file stays
+    tracked, unchanged, until Paddy rules on deleting it.
+20. **The figure fixes.**
+    - Figure 5's G4 row says what section 1a asks: every approved brief passes, no brief that was not
+      verified is approved, and the plant is caught; its result counts the briefs not verified and
+      how many were approved, from `g4_verdict`.
+    - Figure 5's G6 row says Reader B's reading is pending until Reader B's sheet exists.
+    - Figures 2 and 6 and section 8 say "the mean steady year gave notice of 57.0 of 142.5 busy
+      hospital-weeks (40.0%)". The notebook computes the wording for Figure 6 and checks that Figure
+      2's Mermaid source states it word for word.
+    - Figure 3 carries a caption in the notebook and the README: its dates illustrate the release
+      timing for one replay week, and that week's brief was rejected.
