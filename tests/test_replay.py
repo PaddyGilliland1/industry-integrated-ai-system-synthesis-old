@@ -490,6 +490,41 @@ def test_the_runs_a_stopped_set_completed_replay_alone(
     assert len(ids) == 8 and ids[-1].endswith("-planted")
 
 
+def test_a_label_stopped_at_its_budget_replays_what_it_completed(
+    replay_run, holidays, settings, tmp_path
+):
+    # As the notebook replays every label: a stopped one gives the runs it
+    # completed and its stop, as the adequacy record states it.
+    paths = stopped_at_budget(replay_run, holidays, settings, tmp_path, 9)
+    result, stop = rp.replay_label(replay_run, holidays, settings, paths)
+    done = ["20191006-S314H", "20200322-Scotland"]
+    assert [o.run_id for o in result.outcomes] == done
+    assert result.planted is None
+    assert all(c.replayed for o in result.outcomes for c in o.calls)
+    assert stop.completed == done and stop.in_progress == "20200322-S314H"
+    assert stop.unfinished[0] == "20200322-S314H" and len(stop.unfinished) == 5
+    assert stop.designed_failure == "20210613-T101H-planted"
+    assert stop.line().startswith("Stopped at its budget: the live run")
+
+
+def test_a_label_that_completed_replays_whole_with_no_stop(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round2")
+    rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    result, stop = rp.replay_label(replay_run, holidays, settings, paths)
+    assert stop is None and len(result.outcomes) == 7
+    assert result.planted is not None
+    assert all(c.replayed for o in result.outcomes for c in o.calls)
+
+
 def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
     replay_run, holidays, settings, tmp_path
 ):

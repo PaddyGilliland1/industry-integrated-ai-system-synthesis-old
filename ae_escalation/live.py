@@ -61,7 +61,6 @@ from . import design as ds
 from datetime import datetime, timezone
 
 from .adequacy import (
-    BudgetStop,
     assess,
     budget_line,
     read_scores,
@@ -82,8 +81,8 @@ from .replay import (
     edit_reviewer,
     progress,
     queue_with_decisions,
+    replay_label,
     run_set,
-    set_runs,
     spent,
     started_budget,
     write_queue,
@@ -279,20 +278,6 @@ def scoring_round(out, backend, label):
     return 2, ""
 
 
-def _stop_of(run, stopped):
-    """A run stopped at its budget, as the adequacy record states it."""
-    ids = [run_id for _, run_id, _ in set_runs(run)]
-    failure = ids[-1]
-    done = stopped["completed"]
-    return BudgetStop(
-        reason=stopped["reason"],
-        completed=done,
-        in_progress=stopped["in_progress"],
-        unfinished=[r for r in ids[:-1] if r not in done],
-        designed_failure=None if failure in done else failure,
-    )
-
-
 def _adequacy(settings, paths):
     """Record the adequacy test from the reviewer's scores, in the round
     the records give, and release the approver's queue only when the
@@ -315,8 +300,7 @@ def _adequacy(settings, paths):
         print(f"not scored: {why}")
         return 2
     run, holidays = load_run(settings)
-    done = None if stopped is None else stopped["completed"]
-    result = run_set(run, holidays, settings, paths, live=False, only=done)
+    result, stop = replay_label(run, holidays, settings, paths)
     if stopped is not None and not paths.adequacy_scores.exists():
         if any(o.status == "verified" for o in result.outcomes):
             if not paths.adequacy_form.exists():
@@ -336,7 +320,6 @@ def _adequacy(settings, paths):
     except ValueError as exc:
         print(f"the scores sheet is not complete: {exc}")
         return 2
-    stop = None if stopped is None else _stop_of(run, stopped)
     budget = budget_line(started_budget(paths))
     try:
         record = assess(

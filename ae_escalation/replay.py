@@ -40,6 +40,7 @@ from pydantic import BaseModel
 from . import agents as ag
 from . import evaluation as ev
 from . import tools as tl
+from .adequacy import BudgetStop
 from .agents import BriefGraph, BriefOutcome, load_prompts
 from .approval import ApprovalQueue, Refused, read_decisions
 from .backtest import site_sizes
@@ -615,6 +616,40 @@ def run_set(
         backend=gateway.backend,
         model=gateway.model_name,
     )
+
+
+def stop_of(run, stopped):
+    """A run stopped at its budget, from its progress event, as the
+    adequacy record states it: the runs it completed, the one in progress,
+    the briefs it never finished and the designed failure if that never
+    ran either."""
+    ids = [rid for _, rid, _ in set_runs(run)]
+    failure = ids[-1]
+    done = stopped["completed"]
+    return BudgetStop(
+        reason=stopped["reason"],
+        completed=done,
+        in_progress=stopped["in_progress"],
+        unfinished=[r for r in ids[:-1] if r not in done],
+        designed_failure=None if failure in done else failure,
+    )
+
+
+def replay_label(run, holidays, settings, paths):
+    """A label's set replayed from its recordings, with no model: every run
+    when its live run completed; when it stopped at its budget, only the
+    runs it completed, since the rest were never recorded whole.
+
+    Returns
+    -------
+    tuple of (ReplaySetResult, BudgetStop or None)
+        The replay, and the stop as the adequacy record states it, or None
+        for a run that was not stopped at its budget.
+    """
+    stopped = budget_stop(paths)
+    done = None if stopped is None else stopped["completed"]
+    result = run_set(run, holidays, settings, paths, live=False, only=done)
+    return result, None if stopped is None else stop_of(run, stopped)
 
 
 def write_queue(result, paths, log=None):
