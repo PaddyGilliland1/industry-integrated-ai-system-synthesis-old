@@ -64,10 +64,9 @@ Python 3.12.3.
    Sections 5 to 7 replay the live runs from `recordings/`, so no language model runs and Ollama is
    not needed. The GRU comparator runs on the CPU.
 
-4. The tests run with pytest, installed separately:
+4. Run the tests:
 
    ```bash
-   pip install pytest==9.1.1
    python -m pytest
    ```
 
