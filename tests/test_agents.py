@@ -12,11 +12,10 @@ from pydantic import ValidationError
 
 from ae_escalation import agents as ag
 from ae_escalation import briefs as br
-from ae_escalation import config as cf
 from ae_escalation import gateway as gw
 from ae_escalation import tools as tl
 
-from .conftest import REPO
+from .conftest import local_settings
 from .scripted import (
     DONE,
     ORIGIN,
@@ -350,7 +349,7 @@ def test_the_tools_refuse_another_hospital_or_origin(
 
 
 def test_calls_past_the_cap_are_not_run(run, holidays, tmp_path):
-    settings = cf.load_config(REPO / "config.json")
+    settings = local_settings()
     capped = settings.model_copy(
         update={
             "agents": settings.agents.model_copy(update={"tool_call_cap": 2})

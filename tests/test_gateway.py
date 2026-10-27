@@ -10,10 +10,9 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from ae_escalation import config as cf
 from ae_escalation import gateway as gw
 
-from .conftest import REPO
+from .conftest import local_settings
 from .scripted import LOADED, ollama_wire, schema_asked
 
 FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
@@ -25,8 +24,8 @@ class Answer(BaseModel):
 
 @pytest.fixture
 def settings():
-    """The repository's config.json."""
-    return cf.load_config(REPO / "config.json")
+    """The repository's config.json on the local backend."""
+    return local_settings()
 
 
 @pytest.fixture

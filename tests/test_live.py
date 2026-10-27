@@ -11,10 +11,18 @@ from ae_escalation import gateway as gw
 from ae_escalation import live as lv
 from ae_escalation import replay as rp
 
-from .conftest import REPO
+from .conftest import REPO, local_config, local_settings
 from .scripted import LOADED, stand_in
 
 FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
+
+
+@pytest.fixture(autouse=True)
+def local_by_default(tmp_path, monkeypatch):
+    """The command line reads config.json unless told otherwise, and the
+    shipped file names frontier. These tests drive the local path unless
+    they pass a frontier config, so I point the default at a local copy."""
+    monkeypatch.setattr(lv, "CONFIG_PATH", local_config(tmp_path))
 
 
 def tags(digest, thinking=None):
@@ -132,6 +140,7 @@ def test_a_reasoning_setting_the_model_does_not_list_stops_the_run(
     digest = cf.load_config(REPO / "config.json").local.digest
     card = {"values": [False, True, "medium"], "default": True}
     raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
+    raw["llm_backend"] = "local"
     raw["local"]["reasoning_effort"] = "low"
     config = tmp_path / "low.json"
     config.write_text(json.dumps(raw), encoding="utf-8")
@@ -361,8 +370,10 @@ def test_the_digest_preflight_observed_is_in_every_request(
 
 
 def config_with(tmp_path, **agents):
-    """A copy of config.json with the agents' settings changed."""
+    """A copy of config.json on the local backend with the agents'
+    settings changed."""
     raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
+    raw["llm_backend"] = "local"
     raw["agents"].update(agents)
     path = tmp_path / "config.json"
     path.write_text(json.dumps(raw), encoding="utf-8")
@@ -441,7 +452,7 @@ def slipping():
 def stop_at_budget(tmp_path, run, holidays, model, calls, label="t1"):
     """Run the set live until its budget, counted in clock reads, is spent
     during model call calls + 1."""
-    settings = cf.load_config(REPO / "config.json")
+    settings = local_settings()
     paths = rp.Paths.under(tmp_path, "local", label)
     with pytest.raises(rp.BudgetExceeded):
         rp.run_set(
@@ -618,7 +629,7 @@ def test_an_edits_wording_check_is_recorded_live_and_replayed(
     assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 0
     paths = rp.Paths.under(tmp_path, "local", "t1")
     assert paths.edit_reviews.exists()
-    settings = cf.load_config(REPO / "config.json")
+    settings = local_settings()
     run, holidays = lv.load_run(settings)
     result = rp.run_set(run, holidays, settings, paths, live=False)
     again = rp.queue_with_decisions(result, paths, settings=settings)

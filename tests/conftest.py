@@ -1,5 +1,6 @@
 """Shared fixtures: the frozen data, loaded once for the tests that need it."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -43,9 +44,28 @@ def holidays():
     return dt.load_bank_holidays(HOLIDAYS, HOLIDAYS_SHA256)
 
 
-@pytest.fixture
-def settings():
-    """The repository's config.json, as the code reads it."""
+def local_settings():
+    """The repository's config.json with the local backend chosen. The
+    shipped file names frontier; the tests that drive the local path with a
+    stand-in model pin local here, and the frontier path has its own tests."""
     from ae_escalation import config as cf
 
-    return cf.load_config(REPO / "config.json")
+    shipped = cf.load_config(REPO / "config.json")
+    return shipped.model_copy(update={"llm_backend": "local"})
+
+
+def local_config(tmp_path):
+    """A copy of config.json naming the local backend, for the command
+    line, which reads a file."""
+    raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
+    path = tmp_path / "config_local.json"
+    path.write_text(
+        json.dumps({**raw, "llm_backend": "local"}), encoding="utf-8"
+    )
+    return str(path)
+
+
+@pytest.fixture
+def settings():
+    """The repository's config.json on the local backend."""
+    return local_settings()

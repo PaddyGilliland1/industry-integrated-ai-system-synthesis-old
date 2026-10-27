@@ -1,10 +1,12 @@
 """config.json, read once and checked by a Pydantic model.
 
-One value, llm_backend, chooses the model backend: local, the default, is
-Ollama on this machine with the model pinned by digest; frontier is the
-Claude API, used only with a stated case from the adequacy test
-(D-FRAME-03). The graph, tools, schema and Reviewer are the same on either,
-so only the model changes.
+One value, llm_backend, chooses the model backend: local is Ollama on this
+machine with the model pinned by digest; frontier is the Claude API, run
+live only with a stated case from the adequacy test (D-FRAME-03). The
+shipped config.json names frontier, as its set is the one approved; a file
+that names neither runs local. Replay reads the recordings and needs
+neither. The graph, tools, schema and Reviewer are the same on either, so
+only the model changes.
 
 The file names the variable that holds the frontier key, never the key.
 The key is read only from the git-ignored .env, as spec 2.5 says, never

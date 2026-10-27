@@ -26,9 +26,11 @@ def raw():
     return json.loads((REPO / "config.json").read_text(encoding="utf-8"))
 
 
-def test_the_shipped_config_runs_the_local_model_by_default():
+def test_the_shipped_config_names_the_frontier_backend():
+    # The frontier set is the one approved, so config.json names frontier;
+    # the recordings replay on either setting, and local stays one edit away.
     s = cf.load_config(REPO / "config.json")
-    assert s.llm_backend == "local"
+    assert s.llm_backend == "frontier"
     assert s.local.model == "nemotron-3.5-lightning:30b-a3b"
     assert s.local.digest.startswith("e7a64ff15fb1")
     assert s.local.temperature == 0
@@ -50,6 +52,7 @@ def test_the_backend_is_local_or_frontier_and_nothing_else(raw):
 
 
 def test_the_active_backend_names_its_model_and_digest(raw):
+    raw["llm_backend"] = "local"
     s = cf.Settings.model_validate(raw)
     assert (s.model_name, s.model_digest) == (s.local.model, s.local.digest)
     raw["llm_backend"] = "frontier"
@@ -119,9 +122,9 @@ def test_the_frontier_settings_are_the_ruled_ones():
     f = s.frontier
     assert f.temperature is None and f.max_tokens == 16000
     assert f.effort == "medium" and f.time_limit_s == 420
-    assert s.call_time_limit_s == s.agents.time_limit_s == 240
-    front = s.model_copy(update={"llm_backend": "frontier"})
-    assert front.call_time_limit_s == 420
+    assert s.call_time_limit_s == 420
+    local = s.model_copy(update={"llm_backend": "local"})
+    assert local.call_time_limit_s == s.agents.time_limit_s == 240
 
 
 def test_the_frontier_effort_is_a_level_the_model_lists(raw):
