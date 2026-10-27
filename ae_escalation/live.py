@@ -1,4 +1,4 @@
-"""The live run of the replay set, for the main session.
+"""The live run of the replay set, run by the operator.
 
     python -m ae_escalation.live briefs [--label round1] [--resume] \\
         [--budget-s 1200]
@@ -9,7 +9,7 @@
 
 "briefs" runs the seven replay briefs and the designed failure on the
 backend config.json names, recording every model call, then writes the
-adequacy form and scores sheet for the main session's reviewer. "adequacy"
+adequacy form and scores sheet for the adequacy reviewer. "adequacy"
 reads the reviewer's scores, records the adequacy test in approvals/ and,
 only when the verdict sends the set to approval, releases the approval
 queue for Paddy, so the record exists before he reads any brief. The round
@@ -150,8 +150,10 @@ def _stopped(exc, paths):
     new label starts with the briefs."""
     last = progress(paths)[-1]
     print(f"stopped: {exc}")
-    print(f"completed: {', '.join(last['completed']) or 'none'}")
-    print(f"in progress: {last['in_progress']}")
+    # A stop in notify's edit checks comes before notify notes its start,
+    # so the last event may be the briefs' completion, with no run lists.
+    print(f"completed: {', '.join(last.get('completed', [])) or 'none'}")
+    print(f"in progress: {last.get('in_progress', 'none')}")
     print(
         "the budget holds across a resume, so this run has none left: run "
         "the set again under a new label, python -m ae_escalation.live "
@@ -338,8 +340,8 @@ def _adequacy(settings, paths):
 
 
 def frontier_refusal(out, label):
-    """Why the frontier backend may not run the set as this label, or None
-    (D-FRAME-03): it runs only with the stated case, the local
+    """Why the frontier backend may not run the set as this label, or None:
+    it runs only with the stated case, the local
     set's adequacy record for the same label saying "Frontier case: yes",
     and only once on the replay set."""
     local = Paths.under(out, "local", label).adequacy_record
@@ -364,6 +366,9 @@ def frontier_refusal(out, label):
 def _choose(settings, out, label, chosen, initials):
     """Record the approver's choice of set, once both backends have run on
     the replay set and been scored, and release that set's queue."""
+    if chosen not in ("local", "frontier"):
+        print("give the set the approver chose: --set local or --set frontier")
+        return 2
     local = Paths.under(out, "local", label)
     other = Paths.under(out, "frontier", label)
     choice = Path(out) / "approvals" / f"set_choice_{label}.md"

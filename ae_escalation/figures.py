@@ -1,4 +1,4 @@
-"""The Reviewer's code figure check (D-SAFE-19, as amended).
+"""The Reviewer's code figure check.
 
 The brief's text holds no figure of the agent's own: each is a placeholder
 that code writes in with its label, and the words name no number, model,
@@ -616,8 +616,8 @@ def _stated(texts, fields, figures, failed):
 def requirement_problems(texts, figures, failed, ctx):
     """What a brief must state and does not: a demand brief, its primary
     model's forecast, in any field, as a cited figure that passed, found by
-    its measure, which the figure check has tied to its tool (build spec,
-    section 4). A surge or latch brief's forecasts are untrusted, so it is
+    its measure, which the figure check has tied to its tool. A surge or
+    latch brief's forecasts are untrusted, so it is
     never asked for one. Code writes the back-test error, the track record
     and the bank holidays as fixed lines, so no brief is asked to cite
     them."""

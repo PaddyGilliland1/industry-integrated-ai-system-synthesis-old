@@ -1,4 +1,4 @@
-"""The demand level and drift rules, as code (D-DATA-11, D-ARCH-24, D-ARCH-28).
+"""The demand level and drift rules, as code.
 
 Capacity is simulated: for each target week, the 90th percentile of the
 hospital's weekly attendances in the same 13-week window, centred on that
@@ -295,7 +295,7 @@ def drift_interval(run, t):
 
     It is the primary's one-week-ahead forecast plus or minus 1.96 standard
     deviations of its last 52 one-week errors known at the origin, at least
-    26 (D-ARCH-28). It is kept apart from the brief's 80% and 95% ranges.
+    26. It is kept apart from the brief's 80% and 95% ranges.
 
     Returns
     -------

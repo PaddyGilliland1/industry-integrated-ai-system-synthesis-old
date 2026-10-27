@@ -1,4 +1,4 @@
-"""The replay set runner (D-ARCH-25): the five named series at the six
+"""The replay set runner: the five named series at the six
 origins give seven briefs; the second reader's four and the two template
 weeks are picked by the stated rules; a designed failure plants a figure no
 tool returned; every run is recorded so it replays without the model. The
@@ -6,7 +6,7 @@ live side is a scripted stand-in: no test calls a language model."""
 
 import csv
 import json
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -17,7 +17,7 @@ from ae_escalation import gateway as gw
 from ae_escalation import replay as rp
 
 from .conftest import AFTER_ANY_RUN
-from .scripted import stand_in
+from .scripted import answer, stand_in
 
 # --- the set and its rules ---------------------------------------------------
 
@@ -332,6 +332,79 @@ def test_the_budget_is_checked_before_every_model_call(
         "20191006-S314H"
     ]
     assert stopped["in_progress"] == "20200322-Scotland"
+
+
+def interrupting(after):
+    """A stand-in that answers this many calls, then is interrupted, as by
+    Ctrl-C."""
+
+    def interrupt(messages):
+        """The operator's interrupt, mid-call."""
+        raise KeyboardInterrupt
+
+    return gw.ScriptedModel(script=[answer] * after + [interrupt])
+
+
+def test_an_interrupted_run_records_its_stop_and_the_time_spent(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    with pytest.raises(KeyboardInterrupt):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=interrupting(3),
+        )
+    last = rp.progress(paths)[-1]
+    assert last["event"] == "stopped" and last["spent_s"] is not None
+
+
+def progress_at(paths, *events):
+    """A progress file holding these (event, seconds ago, extra) entries."""
+    now = datetime.now(timezone.utc)
+    paths.progress.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        json.dumps(
+            {
+                "event": event,
+                "at": (now - timedelta(seconds=ago)).isoformat(),
+                "step": "briefs",
+                **extra,
+            }
+        )
+        for event, ago, extra in events
+    ]
+    paths.progress.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_killed_run_is_charged_the_time_since_it_started(tmp_path):
+    # A kill leaves no stop, only the start: a resume is charged the time
+    # since then, never a fresh budget.
+    paths = rp.Paths.under(tmp_path, "frontier", "t1")
+    progress_at(paths, ("started", 100, {}))
+    assert rp.spent(paths, "briefs") >= 100
+
+
+def test_a_killed_resume_adds_its_time_to_the_earlier_stops(tmp_path):
+    paths = rp.Paths.under(tmp_path, "frontier", "t1")
+    progress_at(
+        paths,
+        ("started", 500, {}),
+        ("stopped", 400, {"spent_s": 50.0}),
+        ("started", 30, {"resume": True}),
+    )
+    assert 80 <= rp.spent(paths, "briefs") < 90
+
+
+def test_a_completed_or_stopped_run_carries_its_recorded_spend(tmp_path):
+    paths = rp.Paths.under(tmp_path, "frontier", "t1")
+    progress_at(
+        paths, ("started", 500, {}), ("stopped", 400, {"spent_s": 50.0})
+    )
+    assert rp.spent(paths, "briefs") == 50.0
 
 
 def test_a_stopped_run_resumes_from_its_recordings_then_runs_live(

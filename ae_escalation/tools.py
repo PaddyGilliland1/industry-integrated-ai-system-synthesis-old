@@ -1,4 +1,4 @@
-"""The Investigator's read-only tools, and the code's screen, for Phase B.
+"""The Investigator's read-only tools, and the code's screen.
 
 Every tool takes a typed request and returns a typed result (Pydantic), and
 every request names as_of: the origin, the week ending of the latest week

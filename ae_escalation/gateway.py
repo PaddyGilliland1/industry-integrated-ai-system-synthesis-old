@@ -7,9 +7,11 @@ a timeout or a dropped connection, is recorded too, with the error's class,
 message and latency, so its number is never used again and the replay
 raises the same error at the same point. In replay it returns
 the recorded reply, or raises the recorded error, and calls no model; a
-missing recording or a changed request raises ReplayMiss, so a replay can
-never quietly differ from the run it repeats. Every call, with its prompt
-and reply or error, also goes to the append-only audit log.
+missing recording or a changed request raises ReplayMiss, and so does a
+shipped recording whose file no longer matches its SHA-256 in
+recordings_manifest.tsv, so a replay can never quietly differ from the run
+it repeats. Every call, with its prompt and reply or error, also goes to
+the append-only audit log.
 
 I adapted these from Agentic AI Systems (agentic_system.py): ModelGateway
 with RecordingStore for record and exact replay, AuditLog for the JSONL
@@ -17,7 +19,7 @@ trail, call_with_deadline for the time limit, parse_structured for reading
 a typed answer, and ScriptedModel, the stand-in that plays scripted replies
 so the safeguards can be tested with no model. The change here is the
 backend switch: the recording key and record name the backend, so local and
-frontier runs of the same replay set sit side by side (D-FRAME-03).
+frontier runs of the same replay set sit side by side.
 """
 
 import hashlib
@@ -36,7 +38,7 @@ from openai import LengthFinishReasonError
 from openai.lib._parsing import type_to_response_format_param
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from .config import ENV_PATH, frontier_key
+from .config import ENV_PATH, REPO, frontier_key
 
 # --- the audit log -----------------------------------------------------------
 
@@ -77,7 +79,8 @@ class ReplayMiss(RuntimeError):
 
 
 class BudgetExceeded(RuntimeError):
-    """A live run reached its time budget, held under 15 minutes."""
+    """A live run reached its time budget: config.json's, under 15 minutes,
+    or one briefs run's --budget-s, at most 30."""
 
 
 class Budget:
@@ -116,6 +119,64 @@ class Budget:
                 f"({spent:.0f} s spent)"
             )
         return self.limit_s - spent
+
+
+# The SHA-256 of every shipped recording, by path relative to this file's
+# folder. The request hash stops a replay whose request has changed; this
+# stops one whose recorded reply has changed, which no request hash sees.
+RECORDINGS_MANIFEST = REPO / "recordings_manifest.tsv"
+
+
+def sha256_of(path):
+    """A file's SHA-256, as hex."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def read_recordings_manifest(manifest):
+    """The manifest's files and their SHA-256, by path relative to its
+    folder; none when there is no manifest."""
+    manifest = Path(manifest)
+    if not manifest.exists():
+        return {}
+    rows = {}
+    for line in manifest.read_text(encoding="utf-8").splitlines()[1:]:
+        if line.strip():
+            name, digest = line.split("\t")[:2]
+            rows[name] = digest
+    return rows
+
+
+def write_recordings_manifest(manifest, paths):
+    """Write a manifest of these files, each by its path relative to the
+    manifest's folder, with its SHA-256 and size."""
+    manifest = Path(manifest)
+    base = manifest.parent.resolve()
+    lines = ["path\tsha256\tbytes"]
+    for path in sorted(Path(p) for p in paths):
+        name = path.resolve().relative_to(base).as_posix()
+        lines.append(f"{name}\t{sha256_of(path)}\t{path.stat().st_size}")
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def check_recording(path):
+    """Raise ReplayMiss when a recording the manifest lists has changed or
+    gone. A file it does not list, such as a new label's, is not checked."""
+    manifest = Path(RECORDINGS_MANIFEST)
+    try:
+        name = (
+            Path(path).resolve().relative_to(manifest.parent.resolve())
+        ).as_posix()
+    except ValueError:
+        return
+    expected = read_recordings_manifest(manifest).get(name)
+    if expected is None:
+        return
+    found = sha256_of(path) if Path(path).exists() else "missing"
+    if found != expected:
+        raise ReplayMiss(
+            f"the recording {name} has changed since it was recorded: its "
+            f"SHA-256 is {found}, where {manifest.name} holds {expected}"
+        )
 
 
 class RecordingStore:
@@ -370,6 +431,8 @@ class ModelGateway:
         """Hold the backend, model, digest, store and limits."""
         if live and chat_model is None:
             raise ValueError("a live gateway needs a chat model")
+        if not live:
+            check_recording(store.path)
         self.backend = backend
         self.model_name = model_name
         self.digest = digest
@@ -718,11 +781,12 @@ def raw_text(message):
     return text
 
 
-def read_structured(message, schema, context=None):
+def read_structured(message, schema, context=None, whole=False):
     """The schema's object from a reply, from a tool call's arguments or
     from JSON in the text with or without a code fence, with why it could
     not be read and the raw reply, so a retry is never blind.
-    context goes to the schema's validators.
+    context goes to the schema's validators. whole=True takes the text only
+    when all of it, or all of one code fence, is the one JSON object.
 
     Returns
     -------
@@ -750,6 +814,19 @@ def read_structured(message, schema, context=None):
         return None, problems or ["the reply is empty"], raw
     decoder = json.JSONDecoder()
     for text in [m.strip() for m in _FENCE.findall(content)] + [content]:
+        if whole:
+            text = text.strip()
+            try:
+                found, end = decoder.raw_decode(text)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if end != len(text) or not isinstance(found, dict):
+                continue
+            try:
+                return schema.model_validate(found, context=context), [], raw
+            except ValidationError as exc:
+                problems = problems or problems_of(exc)
+            continue
         for start in (i for i, ch in enumerate(text) if ch == "{"):
             try:
                 found, _ = decoder.raw_decode(text, start)
@@ -758,6 +835,8 @@ def read_structured(message, schema, context=None):
                 problems = problems or problems_of(exc)
             except (json.JSONDecodeError, TypeError):
                 continue
+    if whole and not problems:
+        return None, ["the reply is not one JSON object alone"], raw
     return None, problems or ["the reply holds no JSON object"], raw
 
 

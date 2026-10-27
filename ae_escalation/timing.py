@@ -4,7 +4,7 @@ Public Health Scotland publishes each week on the Tuesday 9 days after its
 Sunday week ending. An origin is the latest week released; every rule and tool
 works as of an origin and sees only the weeks up to it. The four release
 horizons are the next four week endings after the release, which are data
-horizons 2 to 5 (D-ARCH-23).
+horizons 2 to 5.
 """
 
 import numpy as np

@@ -1,8 +1,7 @@
-"""The adequacy test (D-FRAME-03; build spec, section 2, item 5): a brief is
-adequate if it passes the code figure check and meets at least 5 of the 6
-approval criteria, as the main session's reviewer judges it. Fewer than 6
-of 7 adequate after one bounded prompt-tuning round is the stated case for
-the frontier backend."""
+"""The adequacy test: a brief is adequate if it passes the code figure
+check and meets at least 5 of the 6 approval criteria, as an AI reviewer
+judges it. Fewer than 6 of 7 adequate after one bounded prompt-tuning
+round is the stated case for the frontier backend."""
 
 import csv
 

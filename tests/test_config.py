@@ -186,7 +186,7 @@ def test_the_frontier_key_is_read_from_the_env_file(tmp_path, raw):
 
 
 def test_a_key_exported_in_the_shell_is_never_used(tmp_path, raw, monkeypatch):
-    # Spec 2.5 reads the key from .env only, so a shell's exported key can
+    # The key is read from .env only, so a shell's exported key can
     # never bill another account without notice.
     s = cf.Settings.model_validate({**raw, "llm_backend": "frontier"})
     monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
@@ -211,6 +211,16 @@ def test_the_settings_never_hold_the_key(tmp_path, raw):
 
 
 def test_dot_env_is_git_ignored_and_never_tracked():
+    # A download without .git has nothing to ask, so the check is skipped
+    # there; in a clone it runs.
+    inside = subprocess.run(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        cwd=REPO,
+        check=False,
+        capture_output=True,
+    )
+    if inside.returncode != 0:
+        pytest.skip("not a git checkout, so .gitignore cannot be asked")
     ignored = subprocess.run(
         ["git", "check-ignore", "-q", ".env"], cwd=REPO, check=False
     )

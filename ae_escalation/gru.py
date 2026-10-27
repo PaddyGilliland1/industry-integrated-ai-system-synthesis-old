@@ -1,6 +1,6 @@
 """The GRU comparator: a small seeded GRU on the CPU, run beside the simple
 models on the five named series. It never sets the flag and is never shown to
-managers (D-ARCH-26).
+managers.
 
 The set-up is the data test's, so its figures reproduce: one GRU layer of 16
 units reads the latest 12 weeks scaled by the 52-week mean with calendar

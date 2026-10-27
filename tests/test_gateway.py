@@ -892,3 +892,56 @@ def test_a_replayed_error_names_the_recorded_message(settings, tmp_path):
         call_once(replay)
     live_text = "KeyError: 'x'"
     assert info.value.call_record.error == live_text
+
+
+# --- the shipped recordings are pinned by hash -------------------------------
+
+
+def test_a_changed_reply_in_a_listed_recording_stops_the_replay(
+    settings, tmp_path, monkeypatch
+):
+    # The request hash catches a changed request; the manifest's SHA-256
+    # catches a changed reply, which the request hash cannot.
+    gateway = live_gateway(settings, tmp_path, [AIMessage(content="Hello.")])
+    gateway.call(
+        run_id="r", call_number=1, agent="a", purpose="p", messages=ask()
+    )
+    manifest = tmp_path / "recordings_manifest.tsv"
+    gw.write_recordings_manifest(manifest, [tmp_path / "rec.jsonl"])
+    monkeypatch.setattr(gw, "RECORDINGS_MANIFEST", manifest)
+    replay = gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "rec.jsonl"), live=False
+    )
+    reply, _ = replay.call(
+        run_id="r", call_number=1, agent="a", purpose="p", messages=ask()
+    )
+    assert reply.content == "Hello."
+    path = tmp_path / "rec.jsonl"
+    path.write_text(path.read_text().replace("Hello.", "Goodbye."))
+    with pytest.raises(gw.ReplayMiss, match="has changed since"):
+        gw.ModelGateway.for_settings(
+            settings, gw.RecordingStore(path), live=False
+        )
+
+
+def test_an_unlisted_recording_replays_unchecked(settings, tmp_path):
+    gateway = live_gateway(settings, tmp_path, [AIMessage(content="Hi.")])
+    gateway.call(
+        run_id="r", call_number=1, agent="a", purpose="p", messages=ask()
+    )
+    gw.ModelGateway.for_settings(
+        settings, gw.RecordingStore(tmp_path / "rec.jsonl"), live=False
+    )
+
+
+def test_the_shipped_manifest_holds_every_recording_as_it_is():
+    listed = gw.read_recordings_manifest(gw.RECORDINGS_MANIFEST)
+    shipped = sorted(
+        p.relative_to(gw.RECORDINGS_MANIFEST.parent).as_posix()
+        for p in (gw.RECORDINGS_MANIFEST.parent / "recordings").rglob("*")
+        if p.is_file()
+    )
+    assert sorted(listed) == shipped
+    for name, digest in listed.items():
+        path = gw.RECORDINGS_MANIFEST.parent / name
+        assert gw.sha256_of(path) == digest, name

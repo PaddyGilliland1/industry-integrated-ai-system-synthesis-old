@@ -4,6 +4,7 @@ manager marked; a "not verified" brief never approved."""
 
 import csv
 import json
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -498,6 +499,41 @@ def test_code_marks_a_changed_cited_figure_set_as_factual(
     )
     item = queue(tmp_path, verified).decide(decide("nw", "edit", edited=fewer))
     assert item.decisions[-1].factual_edit
+
+
+def test_code_marks_an_edit_that_swaps_two_figures_as_factual(good):
+    # The same figures, stated in another order, say something else.
+    field, text = next(
+        (f, t)
+        for f, t in good.texts().items()
+        if not f.startswith("watch_points")
+        and len(set(re.findall(r"\{F\d+\}", t))) >= 2
+    )
+    first, second = list(dict.fromkeys(re.findall(r"\{F\d+\}", text)))[:2]
+    swapped_text = (
+        text.replace(first, "{X}")
+        .replace(second, first)
+        .replace("{X}", second)
+    )
+    swapped = edited_copy(good, **{field: swapped_text})
+    assert ap.factual_changes(good, swapped)
+
+
+def test_code_marks_a_reordered_cited_figure_list_as_factual(good):
+    figures = good.model_dump(mode="json")["cited_figures"]
+    reordered = edited_copy(
+        good, cited_figures=[figures[1], figures[0], *figures[2:]]
+    )
+    assert ap.factual_changes(good, reordered)
+
+
+def test_code_marks_a_figure_moved_to_another_field_as_factual(good):
+    moved = edited_copy(
+        good,
+        summary=good.summary.replace("{F1}", "it"),
+        model_agreement=good.model_agreement + " It starts at {F1}.",
+    )
+    assert ap.factual_changes(good, moved)
 
 
 def test_the_approver_may_still_declare_a_factual_edit(

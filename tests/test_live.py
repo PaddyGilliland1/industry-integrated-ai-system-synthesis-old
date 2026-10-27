@@ -1,4 +1,4 @@
-"""The live run's command line, for the main session. Here it runs with the
+"""The live run's command line, for the operator. Here it runs with the
 scripted stand-in and a fake Ollama listing, so no test calls a model."""
 
 import csv
@@ -634,6 +634,15 @@ def test_an_edits_wording_check_is_recorded_live_and_replayed(
     result = rp.run_set(run, holidays, settings, paths, live=False)
     again = rp.queue_with_decisions(result, paths, settings=settings)
     assert again.item(row["brief_id"]).state == "approved with edit"
+    # The edits replay with the generation settings they were recorded
+    # with, as the briefs do, whatever config.json now says.
+    changed = settings.model_copy(
+        update={"local": settings.local.model_copy(update={"num_predict": 99})}
+    )
+    result = rp.run_set(run, holidays, changed, paths, live=False)
+    again = rp.queue_with_decisions(result, paths, settings=changed)
+    assert again.item(row["brief_id"]).state == "approved with edit"
+    rp.coordinate_approved(again, changed, paths, live=False)
 
 
 # --- the warm-up, outside the recordings and the budget ----------------------
@@ -816,3 +825,22 @@ def test_a_resume_keeps_the_budget_its_run_started_with(
     other = [*resume, "--budget-s", "1200"]
     assert lv.main(other, chat_model=stand_in(), fetch=pinned) == 2
     assert "the budget holds across a resume" in capsys.readouterr().out
+
+
+def test_choose_without_a_set_is_refused_before_anything_runs(
+    tmp_path, capsys
+):
+    args = ["choose", "--label", "t1", "--initials", "PG"]
+    assert lv.main([*args, "--out", str(tmp_path)]) == 2
+    assert "--set local or --set frontier" in capsys.readouterr().out
+
+
+def test_a_budget_stop_after_a_completed_step_says_what_it_can(
+    tmp_path, capsys
+):
+    # A stop during notify's edit checks comes before notify notes its
+    # start, so the last progress event can be the briefs' completion.
+    paths = rp.Paths.under(tmp_path, "local", "t1")
+    rp.note_progress(paths, "completed", step="briefs", spent_s=1.0)
+    assert lv._stopped(gw.BudgetExceeded("budget"), paths) == 3
+    assert "completed: none" in capsys.readouterr().out

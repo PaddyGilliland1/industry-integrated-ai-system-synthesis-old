@@ -2,14 +2,14 @@
 
 One value, llm_backend, chooses the model backend: local is Ollama on this
 machine with the model pinned by digest; frontier is the Claude API, run
-live only with a stated case from the adequacy test (D-FRAME-03). The
+live only with a stated case from the adequacy test. The
 shipped config.json names frontier, as its set is the one approved; a file
 that names neither runs local. Replay reads the recordings and needs
 neither. The graph, tools, schema and Reviewer are the same on either, so
 only the model changes.
 
 The file names the variable that holds the frontier key, never the key.
-The key is read only from the git-ignored .env, as spec 2.5 says, never
+The key is read only from the git-ignored .env, never
 from the shell's environment, so a key exported for something else cannot
 bill a frontier run without notice. It is read at the moment a
 live frontier call needs it, and is never stored in the settings, logged
@@ -83,7 +83,7 @@ class LocalBackend(_Frozen):
 
     model: str = Field(min_length=1)
     # The digest Ollama lists for the model, so a run traces to the exact
-    # weights (D-FRAME-02 pins e7a64ff15fb1, its first 12 characters).
+    # weights, e7a64ff15fb1 in its first 12 characters.
     digest: str = Field(pattern=DIGEST)
     temperature: float = Field(ge=0, le=2)
     endpoint: str = Field(pattern=r"^https?://")
@@ -132,10 +132,11 @@ class FrontierBackend(_Frozen):
 
 class AgentSettings(_Frozen):
     tool_call_cap: int = Field(gt=0)
-    # One retry after a failed check, as D-SAFE-19 rules.
+    # One retry after a failed check, as the Reviewer's rule sets.
     retries: Literal[1] = 1
     time_limit_s: float = Field(gt=0)
-    # Every run stays under 15 minutes (build spec, section 3).
+    # config.json's budget stays under 15 minutes; --budget-s may raise one
+    # briefs run to 30, and the run's record says so.
     run_budget_s: float = Field(gt=0, le=900)
 
 
@@ -182,6 +183,13 @@ class Settings(_Frozen):
     """Everything config.json holds. It never holds a key."""
 
     llm_backend: Literal["local", "frontier"] = "local"
+    # Who writes a brief's explanation. The template comparison, judged by
+    # a rule set before the ratings, failed in the demand week; by that rule
+    # the template writes it by default, and the agent only in latched
+    # weeks. "agent" has the agent write every brief, as the replay set ran.
+    explanation: Literal["agent", "template_by_default"] = (
+        "template_by_default"
+    )
     local: LocalBackend
     frontier: FrontierBackend
     agents: AgentSettings

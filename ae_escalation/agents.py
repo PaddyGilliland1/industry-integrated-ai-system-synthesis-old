@@ -1,10 +1,10 @@
 """The agents: the Investigator and the Reviewer, wired as a LangGraph graph.
 
-The screen (code, from Phase A) leads to the Investigator, which drafts the
+The screen, which is code, leads to the Investigator, which drafts the
 demand brief through the typed read-only tools, each as of the origin. The
 Reviewer then runs the code figure check (figures.check_brief) and, only if
 that passes, the wording check: a code screen for the words the MHRA lists
-as indicative of a device (D-ETHICS-11), then the language model's check for
+as indicative of a device, then the language model's check for
 claims of cause without a tool basis and anything that reads as an
 instruction to a clinician. A failure allows one retry, with the problems
 named. A brief that fails again is "not verified, do not act": it reaches
@@ -29,7 +29,7 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, Strict, ValidationError
 
 from . import placeholders as ph
 from . import tools as tl
@@ -96,12 +96,14 @@ REQUESTS = {
     "get_calendar": tl.CalendarRequest,
 }
 # The words the MHRA lists as indicative of a medical device, which every
-# brief avoids (D-ETHICS-11; MHRA, 2023, PDF p. 20).
+# brief avoids (MHRA, 2023, PDF p. 20).
+# Each pattern catches every form of its word: "predict" with no leading
+# word boundary, so "unpredictable" and "predictive" are caught too.
 DEVICE_WORDS = [
-    (r"\bpredict(?:s|ed|ing|ion|ions)?\b", "says predict, not forecast"),
+    (r"predict\w*", "says predict, not forecast"),
     (r"\bprognos(?:is|es|tic)\b", "says prognosis"),
     (r"\btriage\w*", "says triage"),
-    (r"\brisk of\b", 'says "risk of"'),
+    (r"\brisks?\s+of\b", 'says "risk of"'),
 ]
 
 
@@ -516,7 +518,9 @@ class WordingVerdict(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    passes: bool
+    # Strict, so a pass written as a word such as "yes" is a slip, not a
+    # pass. The JSON schema the requests carry is unchanged by it.
+    passes: Annotated[bool, Strict()]
     problems: list[str] = Field(default_factory=list)
 
 
@@ -591,7 +595,20 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
             errors.append(f"model error: {error_text(exc)}")
             continue
         records.append(record)
-        verdict, unread, raw = read_structured(reply, WordingVerdict)
+        # The verdict must be the whole reply, so a form quoted inside prose
+        # is never read as the Reviewer's answer.
+        verdict, unread, raw = read_structured(
+            reply, WordingVerdict, whole=True
+        )
+        if verdict is not None and verdict.passes and verdict.problems:
+            # The prompt passes a brief only when all three checks hold, so
+            # a pass that names problems contradicts itself; it is read as a
+            # slip, never as a pass that drops the problems.
+            unread = [
+                "the verdict passes the brief yet names problems, which "
+                "cannot both hold: " + "; ".join(verdict.problems)
+            ]
+            verdict = None
         if verdict is not None:
             break
         slips.append("; ".join(unread))

@@ -1,7 +1,7 @@
-"""The template brief (D-ARCH-27, option A): a fixed fill-in-the-blanks
-text that code fills from the same tool results the Investigator uses, with
-the seven fields the build spec lists in section 1b, and the comparison's
-pass rule."""
+"""The template brief, option A: a fixed fill-in-the-blanks text that code
+fills from the same tool results the Investigator uses, with the seven
+fields fixed before any brief existed; the comparison's pass rule; and the
+rule it then sets for who writes a brief's explanation."""
 
 import csv
 import re
@@ -398,3 +398,68 @@ def test_the_shipped_ratings_hold_both_raters_on_both_weeks():
     assert sorted((r.rater, r.week) for r in ratings) == sorted(
         (rater, week) for rater in tp.RATERS for week in tp.WEEKS
     )
+
+
+# --- the template rule: who writes a brief's explanation ---------------------
+
+
+def replay_set_entries(run):
+    """The replay set's seven screened entries."""
+    from ae_escalation import replay as rp
+
+    return rp.replay_entries(run)
+
+
+def test_the_shipped_config_applies_the_template_rule(settings):
+    assert settings.explanation == "template_by_default"
+
+
+def test_a_demand_week_takes_the_template_and_a_latched_week_the_agent(
+    replay_run, settings
+):
+    # The comparison failed in the demand week, so by the rule set before
+    # the ratings the template writes a flag week's explanation; drift and
+    # surge weeks, which are latched, keep the agent.
+    writers = {
+        (e.kind, tp.explanation_writer(e, settings))
+        for e in replay_set_entries(replay_run)
+    }
+    assert writers == {
+        ("demand", "template"),
+        ("latch", "agent"),
+        ("surge", "agent"),
+    }
+
+
+def test_the_rule_can_be_switched_back_to_the_agent(replay_run, settings):
+    back = settings.model_copy(update={"explanation": "agent"})
+    assert {
+        tp.explanation_writer(e, back) for e in replay_set_entries(replay_run)
+    } == {"agent"}
+
+
+class RefusingGraph:
+    """A brief graph that must not be asked: a template week makes no
+    model call."""
+
+    def __init__(self):
+        """Count the runs asked for."""
+        self.asked = []
+
+    def run(self, as_of, hospital, run_id):
+        """Record the run asked for, and answer with its id."""
+        self.asked.append(run_id)
+        return run_id
+
+
+def test_a_template_week_is_written_by_code_with_no_model_call(
+    replay_run, settings
+):
+    graph = RefusingGraph()
+    for e in replay_set_entries(replay_run):
+        brief = tp.weekly_brief(replay_run, e, settings, graph)
+        if e.kind == "demand":
+            assert brief == tp.template_brief(replay_run, e)
+        else:
+            assert brief == f"{e.as_of:%Y%m%d}-{e.hospital}"
+    assert len(graph.asked) == 5

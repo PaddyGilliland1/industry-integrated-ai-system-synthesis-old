@@ -2,7 +2,7 @@
 
 Paddy approves, edits or rejects each replay brief himself, with his
 initials and a timestamp, and records which of the six approval criteria
-each brief met (D-EVAL-19; build spec, section 2, item 6). Only a verified
+each brief met. Only a verified
 brief can be approved. Every edit re-runs the code figure check, then the
 device-word screen and the Reviewer's wording check, before it can be
 approved; an edit that fails comes back to the manager marked
@@ -50,9 +50,9 @@ class Criterion(BaseModel):
     test: str
 
 
-# The six approval criteria, written before any brief existed (build spec,
-# section 2, item 6). Paddy, the second reader, the adequacy test and the
-# template comparison all use these.
+# The six approval criteria, written before any brief existed. The
+# approver, the second reader, the adequacy test and the template
+# comparison all use these.
 CRITERIA = (
     Criterion(
         field="figures_correct",
@@ -241,6 +241,27 @@ def _figure_set(figures):
     )
 
 
+def _stated(draft):
+    """Field by field and in order, what a text states: each figure
+    placeholder as the cited figure it resolves to, each other token as
+    itself. Fields that state nothing are left out, so a reworded watch
+    point with no figure is not a change of fact."""
+    figures = [
+        tuple(str(v) for v in f.model_dump(mode="json").values())
+        for f in draft.cited_figures
+    ]
+    out = {}
+    for field, text in draft.texts().items():
+        stated = []
+        for m in ph.PLACEHOLDER.finditer(text):
+            n = int(m.group("n")) if m.group("n") else 0
+            known = 0 < n <= len(figures)
+            stated.append(figures[n - 1] if known else m.group(0))
+        if stated:
+            out[field] = stated
+    return out
+
+
 def factual_changes(base, draft):
     """What an edit changed that makes it factual, found by code: the cited
     figures, or the figures and tokens its text states. A correction of a
@@ -252,6 +273,9 @@ def factual_changes(base, draft):
         changes.append("the cited figures changed")
     if _facts(base.texts().values()) != _facts(draft.texts().values()):
         changes.append("a figure, date, level or hospital in the text changed")
+    if not changes and _stated(base) != _stated(draft):
+        # The same figures, swapped or moved, say something else.
+        changes.append("the text states its figures in another order or field")
     return changes
 
 
@@ -622,7 +646,7 @@ class ApprovalQueue:
         return out
 
 
-# --- G4, G5 and G6 as the build spec's section 1a words them -----------------
+# --- G4, G5 and G6 as the goals word them -----------------------------------
 
 # G6's second reader reads four briefs and must agree with the approver on at
 # least three of them.
@@ -689,8 +713,8 @@ DECISION_COLUMNS = (
     *[c.field for c in CRITERIA],
     "note",
     "edited_file",
-    # "yes" only if the approver opts out and the decisions are simulated
-    # (D-EVAL-19); blank is no.
+    # "yes" only if the approver opts out and the decisions are simulated;
+    # blank is no.
     "simulated",
 )
 
@@ -795,7 +819,7 @@ def _decision(row, folder):
     )
 
 
-# --- Reader B, the second reader (D-EVAL-19) ---------------------------------
+# --- Reader B, the second reader --------------------------------------------
 
 
 class ReaderBDecision(BaseModel):

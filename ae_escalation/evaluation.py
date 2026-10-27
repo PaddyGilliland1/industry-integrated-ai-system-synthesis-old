@@ -1,8 +1,8 @@
-"""The evaluation: goals G1, G2, G3, G7 and G8 as the spec words them, the
+"""The evaluation: goals G1, G2, G3, G7 and G8 as the goals word them, the
 flag's calibration, the pressure match, the month tables, the replay set,
 the level by site and the sensitivity table.
 
-G4, G5 and G6 concern the demand briefs, which Phase B builds. Every figure
+G4, G5 and G6 concern the demand briefs, which the agents write. Every figure
 here is in-sample: the design was tuned on the same 2015 to 2026 data. The
 goal measures follow probe 7 (probe7.py), so its figures reproduce.
 """
@@ -814,8 +814,7 @@ def sensitivity(wide, qs=(0.80, 0.90, 0.95)):
     simulated capacity at each percentile in qs, in all years and the steady
     years.
 
-    It shows what changing the setting would mean (D-DATA-10, carried into
-    D-DATA-11). wide is not changed.
+    It shows what changing the setting would mean. wide is not changed.
     """
     rows = []
     for q in qs:
@@ -843,8 +842,7 @@ def sensitivity(wide, qs=(0.80, 0.90, 0.95)):
 
 def level_by_site(frame, sizes, names):
     """Return each hospital's share of steady-year outlooks raised, with its
-    flags borne out against its base rate, largest raised share first
-    (D-ETHICS-10)."""
+    flags borne out against its base rate, largest raised share first."""
     st, base, steady = scopes(frame)
     rows = []
     for s, g in st[st["level_set"] & st["year"].isin(STEADY_YEARS)].groupby(

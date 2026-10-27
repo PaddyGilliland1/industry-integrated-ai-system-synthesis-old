@@ -1,9 +1,9 @@
-"""The adequacy test of the local briefs (D-FRAME-03), stated before any
-brief existed (build spec, section 2, item 5).
+"""The adequacy test of the local briefs, stated before any brief existed:
+it decides whether the frontier backend may run.
 
 A brief is adequate if it passes the code figure check and meets at least 5
-of the 6 approval criteria, as the main session's reviewer judges it. The
-approver never scores it, so the approval stays independent. Code fills in
+of the 6 approval criteria, as an AI reviewer, on my instruction, judges it.
+The approver never scores it, so the approval stays independent. Code fills in
 the brief's status; the reviewer marks the six criteria on the form this
 module writes. A brief counts only when its status is verified: one that
 passed the code check but failed the wording check twice can never be

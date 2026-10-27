@@ -49,6 +49,7 @@ Thumbs.db
 !data/weekly_ae_activity_20261011.csv
 !data/bank-holidays_20261024.json
 !data/MANIFEST.tsv
+!recordings_manifest.tsv
 
 # The approval sheets of the frontier set, the approver's decisions and the adequacy scores,
 # published as the replay's evidence.

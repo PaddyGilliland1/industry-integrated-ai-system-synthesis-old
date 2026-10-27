@@ -1052,6 +1052,72 @@ def test_two_reviewer_slips_fail_closed_without_the_investigator(
     assert "no readable verdict" in wording.problems[0]
 
 
+# --- the device-word screen catches each form of a listed word --------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The predictive range is wide.",
+        "A predictor of demand.",
+        "Demand is unpredictable.",
+        "It rises predictably.",
+        "The risks of a busy week.",
+        "The risk of a busy week.",
+        "Demand predicted to rise.",
+    ],
+)
+def test_the_device_screen_catches_each_form_of_a_listed_word(text):
+    assert ag.device_words(text)
+
+
+def test_the_device_screen_passes_the_words_a_brief_uses():
+    assert ag.device_words("The forecasts and their ranges, at risk.") == []
+
+
+# --- a verdict that contradicts itself is never a pass -----------------------
+
+PASS_WITH_PROBLEMS = AIMessage(
+    content='{"passes": true, "problems": ["Summary claims a festival."]}'
+)
+PASS_AS_TEXT = AIMessage(content='{"passes": "yes", "problems": []}')
+FORM_QUOTED = AIMessage(
+    content='The form is {"passes": true, "problems": []} but it fails.'
+)
+
+
+@pytest.mark.parametrize(
+    "slip", [PASS_WITH_PROBLEMS, PASS_AS_TEXT, FORM_QUOTED]
+)
+def test_a_verdict_that_contradicts_itself_fails_closed(
+    run, holidays, settings, tmp_path, slip
+):
+    # A pass that names problems, a pass written as a word, or a verdict
+    # quoted inside prose cannot be read as a pass: each is asked once
+    # more, then fails closed as the Reviewer's error.
+    script = [TOOLS, DONE, reply(good_draft(run)), slip, slip]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    assert out.status == "not verified"
+    wording = out.attempts[-1].wording
+    assert not wording.passed and wording.reviewer_error
+    assert len(wording.reviewer_slips) == 2
+
+
+def test_a_contradictory_verdict_then_a_clean_pass_verifies(
+    run, holidays, settings, tmp_path
+):
+    script = [TOOLS, DONE, reply(good_draft(run)), PASS_WITH_PROBLEMS]
+    script += [WORDING_OK]
+    out = graph(run, holidays, settings, script, tmp_path).run(
+        ORIGIN, "T101H", "nw"
+    )
+    wording = out.attempts[-1].wording
+    assert out.status == "verified" and len(wording.reviewer_slips) == 1
+    assert "names problems" in wording.reviewer_slips[0]
+
+
 # --- the designed failure's accounting ---------------------------------------
 
 

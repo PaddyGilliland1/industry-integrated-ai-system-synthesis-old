@@ -7,6 +7,7 @@ ae_escalation_spot_check.ipynb
 data/weekly_ae_activity_20261011.csv
 data/bank-holidays_20261024.json
 data/MANIFEST.tsv
+recordings_manifest.tsv
 pyproject.toml
 ae_escalation/__init__.py
 ae_escalation/data.py

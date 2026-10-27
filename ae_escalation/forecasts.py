@@ -302,7 +302,7 @@ def design_models(cal, H=5, blocks=False):
     """Return the design's four simple models, each as fit(hist, t, exclude).
 
     The order is the re-selection's tie-break: linear, the 4-week moving
-    average, seasonal naive, then SA-MA (D-ARCH-24). Each gives NaN until it
+    average, seasonal naive, then SA-MA. Each gives NaN until it
     has the history it needs. SA-MA's index is by ISO week of complete
     calendar years, reaching back up to 8 years past excluded weeks; with
     blocks it uses 52-week blocks ending at the origin instead, which is the

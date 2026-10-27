@@ -1,8 +1,7 @@
-"""The demand brief's schema and the Reviewer's code figure check
-(D-SAFE-19, as amended): every cited figure traced to its tool call by its
-value, measure, model, release horizon, week and unit, the figures every
-brief must state, the level equal to the rule's, and every text rule named
-at once."""
+"""The demand brief's schema and the Reviewer's code figure check: every
+cited figure traced to its tool call by its value, measure, model, release
+horizon, week and unit, the figures every brief must state, the level equal
+to the rule's, and every text rule named at once."""
 
 import typing
 from datetime import date

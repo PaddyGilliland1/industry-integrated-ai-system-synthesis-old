@@ -1,10 +1,11 @@
-"""The template brief and the template comparison (D-ARCH-27, option A).
+"""The template brief, the template comparison (option A) and the rule
+it then sets for who writes a brief's explanation.
 
 The template brief is a fixed fill-in-the-blanks text with no free text.
 Code fills each blank from the same tool results the Investigator uses, so
-it is never sent to the Reviewer. Its seven fields, in order, were fixed in
-the build spec, section 1b, before any brief existed, so whoever writes this
-code does not decide the comparison's result:
+it is never sent to the Reviewer. Its seven fields, in order, were fixed
+before any brief existed, so whoever writes this code does not decide the
+comparison's result:
 
 1. the heading: the hospital or Scotland, the origin and the release date;
 2. the level and where it came from, then the level's fixed meaning line
@@ -18,19 +19,24 @@ code does not decide the comparison's result:
 7. the watch point, one fixed sentence chosen by rule.
 
 It prints no calendar flag, and it never ranks the models or says which to
-trust less. Two things differ from the spec's wording. The article in the
-drift sentence: "a downward breach", where the spec's "an {upward |
-downward}" would print "an downward". And the band line after the meaning
-line, which the agent's brief prints too, so the two stay comparable: the
-meaning line alone reads as if level 1 were unusually high. The band line
-says what the level's source means: for the flag, that it flagged a week
-ahead that may reach the first cut of simulated capacity. It never states a
-chance or names a primary model.
+trust less. Two things differ from the wording first fixed. The article in
+the drift sentence: "a downward breach", where the first wording's
+"an {upward | downward}" would print "an downward". And the band line after
+the meaning line, which the agent's brief prints too, so the two stay
+comparable: the meaning line alone reads as if level 1 were unusually high.
+The band line says what the level's source means: for the flag, that it
+flagged a week ahead that may reach the first cut of simulated capacity. It
+never states a chance or names a primary model.
 
 Option A, the comparison's pass rule: in a week, the agent adds value only
 if it meets every criterion the template brief meets, and at least one it
 does not, with no factual error; it adds value overall only if it does so
 in both weeks. Each rater is judged separately, and a split is reported.
+
+The rule set with option A, before any rating: if the agent fails in
+either week, the template writes the brief's explanation by default, and
+the agent only in drift, surge or model-disagreement weeks. Both raters
+failed it in the demand week, so explanation_writer applies that rule.
 """
 
 import zlib
@@ -229,6 +235,34 @@ def template_brief(run, entry):
         track=track,
         ledger=ledger,
     )
+
+
+def explanation_writer(entry, settings):
+    """Who writes a screened brief's explanation under config.json's rule:
+    "template" or "agent".
+
+    The comparison, judged by option A, failed in the demand week, and the
+    rule set before the ratings then has the template write the explanation
+    by default, and the agent only in drift, surge or model-disagreement
+    weeks. Drift and surge weeks are the latched ones. The design has no
+    measure of model disagreement, so no week is kept for the agent on that
+    ground.
+    """
+    if settings.explanation == "agent" or entry.latched:
+        return "agent"
+    return "template"
+
+
+def weekly_brief(run, entry, settings, graph):
+    """The brief for one screened hospital and week: the template brief,
+    filled by code with no model call, or the agent's run through the brief
+    graph, as explanation_writer says. The recorded replay set ran the
+    agent on every brief and replays as it ran."""
+    from .replay import run_id
+
+    if explanation_writer(entry, settings) == "template":
+        return template_brief(run, entry)
+    return graph.run(entry.as_of, entry.hospital, run_id(entry))
 
 
 # --- the comparison ----------------------------------------------------------

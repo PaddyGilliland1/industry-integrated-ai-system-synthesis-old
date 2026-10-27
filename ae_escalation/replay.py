@@ -1,4 +1,4 @@
-"""The replay set (D-ARCH-25) and the rules that pick from it.
+"""The replay set and the rules that pick from it.
 
 Five named series, the national series, the Royal Infirmary of Edinburgh,
 Ninewells, Lorn & Islands and the Queen Elizabeth University Hospital, at
@@ -61,7 +61,7 @@ from .gateway import (
 # callers catch it from here.
 from .gateway import BudgetExceeded  # noqa: F401
 
-# The probe's count for the approved design (build spec, section 2, item 7).
+# The design probes' count for the approved design, stated before the run.
 EXPECTED = {"total": 7, "by_source": {"latch": 4, "demand": 2, "surge": 1}}
 ALARM_WEEK = "2020-03-22"
 
@@ -141,7 +141,8 @@ def reader_b_four(entries, size_table):
 
 
 def template_weeks(entries):
-    """The template comparison's two weeks, by the rule in section 1b."""
+    """The template comparison's two weeks, by the rule stated before any
+    brief existed."""
     alarm = pd.Timestamp(ALARM_WEEK).date()
     return {
         "national latch week": _first(
@@ -395,13 +396,17 @@ def run_started(paths):
 
 def spent(paths, step):
     """The seconds a step's live runs have spent so far, from the last stop
-    in its progress file, which carries every earlier one."""
-    stops = [
-        e
-        for e in progress(paths)
-        if e.get("step") == step and e.get("spent_s") is not None
-    ]
-    return stops[-1]["spent_s"] if stops else 0.0
+    in its progress file, which carries every earlier one. A start with
+    nothing after it, as when the process was killed, is charged the whole
+    time since it began, so a resume never gains a fresh budget."""
+    mine = [e for e in progress(paths) if e.get("step") == step]
+    stops = [e for e in mine if e.get("spent_s") is not None]
+    carried = stops[-1]["spent_s"] if stops else 0.0
+    if mine and mine[-1]["event"] == "started":
+        began = datetime.fromisoformat(mine[-1]["at"])
+        since = (datetime.now(timezone.utc) - began).total_seconds()
+        carried += max(since, 0.0)
+    return carried
 
 
 def started_budget(paths, step="briefs"):
@@ -601,9 +606,9 @@ def run_set(
                 outcomes.append(
                     graph.run(e.as_of, e.hospital, rid, plant=plant)
                 )
-            except Exception as exc:
-                # A stop of any kind says what was done and the time spent,
-                # which a resume carries.
+            except BaseException as exc:
+                # A stop of any kind, Ctrl-C included, says what was done
+                # and the time spent, which a resume carries.
                 if live:
                     note_progress(
                         paths,
@@ -723,9 +728,12 @@ def edit_reviewer(
             settings.agents.run_budget_s,
             spent_before=spent(paths, "notify") if resume else 0.0,
         )
+    # A replay uses the generation settings the edits were recorded with,
+    # as the briefs' replay does.
+    store = RecordingStore(paths.edit_reviews)
     gateway = ModelGateway.for_settings(
-        settings,
-        RecordingStore(paths.edit_reviews),
+        settings if live else label_settings(settings, store),
+        store,
         live=live,
         chat_model=chat_model,
         log=log,
@@ -850,9 +858,10 @@ def coordinate_approved(
             settings.agents.run_budget_s,
             spent_before=spent(paths, "notify") if resume else 0.0,
         )
+    store = RecordingStore(paths.notify)
     gateway = ModelGateway.for_settings(
-        settings,
-        RecordingStore(paths.notify),
+        settings if live else label_settings(settings, store),
+        store,
         live=live,
         chat_model=chat_model,
         log=log,
@@ -878,7 +887,7 @@ def coordinate_approved(
                 continue
             try:
                 done.append(coordinator.coordinate(item))
-            except Exception as exc:
+            except BaseException as exc:
                 if live:
                     note_progress(
                         paths,

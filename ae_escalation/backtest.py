@@ -2,7 +2,7 @@
 drift primitives.
 
 The protocol is the data test's, fixed before any result was seen, so its
-figures reproduce (D-EVAL-18): one origin every week, MAPE scored from the
+figures reproduce: one origin every week, MAPE scored from the
 week ending 7 January 2018, and 95% moving-block bootstrap intervals with
 8-week blocks and 2,000 resamples.
 """
@@ -91,7 +91,7 @@ def block_bootstrap_ci(
     I took the seeded percentile bootstrap from Statistical Analysis
     (analysis.ipynb, bootstrap_slope, cell 104), which resampled whole
     companies; here the units are runs of `block` consecutive weeks, because
-    weekly errors are not independent (Kunsch, 1989; Hyndman and
+    weekly errors are not independent (Künsch, 1989; Hyndman and
     Athanasopoulos, 2021, section 12.5). The same seed gives the same
     interval. x is not changed.
 

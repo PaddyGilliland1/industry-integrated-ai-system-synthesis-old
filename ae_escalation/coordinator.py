@@ -1,7 +1,7 @@
 """The coordinator: actions by level, assignment, notification, tracking and
 escalation for an approved demand brief.
 
-Code does the deciding (D-ARCH-21). It sets the staffing actions for the
+Code does the deciding. It sets the staffing actions for the
 level, assigns each to a role, sets its reply deadline, tracks it and
 escalates it when the deadline passes without an acknowledgement. The
 language model drafts only each notification's wording, and writes no
@@ -9,7 +9,7 @@ figure, date, time, hospital or level of its own: each is a placeholder or
 a token, such as {F1}, {WEEK1} to {WEEK4}, {DEADLINE}, {HOSPITAL} or
 {LEVEL}, and code writes in the value (placeholders.py). A Pydantic model
 holds each draft to the same word rules as a brief before anything reaches
-the outbox (D-SAFE-19, as amended), and to one more: a figure must be one
+the outbox, and to one more: a figure must be one
 the approved brief's text states, and no past week's actual, for one of the
 action's weeks or for no one week. In a surge or latch brief no forecast,
 range end or spread is offered or allowed, since each is untrusted while
