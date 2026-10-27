@@ -1,0 +1,5 @@
+# The data files and the recordings are pinned by SHA-256, so they are checked
+# out byte for byte, never with their line endings converted.
+data/** -text
+recordings/** -text
+recordings_manifest.tsv -text
