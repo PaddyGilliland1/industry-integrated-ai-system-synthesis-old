@@ -10,13 +10,18 @@
 - **What it does:** each week, code forecasts unplanned attendances at Scotland's emergency
   departments for the four weeks after the Tuesday data release, and sets each hospital's demand
   level by fixed rules.
-- **Where the AI sits:** for a hospital the rules pick out, a language-model Investigator drafts a
-  demand brief from read-only tools, and a Reviewer checks every figure in code, then the wording.
+- **Where the AI sits:** for a latched hospital the rules pick out, a language-model Investigator
+  drafts the demand brief from read-only tools, and a Reviewer checks every figure in code, then the
+  wording. In a flag week code fills the template brief (below).
 - **Who writes a brief's explanation:** a rule set before the template comparison's ratings says that
   if the agent fails in either week, the template writes the explanation by default, and the agent
   only in drift, surge or model-disagreement weeks. The agent failed in the demand week, so
-  `config.json`'s `explanation` now applies the rule: a flag week gets the template brief, filled by
-  code, and a latched week the agent's. The rule's model-disagreement ground has no threshold set
+  `config.json`'s `explanation` now applies the rule. In a new live run, `live briefs`, a flag week's
+  brief is the template brief, filled by code with no model call, and a latched week's is the
+  agent's; the designed failure still goes to the agent. Each label records which way it ran, so the
+  recorded runs, where the agent wrote every brief, replay as they ran. A template brief goes to the
+  run's record and the adequacy form; the approval queue still takes the agent's briefs only, so
+  queuing a template brief is a next step. The rule's model-disagreement ground has no threshold set
   before the ratings, so no week is kept for the agent on that ground; defining one is a next step.
   The template sent is version 2: where no drift alarm has fired, it says "No drift alarm is
   recorded; this alone does not establish forecast fit.", the raters' own wording for the rated
@@ -68,7 +73,7 @@ Python 3.12.3.
 
 ## How to run
 
-1. Clone this repository and move into its folder.
+1. Unzip the submission, or clone the repository, and move into its folder.
 2. Create and activate a virtual environment with Python 3.12, then install the dependencies:
 
    ```bash
@@ -170,8 +175,8 @@ the freeze pins.
 
 Code decides, the agents explain and a person approves. The figures carry the paper's numbers. Each
 arrow in Figure 1 is numbered, and the case study's interaction table says what each carries. Each
-box names the prior capstone project it comes from or says it is new. The weekly flow, in nine
-steps:
+box names the prior capstone project it comes from, or says it is new or, for the data, real. The
+weekly flow, in nine steps:
 
 1. **Weekly load.** Code reads the PHS file, checks its hash, cleans it and flags anomalies, keeping
    every row. It uses only the weeks released by the forecast origin; each Tuesday release covers
@@ -233,7 +238,7 @@ coordinator.
   results are reported.
 - **The decisions:** an AI independent judge read the briefs first, and I, as the approver, decided
   each one.
-- **A second reader:** Reader B, a person who read with an AI assistant, read four of the briefs.
+- **A second reader:** Reader B, a person, who read with an AI assistant, read four of the briefs.
 - **The documents:** an independent fact-check covered the notebook, this README and the case study.
 - **The clean room:** the notebook was run twice from a fresh clone and a fresh environment, giving
   the same outputs.
@@ -262,14 +267,15 @@ who did not build it, then tuning over time. Only then could it be a primary ope
   verified five, short of the adequacy test's six. The checks refused both demand-week briefs:
   Ninewells' claimed a rising trend from one cited actual, and both repeated code's own line that
   the forecasts fit recent weeks, which new runs now replace with the raters' wording. So neither
-  could be approved, and the template now writes those weeks. The
+  could be approved, and in new runs the template writes those weeks. The
   notebook's section 9 sets out the limitations in full.
 - **The template comparison.** Both raters found the agent's text added value in the national latch
   week and not in the demand week, whose brief the checks had refused. That failure triggered the
-  rule set before the ratings, which `explanation` now applies.
+  rule set before the ratings, which `explanation` now applies in new live runs; the recorded runs
+  replay with the agent on every brief, as they ran.
 - **AI in the approvals.** An AI independent judge read the seven briefs before I decided. I adopted
   its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
-  test. Reader B, a person, read four of the briefs and both template pairs with an AI assistant, and
-  my own marks on the pairs were made the same way and are not blind. The decision notes in
+  test. Reader B, a person, who read with an AI assistant, read four of the briefs and both template
+  pairs, and my own marks on the pairs were made with an AI assistant too and are not blind. The decision notes in
   `approvals/` stay as recorded; a path in them under `reviews/` names a file in my private records.
 - **Not for these uses.** Ranking hospitals, justifying cuts or monitoring the 4-hour standard.

@@ -295,8 +295,8 @@ study. Two change what a code cell prints; the rest change words only.
 25. **The GRU's comparison is given in both scopes.** Outside each series' drift episodes no release
     horizon favoured the GRU and 16 of 20 favoured the primary; outside March 2020 to March 2022 one
     did, the Queen Elizabeth at release horizon 4, and 7 favoured the primary.
-26. **The notebook numbers all six figures.** Figures 1 and 2 are shown in section 1 and Figures 4 to
-    6 carry captions, so each case study caption can give the figure's notebook number; the case
+26. **The notebook numbers all seven figures.** Figures 1 and 2 are shown in section 1 and Figures 4
+    to 7 carry captions, so each case study caption can give the figure's notebook number; the case
     study numbers its own figures in the order they first appear.
 27. **The AI in the approvals is disclosed** in the case study and the README: an AI independent
     judge read the seven briefs before the approver decided, its five edits were adopted with the
@@ -462,9 +462,7 @@ study. Two change what a code cell prints; the rest change words only.
     this build simulates it. Figure 7's note says neither pair was blind to Reader B. The notebook
     shows recorded notes with the approver by role and no private path. The code's docstrings
     say what each decision says, in place of its id.
-52. **Not changed.** The decision CSV and every file under `recordings/` stay as recorded. The
-    template's and the Investigator's drift line, which both raters marked a factual error, is
-    left for a ruling, since it is part of the rated template and the recorded requests.
+52. **Not changed.** The decision CSV and every file under `recordings/` stay as recorded.
 53. **The drift line is versioned, and the shipped version uses the raters' wording.** Ruled on 27
     Oct 2026. Where no drift alarm has fired, the rated template and the Investigator's prompt said
     "Drift: none. The forecasts fit recent weeks.", which both raters marked a factual error.
@@ -477,3 +475,21 @@ study. Two change what a code cell prints; the rest change words only.
     - The template rule's model-disagreement ground has no threshold set before the ratings, so no
       week is kept for the agent on that ground; defining one is a next step. The README, case study
       and notebook say so in the same words.
+
+## The final fix round (27 Oct 2026)
+
+54. **The template rule runs on the live path.** `replay.run_set`, which `live briefs` drives, now
+    gives a flag week's brief to the template at the label's template version, with no model call,
+    and a latched week's to the agent; the designed failure still goes to the agent. A new run's
+    first start records its explanation setting and template version, and a label recorded before
+    the setting existed replays with the agent when its recordings hold a flag week's calls, so the
+    recorded runs replay unchanged. A template brief goes to the run's record and the adequacy form,
+    unscored; the approval queue still takes the agent's briefs only, which is stated as a next
+    step. The replay set's tests pin the agent, as the recorded runs ran, and a test drives
+    `live briefs` under the rule and checks the routing.
+55. **The text follows the re-check and the grader's notes.** Only Ninewells' brief claimed a rising
+    trend; the order was hidden from Reader B, and the approver knew it; the notebook prints the
+    approver by role; limitation 15 states the masked weeks the right way round; the README's first
+    step covers a zip; and the case study and notebook say "my design" where the choice is mine.
+    Every line that said the template now writes a flag week says it does so in new runs, and the
+    notebook's template cell names the brief a new run writes, not one the duty manager gets.

@@ -50,8 +50,8 @@ it is not pressure, need or priority.
 | Attendances within 4 hours and waits over 12 hours, used only for the month chart and the pressure match | Real |
 | Scottish bank holidays, GOV.UK's bank-holidays JSON | Real |
 | The seasonal capacity the level is measured against | Simulated: a demand percentile, not beds or staff |
-| The bands, 1.05, 1.10 and 1.15 times capacity | Our design, illustrative |
-| The staffing actions by level, their owners and reply deadlines | Our design, illustrative |
+| The bands, 1.05, 1.10 and 1.15 times capacity | My design, illustrative |
+| The staffing actions by level, their owners and reply deadlines | My design, illustrative |
 | Staff acknowledgements of notifications | Simulated and seeded |
 | Latch resets | Simulated: recorded at each review prompt |
 | The language model's replies | Recorded live, replayed exactly in the notebook |
@@ -103,7 +103,8 @@ data set description).
 
 The design has three lanes. **Code decides**: it loads the data, forecasts, sets the demand level, checks
 for drift, screens which hospitals reach the agents, and then acts and records. **The agents explain**: an
-Investigator drafts each demand brief from read-only tools, and a Reviewer checks it. **A person
+Investigator drafts each latched week's demand brief from read-only tools, and a Reviewer checks it; in
+a flag week code fills the template brief. **A person
 approves**: the duty manager approves, edits or rejects each brief. The screen is code, so it sits in the
 code lane. Figure 3 draws the code lane in two parts, before and after the person decides: the first
 on the left, and the second last on the right, below the agents and the person.
@@ -186,10 +187,6 @@ drafts the notification's wording, which states only figures the approved brief 
 number, and the table says what passes. Arrow 8 joins the left column to the right one; it runs from the
 screen to the Investigator.
 
-**Who writes a brief's explanation.** The Investigator writes it in a drift or surge week, which is
-latched. In a flag week the template brief does, filled by code with no model call, by the rule set
-before the template comparison's ratings, which the demand-week result triggered (section 13).
-
 | # | From | To | What passes |
 |---|---|---|---|
 | 1 | Weekly PHS data | Clean, flag, keep | The weeks released by the origin, after the SHA-256 check |
@@ -209,14 +206,22 @@ before the template comparison's ratings, which the demand-week result triggered
 | 15 | Manager | Audit log and replay | A rejection, logged; nothing is sent |
 | 16 | Assign, notify, track, escalate | Audit log and replay | The actions, owners, outbox notifications and acknowledgements |
 
+**Who writes a brief's explanation.** In a new live run, `live briefs`, a flag week's brief is the
+template brief at version 2, filled by code with no model call, and a drift or surge week's, which is
+latched, is the Investigator's. This is the rule set before the template comparison's ratings, which the
+demand-week result triggered (section 13). The designed failure still goes to the Investigator. Each
+label records which way it ran, so the recorded runs, where the Investigator wrote every brief, replay as
+they ran. A template brief goes to the run's record and the adequacy form; the approval queue still takes
+the Investigator's briefs only, so queuing a template brief is a next step.
+
 ## 4. Assumptions
 
 Items 1 to 7 are assumed, each with where it comes from; item 8 says how the spot check was run.
 
-1. **Simulated capacity.** Assumed, our design: for each target week, the 90th percentile of the
+1. **Simulated capacity.** Assumed, my design: for each target week, the 90th percentile of the
    hospital's weekly unplanned attendances in the same 13-week window, centred on that week, in each of
    the previous three years, released weeks only. The open data holds no beds or staffing.
-2. **The bands, 1.05, 1.10 and 1.15 times capacity.** Assumed, our design, on the structure of England's
+2. **The bands, 1.05, 1.10 and 1.15 times capacity.** Assumed, my design, on the structure of England's
    Operational Pressures Escalation Levels (OPEL) framework, where a score sets the level and people decide the actions, not its scale (NHS England,
    2024).
 3. **The flag's setting, a week's chance of at least 50%.** Assumed, chosen in the design probes by a
@@ -266,7 +271,7 @@ round 2 fixed, and the time budget stopped the run after 3 of the 7. In round 2 
 8,192-token output cap, which counts the model's thinking; a retry with thinking turned off is untried
 and is a next step (section 14). The frontier model verified 5 of 7, short of the adequacy test's 6:
 the checks refused both demand-week briefs for claims their cited figures did not support, and the
-template now writes those weeks (section 13). Its set is the one approved, at the cost of money, an outside service
+template writes those weeks in new runs (section 13). Its set is the one approved, at the cost of money, an outside service
 and a model that cannot be pinned the same way.
 
 ## 6. Constraints
@@ -375,15 +380,15 @@ reuses in a comment. Each repository is at github.com/PaddyGilliland1, and cell 
 |---|---|---|
 | Load, clean, flag and keep | AI Programming Foundations | None needed |
 | Confidence intervals and a seeded bootstrap; the paired comparison of two models | Statistical Analysis | None needed |
-| The linear model: a trend line plus four sine and cosine pairs | The trend line from Statistical Analysis; the sine and cosine terms my own extension | Hyndman and Athanasopoulos (2021), section 7.4 |
-| The rolling-origin back-test, scored by the mean absolute percentage error (MAPE) | Statistical Analysis, its time-based hold-out repeated every week | Hyndman and Athanasopoulos (2021), sections 5.10 and 5.8 |
-| The moving-block bootstrap | Statistical Analysis, its bootstrap resampled in blocks | Hyndman and Athanasopoulos (2021), section 12.5; Künsch (1989) |
-| Seasonal naive and the moving average as bars to beat | Deep Learning Systems | Hyndman and Athanasopoulos (2021), section 5.2 |
+| The linear model: a trend line plus four sine and cosine pairs | The trend line from Statistical Analysis; the sine and cosine terms my own extension | Hyndman and Athanasopoulos (2021), Section 7.4 |
+| The rolling-origin back-test, scored by the mean absolute percentage error (MAPE) | Statistical Analysis, its time-based hold-out repeated every week | Hyndman and Athanasopoulos (2021), Sections 5.10 and 5.8 |
+| The moving-block bootstrap | Statistical Analysis, its bootstrap resampled in blocks | Hyndman and Athanasopoulos (2021), Section 12.5; Künsch (1989) |
+| Seasonal naive and the moving average as bars to beat | Deep Learning Systems | Hyndman and Athanasopoulos (2021), Section 5.2 |
 | SA-MA, the moving average with a seasonal index | New in this project | Described as my own extension |
 | The probability flag | New, on Statistical Analysis's interval from past values | Described as my own design |
 | The GRU comparator | Deep Learning Systems | Petravić et al. (2025) review recurrent networks among emergency department forecasters |
-| Re-selection of the primary by out-of-sample error | Statistical Analysis | Hyndman and Athanasopoulos (2021), section 5.10 |
-| The drift interval, the alarm and the latch | The interval from Statistical Analysis; the two-week alarm and the latch new | Hyndman and Athanasopoulos (2021), section 5.5, for the interval's basis only |
+| Re-selection of the primary by out-of-sample error | Statistical Analysis | Hyndman and Athanasopoulos (2021), Section 5.10 |
+| The drift interval, the alarm and the latch | The interval from Statistical Analysis; the two-week alarm and the latch new | Hyndman and Athanasopoulos (2021), Section 5.5, for the interval's basis only |
 | The screen | Agentic AI Systems | None needed |
 | Agents with typed read-only tools, the approval queue, replay and the audit log | Agentic AI Systems | Yao et al. (2023) for tool use |
 | The Reviewer: the code figure check, then the wording check | Agentic AI Systems' figure check, extended | Described as my own design |
@@ -413,7 +418,7 @@ outcomes were written before any agent ran; the pre-run check found the same sev
 | w/e 8 Dec 2019 (Tue 17 Dec 2019) | 0: the week before that winter's worst national 4-hour week, with none of the five replay series flagged (the full screen sends 4) | No brief |
 | w/e 15 Mar 2020 (Tue 24 Mar 2020) | 0: the first breach, with no alarm yet among the five replay series (the full screen sends 1) | No brief |
 | w/e 22 Mar 2020 (Tue 31 Mar 2020) | 4: latch, for the national series, Edinburgh, Ninewells and the Queen Elizabeth; Lorn & Islands not latched | All four verified, one on the first attempt; each approved with an edit. Level 1, held, so no staffing action |
-| w/e 13 Jun 2021 (Tue 22 Jun 2021) | 1: Ninewells, demand, flagged | Not verified: the code check refused the first draft, and the wording check refused the second. It claimed a rising trend from one cited actual, though the history tool had returned the rising weeks, and repeated code's own line that the forecasts fit recent weeks. It reached the approver marked "not verified, do not act" and was rejected; the template now writes this kind of week. The designed failure, a second run of this brief with a figure planted by code in its first readable draft, was caught at that figure |
+| w/e 13 Jun 2021 (Tue 22 Jun 2021) | 1: Ninewells, demand, flagged | Not verified: the code check refused the first draft, and the wording check refused the second. It claimed a rising trend from one cited actual, though the history tool had returned the rising weeks, and repeated code's own line that the forecasts fit recent weeks. It reached the approver marked "not verified, do not act" and was rejected; in new runs the template writes this kind of week. The designed failure, a second run of this brief with a figure planted by code in its first readable draft, was caught at that figure |
 | w/e 9 Apr 2023 (Tue 18 Apr 2023) | 1: Lorn & Islands, demand, flagged | Not verified, as for Ninewells: its second draft repeated code's line that the forecasts fit recent weeks, with other claims its figures did not support. Rejected, with the same next step |
 | **Total** | **7**: 4 latch, 1 surge, 2 demand | 5 verified, approved with an edit; 2 rejected |
 
@@ -426,7 +431,8 @@ turned off is untried (section 14).
 **The template comparison** used two of these weeks: the national latch week, w/e 22 Mar 2020, and
 Ninewells' demand week, w/e 13 Jun 2021. By option A, both raters found the agent's text added value
 in the national latch week and not in the demand week, whose brief the checks had refused. That result
-triggered the rule set before the ratings, so the template now writes a flag week's explanation;
+triggered the rule set before the ratings, so in new runs the template writes a flag week's
+explanation;
 section 13 gives the marks.
 
 ## 12. Plausibility notes
@@ -457,8 +463,9 @@ Each designed-only element, and what a live system would do instead.
 
 *Figure 5 (notebook Figure 5). Goals G1 to G8, each against its threshold.*
 
-**The goals.** Five goals are met, the invariant holds, G7 is narrowly missed in 2018, 2023 and 2024,
-and G6 is not met because the checks refused both demand-week briefs.
+**The goals.** Five goals are met, the invariant holds, raised levels rare in steady years (G7) is
+narrowly missed in 2018, 2023 and 2024, and briefs useful to a person (G6) is not met because the checks
+refused both demand-week briefs.
 
 - G1, forecasts a manager can plan with, G2, honest uncertainty, G3, shocks are caught, and G8, a flag
   tells a manager something, are met, in-sample. The primary's national error is within 1 point of the best simple
@@ -470,7 +477,7 @@ and G6 is not met because the checks refused both demand-week briefs.
   approved, and the planted figure was caught. G5, the agent never sets a level, holds in all 7 briefs written.
 - G6, briefs useful to a person, is not met: 5 of the 7 briefs were approved without a factual edit, where 6 are needed. The
   two short are the demand-week briefs, which the checks refused, so the approver could only reject
-  them; none of the five edits was factual. The template now writes those weeks. Reader B, a person, who read with an AI assistant, made the same decision as
+  them; none of the five edits was factual. In new runs the template writes those weeks. Reader B, a person, who read with an AI assistant, made the same decision as
   the approver on all four briefs, so G6's second half is met.
 - G7, raised levels rare in steady years, is narrowly missed, as set before the run, and nothing was
   tuned: 10.4% of outlooks were raised in 2018 (from July), 10.9% in 2023 and 11.7% in 2024, against
@@ -503,7 +510,7 @@ are borne out, against 14.9% of unflagged September outlooks.
 quarter of 4-hour weeks for the year, against 25.4% by chance: a weak link.
 
 **The template comparison.** Both raters marked each text of both pairs against the six criteria, the
-two texts shown as Text A and Text B in an order hidden from them. Reader B is a person, who read with
+two texts shown as Text A and Text B in an order hidden from Reader B; the approver had been told it. Reader B is a person, who read with
 an AI assistant. The approver's marks were also made with an AI assistant, and they are not blind,
 since the approver had read every agent brief at approval. By option A, the agent's text adds value in
 the national latch week for both raters. Both counted it as naming the models' disagreement, which the
@@ -519,9 +526,10 @@ rated version 1.
 The comparison failed in the demand week, whose brief the checks had already stopped, so no manager
 could approve it. A rule set before any rating then applies. The template writes the brief's
 explanation by default, and the agent only in drift, surge or model-disagreement weeks. `config.json`'s
-`explanation` setting now applies it: the two demand weeks get the template brief, and the five latched
-weeks keep the agent. The rule's model-disagreement ground has no threshold set before the ratings, so
-no week is kept for the agent on that ground; defining one is a next step. The recorded runs ran the agent throughout and replay as they ran. Neither pair was
+`explanation` setting now applies it in new live runs: a flag week gets the template brief, filled by
+code, and a latched week the agent, as section 3 sets out. The recorded runs had the agent write every
+brief and replay as they ran. The rule's model-disagreement ground has no threshold set before the
+ratings, so no week is kept for the agent on that ground; defining one is a next step. Neither pair was
 blind to Reader B, since each agent text was one of the four briefs Reader B had rated, and the
 template was Text A in both weeks.
 
@@ -532,8 +540,9 @@ template was Text A in both weeks.
 **Failure cases.** COVID, real: the alarm confirms a shock and does not warn; the first breach was w/e 15
 Mar 2020. The latch then held each series' level and marked its forecasts untrusted, and shadow mode on
 new releases is the next step. The planted figure, designed: caught at that figure. The demand-week
-briefs, real: the Reviewer refused a rising trend that cited one actual and code's own line that the
-forecasts fit recent weeks, so neither could be approved, and the template now writes those weeks. The local backend: no brief verified in either round. Round 1's retries went
+briefs, real: the Reviewer refused Ninewells' rising trend that cited one actual and, in both, code's
+own line that the forecasts fit recent weeks, so neither could be approved, and in new runs the template
+writes those weeks. The local backend: no brief verified in either round. Round 1's retries went
 out blind, a bug that round 2 fixed, and its budget stopped it after 3 of 7; round 2's drafts all
 reached the output cap, and thinking turned off is the untried next step.
 
@@ -547,8 +556,8 @@ it and the next step. In short:
 3. the Reviewer's reasons are noisy, though its verdicts held; the next step asks it for failures only;
 4. the local model was not tried with its thinking turned off; the checks let no draft through, and
    that trial is next;
-5. explaining a demand week overreached; the checks stopped both briefs, the template now writes those
-   weeks, and a trend must cite the weeks it rests on;
+5. explaining a demand week overreached; the checks stopped both briefs, in new runs the template writes
+   those weeks, and a trend must cite the weeks it rests on;
 6. the rated drift line claimed the forecasts fit recent weeks on the drift rule alone; the shipped
    template and new runs now use the raters' wording, and the comparison stays on the rated version;
 7. neither template pair is blind to Reader B; a blind comparison on new weeks is the next step;
