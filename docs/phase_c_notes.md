@@ -322,3 +322,6 @@ study. Two change what a code cell prints; the rest change words only.
     unchanged.
 32. **Each goal is named at its first use in a case study section**, and the approver is referred to
     by role.
+33. **The old copy of Figure 4 is deleted.** `figures/month_attendances_and_4_hours.png` was
+    identical to `fig4_month_chart.png`, and a search found nothing that referenced it. Paddy agreed
+    to the deletion on 27 Oct 2026, and it is off `ALLOWLIST.txt`.
