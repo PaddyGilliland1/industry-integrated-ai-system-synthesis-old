@@ -484,8 +484,8 @@ study. Two change what a code cell prints; the rest change words only.
     first start records its explanation setting and template version, and a label recorded before
     the setting existed replays with the agent when its recordings hold a flag week's calls, so the
     recorded runs replay unchanged. A template brief goes to the run's record and the adequacy form,
-    unscored; the approval queue still takes the agent's briefs only, which is stated as a next
-    step. The replay set's tests pin the agent, as the recorded runs ran, and a test drives
+    unscored; the approval queue then took the agent's briefs only, and item 56 now queues the
+    template's too. The replay set's tests pin the agent, as the recorded runs ran, and a test drives
     `live briefs` under the rule and checks the routing.
 55. **The text follows the re-check and the grader's notes.** Only Ninewells' brief claimed a rising
     trend; the order was hidden from Reader B, and the approver knew it; the notebook prints the
@@ -493,3 +493,41 @@ study. Two change what a code cell prints; the rest change words only.
     step covers a zip; and the case study and notebook say "my design" where the choice is mine.
     Every line that said the template now writes a flag week says it does so in new runs, and the
     notebook's template cell names the brief a new run writes, not one the duty manager gets.
+
+## Paddy's read of paper v3 (27 Oct 2026)
+
+56. **Template briefs are queued for approval.** Every brief, the template's or the agent's, reaches
+    the duty manager to approve, edit or reject under the same rules.
+    - Before a template brief is queued, code checks every figure it prints against the tool call it
+      came from, by the same figure rule as the agent's briefs, and the level against the rule's.
+      G4 checks an approved one again.
+    - An edit of a template brief is written in the agent's form, citing the template's tool calls,
+      and is checked as any edit is. With no draft to compare, code marks it factual.
+    - Only an approved brief sets actions. The coordinator drafts its notifications from the
+      template's own figures. The template names no primary model, so neither may a notification:
+      `{PRIMARY}` is refused there and not offered.
+    - The template brief's model moved from `template.py` to `briefs.py`, beside the agent's, so the
+      queue can hold either without an import cycle; `template.py` keeps its old names.
+    - The recorded labels hold no template brief, so they replay unchanged. Tests drive `live briefs`
+      with no network, show both flag weeks' template briefs in the released queue, and show that
+      approving one writes its notifications while rejecting the other writes none.
+57. **Examples ship in the repository.** `examples/` holds four, rendered from the recorded set and
+    the code with no model call by `python -m ae_escalation.examples`. A test renders them again and
+    checks each against the shipped file. Figure 9, `figures/fig9_sample_brief.png`, is the first
+    example's approved brief, drawn at 16.5 cm with 8.5 pt text; it fits whole, so it needs no
+    "continues" mark.
+58. **Figure 2's link 2 names the staff bank.** It reads "Planned cover from the staff bank, the
+    board's own pool of flexible staff, instead of late agency cover", in the diagram and the case
+    study's table. Redrawn, its smallest text prints at 8.3 pt at 16 cm, and the notebook's Figure 2
+    wording check still matches.
+59. **G6 in plain words.** Figure 5's G6 row and every G6 statement say what counts: 6 of the 7
+    briefs approved with no factual change, and Reader B making the approver's decision on at
+    least 3 of the 4 they read. The result, 5 of 7 with the two demand-week briefs refused and
+    rejected, and Reader B agreeing on 4 of 4, comes from the outputs; `approval.g6_short` words
+    the shortfall from the queue.
+60. **The reviewers' AI tools are not named.** The README, the case study and the notebook no longer
+    say that Reader B or the approver used an AI assistant, and Figure 7's footnote is redrawn
+    without it. One line closes the notebook's limitations: both raters used AI tools to help draft
+    their notes, and the decisions were theirs. The runs and scores are mine in the first person;
+    the AI reviewer that scored the adequacy test and the AI independent judge stay, as designed
+    steps. Round 1's blind retries are a fault in my code that calls the model, fixed before round 2.

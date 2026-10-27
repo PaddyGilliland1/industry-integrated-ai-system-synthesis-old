@@ -65,7 +65,7 @@ it is not pressure, need or priority.
 | # | Link | Label | Evidence |
 |---|---|---|---|
 | 1 | Earlier notice of unusually busy weeks | Measured, in-sample | The mean steady year gave notice of 57.0 of 142.5 busy hospital-weeks (40.0%). Over the steady years combined, 280 of 713 busy hospital-weeks had notice, carrying 19,806 of 46,243 extra patients; 197 had it from the week's own flag |
-| 2 | Planned bank cover instead of late agency cover | Sourced, hypothesised | Audit Scotland (2025, p. 15), 2024/25: £256m on agency staff of all kinds (£57m nursing, £108m medical) and, separately, £353m on the nursing bank. Public Services Delivery Scotland (2026), 2025/26: agency nursing and midwifery £34.5m (down 39.2%), nursing and midwifery bank £391.0m (up 10.6%) on hours up 0.1%. Hu et al. (2025): one US emergency department's forecast-driven nurse staffing cut hourly staffing costs by $162.04 with no loss of throughput, before and after, with no control group |
+| 2 | Planned cover from the staff bank, the board's own pool of flexible staff, instead of late agency cover | Sourced, hypothesised | Audit Scotland (2025, p. 15), 2024/25: £256m on agency staff of all kinds (£57m nursing, £108m medical) and, separately, £353m on the nursing bank. Public Services Delivery Scotland (2026), 2025/26: agency nursing and midwifery £34.5m (down 39.2%), nursing and midwifery bank £391.0m (up 10.6%) on hours up 0.1%. Hu et al. (2025): one US emergency department's forecast-driven nurse staffing cut hourly staffing costs by $162.04 with no loss of throughput, before and after, with no control group |
 | 3 | Less stress for permanent staff | Sourced, hypothesised | Imamura et al. (2026): a few studies of burnout and turnover suggest potential benefits of adequate staffing. Royal College of Emergency Medicine (RCEM, 2026): in its December 2025 survey one Scottish emergency department clinical lead reported decision fatigue and burnout among staff, and RCEM links crowding to burnout; the survey does not give its response count |
 | 4 | Better patient care | Sourced, hypothesised | Rivet et al. (2026): more nurses per patient associated with lower emergency department mortality (adjusted odds ratio 0.68, 0.49 to 0.94), observational. Jones et al. (2022): delays to admission associated with 30-day mortality. RCEM (2026) estimates 818 deaths in Scotland in 2025 associated with long waits: an estimate, not a count |
 | 5 | Better A&E throughput | To be tested | The pilot's goal (section 14) |
@@ -211,8 +211,9 @@ template brief at version 2, filled by code with no model call, and a drift or s
 latched, is the Investigator's. This is the rule set before the template comparison's ratings, which the
 demand-week result triggered (section 13). The designed failure still goes to the Investigator. Each
 label records which way it ran, so the recorded runs, where the Investigator wrote every brief, replay as
-they ran. A template brief goes to the run's record and the adequacy form; the approval queue still takes
-the Investigator's briefs only, so queuing a template brief is a next step.
+they ran. A template brief goes to the same approval queue: code checks every figure it prints against the tool
+call it came from, the duty manager approves, edits or rejects it, an edit is checked again, and only an
+approved brief sets actions (`examples/template_brief_ninewells.md`).
 
 ## 4. Assumptions
 
@@ -266,8 +267,8 @@ they are repeatable and checkable. The language model adds explanation only, and
 calls and a person's time.
 
 **The model backend.** The local model runs on this machine, costs nothing per call and is pinned by
-digest. It verified none in either round. In round 1 each retry went out blind, a bug in my client that
-round 2 fixed, and the time budget stopped the run after 3 of the 7. In round 2 every draft reached the
+digest. It verified none in either round. In round 1 each retry went out blind, a fault in my code that
+calls the model, fixed before round 2, and the time budget stopped the run after 3 of the 7. In round 2 every draft reached the
 8,192-token output cap, which counts the model's thinking; a retry with thinking turned off is untried
 and is a next step (section 14). The frontier model verified 5 of 7, short of the adequacy test's 6:
 the checks refused both demand-week briefs for claims their cited figures did not support, and the
@@ -355,7 +356,7 @@ above. The design follows the principle that a person can disregard, override or
 
 In the spot check I play the approver, the unscheduled-care lead and the analytics lead. The clinical
 safety reviewer's sign-off is not exercised, because there is no live use. Approving briefs for a system I
-built is a limitation, which a second reader, Reader B, a person, who read with an AI assistant,
+built is a limitation, which a second reader, Reader B,
 checks: Reader B made the same decision as the approver on all four briefs.
 
 An AI independent judge read the seven briefs before I decided. I adopted its five edits as my own, with
@@ -424,7 +425,7 @@ outcomes were written before any agent ran; the pre-run check found the same sev
 
 Neither local set verified a brief, so none of its briefs could be approved. Round 1 completed 3 of its
 7 briefs before its 840-second budget stopped it, and the text rules refused both drafts of each: each
-retry went out blind, a bug in my client that round 2 fixed. Round 2 completed all seven, and every
+retry went out blind, a fault in my code that calls the model, fixed before round 2. Round 2 completed all seven, and every
 draft was cut at the 8,192-token output cap, which counts the model's thinking; a retry with thinking
 turned off is untried (section 14).
 
@@ -452,8 +453,8 @@ Each designed-only element, and what a live system would do instead.
 - **The staffing actions.** Code fixes each action's text by level; the language model drafts only each
   notification's wording. A board would set its own actions and owners.
 - **The roles.** I play three roles, and the clinical safety reviewer's sign-off is not exercised.
-- **The template comparison.** Two raters marked two weeks, both with an AI assistant, and one of them
-  is the approver, whose marks are not blind. A pilot would repeat it with managers who did not build
+- **The template comparison.** Two raters marked two weeks, and one of them is the approver, whose
+  marks are not blind. A pilot would repeat it with managers who did not build
   the system (section 14).
 - **Shadow mode.** The frozen design has not yet run on new weekly releases.
 
@@ -475,10 +476,11 @@ refused both demand-week briefs.
   as the base rate in the steady years.
 - G4, no unchecked number reaches a manager as approved, is met: all 5 approved briefs pass the code check again, neither brief that was not verified was
   approved, and the planted figure was caught. G5, the agent never sets a level, holds in all 7 briefs written.
-- G6, briefs useful to a person, is not met: 5 of the 7 briefs were approved without a factual edit, where 6 are needed. The
-  two short are the demand-week briefs, which the checks refused, so the approver could only reject
-  them; none of the five edits was factual. In new runs the template writes those weeks. Reader B, a person, who read with an AI assistant, made the same decision as
-  the approver on all four briefs, so G6's second half is met.
+- G6, briefs useful to a person, is not met: 5 of the 7 briefs were approved with no factual change,
+  where 6 are needed; the two demand-week briefs were refused and rejected, since the approver could
+  only reject a brief the checks refused. None of the five edits was factual. In new runs the template
+  writes those weeks. Reader B made the approver's decision on all 4 of the 4 briefs they read, so
+  G6's second half is met.
 - G7, raised levels rare in steady years, is narrowly missed, as set before the run, and nothing was
   tuned: 10.4% of outlooks were raised in 2018 (from July), 10.9% in 2023 and 11.7% in 2024, against
   under 10%. My reading, which nothing here tests, is that in those years attendances ran above the
@@ -510,9 +512,8 @@ are borne out, against 14.9% of unflagged September outlooks.
 quarter of 4-hour weeks for the year, against 25.4% by chance: a weak link.
 
 **The template comparison.** Both raters marked each text of both pairs against the six criteria, the
-two texts shown as Text A and Text B in an order hidden from Reader B; the approver had been told it. Reader B is a person, who read with
-an AI assistant. The approver's marks were also made with an AI assistant, and they are not blind,
-since the approver had read every agent brief at approval. By option A, the agent's text adds value in
+two texts shown as Text A and Text B in an order hidden from Reader B; the approver had been told it. The approver's marks are
+not blind, since the approver had read every agent brief at approval. By option A, the agent's text adds value in
 the national latch week for both raters. Both counted it as naming the models' disagreement, which the
 template cannot, because it marked every model untrusted while latched and ranked none. In the demand
 week it does not, for both raters. That text is the refused demand-week brief. Both marked its figures
@@ -527,7 +528,7 @@ The comparison failed in the demand week, whose brief the checks had already sto
 could approve it. A rule set before any rating then applies. The template writes the brief's
 explanation by default, and the agent only in drift, surge or model-disagreement weeks. `config.json`'s
 `explanation` setting now applies it in new live runs: a flag week gets the template brief, filled by
-code, and a latched week the agent, as section 3 sets out. The recorded runs had the agent write every
+code and queued for approval like any brief, and a latched week the agent, as section 3 sets out. The recorded runs had the agent write every
 brief and replay as they ran. The rule's model-disagreement ground has no threshold set before the
 ratings, so no week is kept for the agent on that ground; defining one is a next step. Neither pair was
 blind to Reader B, since each agent text was one of the four briefs Reader B had rated, and the
@@ -543,7 +544,7 @@ new releases is the next step. The planted figure, designed: caught at that figu
 briefs, real: the Reviewer refused Ninewells' rising trend that cited one actual and, in both, code's
 own line that the forecasts fit recent weeks, so neither could be approved, and in new runs the template
 writes those weeks. The local backend: no brief verified in either round. Round 1's retries went
-out blind, a bug that round 2 fixed, and its budget stopped it after 3 of 7; round 2's drafts all
+out blind, a fault in my code that calls the model, fixed before round 2, and its budget stopped it after 3 of 7; round 2's drafts all
 reached the output cap, and thinking turned off is the untried next step.
 
 **Limits.** The notebook's section 9 sets out seventeen limitations, each with its evidence, what held
@@ -568,7 +569,7 @@ it and the next step. In short:
     ends share a week is next;
 11. G6 is not met, as both demand-week briefs were refused and rejected, with the builder as approver;
     Reader B made the same decisions;
-12. round 1's retries went out blind; round 2's client fixed it;
+12. round 1's retries went out blind, a fault in my code that calls the model, fixed before round 2;
 13. a notification's wording is checked for its figures and words, not its meaning; a wording check
     on each notification is next;
 14. the Reviewer reads the brief inline, so a draft could address it; the code check runs first, and

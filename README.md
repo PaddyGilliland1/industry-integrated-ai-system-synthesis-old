@@ -20,8 +20,8 @@
   brief is the template brief, filled by code with no model call, and a latched week's is the
   agent's; the designed failure still goes to the agent. Each label records which way it ran, so the
   recorded runs, where the agent wrote every brief, replay as they ran. A template brief goes to the
-  run's record and the adequacy form; the approval queue still takes the agent's briefs only, so
-  queuing a template brief is a next step. The rule's model-disagreement ground has no threshold set
+  approval queue like the agent's: code checks every figure it prints, the duty manager approves,
+  edits or rejects it, an edit is checked again, and only an approved brief sets actions. The rule's model-disagreement ground has no threshold set
   before the ratings, so no week is kept for the agent on that ground; defining one is a next step.
   The template sent is version 2: where no drift alarm has fired, it says "No drift alarm is
   recorded; this alone does not establish forecast fit.", the raters' own wording for the rated
@@ -99,6 +99,12 @@ Python 3.12.3.
    ```bash
    python -m pytest
    ```
+
+**Examples.** `examples/` shows four outputs as a reader meets them, each rendered from the
+recorded set and the code with no model call. They are Edinburgh's surge brief as the approver saw it
+and as approved with the edit, the template brief a new run queues for Ninewells' demand week, Edinburgh's
+notifications and escalation, and a brief marked "not verified, do not act". `examples/README.md`
+lists them, and `python -m ae_escalation.examples` writes them again.
 
 **The model backend.** `config.json` sets `llm_backend` to `"frontier"`, because the frontier set is
 the one approved, and the recordings make the notebook reproducible on either setting: the replay
@@ -238,7 +244,7 @@ coordinator.
   results are reported.
 - **The decisions:** an AI independent judge read the briefs first, and I, as the approver, decided
   each one.
-- **A second reader:** Reader B, a person, who read with an AI assistant, read four of the briefs.
+- **A second reader:** Reader B, a second person, read four of the briefs.
 - **The documents:** an independent fact-check covered the notebook, this README and the case study.
 - **The clean room:** the notebook was run twice from a fresh clone and a fresh environment, giving
   the same outputs.
@@ -260,7 +266,7 @@ who did not build it, then tuning over time. Only then could it be a primary ope
 - **In-sample.** The design was tuned on the same 2015 to 2026 data that scores it, so every figure
   is in-sample. Before any live use the frozen design would run in shadow mode on new releases.
 - **The agents.** The local model verified none of the replay briefs. Round 1's retries went out
-  blind, a bug in my client that round 2 fixed, and its time budget stopped it after 3 of the 7.
+  blind, a fault in my code that calls the model, fixed before round 2, and its time budget stopped it after 3 of the 7.
   Round 2 finished all seven, but every draft reached the 8,192-token output cap, which counts the
   model's thinking; a retry with thinking turned off is untried future work. So the frontier model
   ran once, as the adequacy test set out before the runs, and its set is the one approved. It
@@ -275,7 +281,7 @@ who did not build it, then tuning over time. Only then could it be a primary ope
   replay with the agent on every brief, as they ran.
 - **AI in the approvals.** An AI independent judge read the seven briefs before I decided. I adopted
   its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
-  test. Reader B, a person, who read with an AI assistant, read four of the briefs and both template
-  pairs, and my own marks on the pairs were made with an AI assistant too and are not blind. The decision notes in
+  test. Reader B read four of the briefs and both template pairs; my own marks on
+  the pairs are not blind, since I had read every agent brief at approval. The decision notes in
   `approvals/` stay as recorded; a path in them under `reviews/` names a file in my private records.
 - **Not for these uses.** Ranking hospitals, justifying cuts or monitoring the 4-hour standard.
