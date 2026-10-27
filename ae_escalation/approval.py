@@ -11,6 +11,12 @@ to the Investigator, which would overwrite it. A brief that is "not
 verified" can never be approved, edited or not, and counts as a G4 event;
 the manager may edit it, for the record, or reject it.
 
+A flag week's template brief, under the template rule, is queued the same
+way. Code checks every figure it prints before it is queued and again once
+it is approved, and only an approved one sets actions. It has no draft to
+edit in place, so an edit of it is written in the agent's form, citing the
+template's tool calls, and is checked as any edit is.
+
 The queue is an append-only JSONL file of events, queued briefs and
 decisions, so the states can always be rebuilt from it, and every act goes
 to the audit log. I adapted the queue and its decision record from Agentic
@@ -36,8 +42,8 @@ from pydantic import (
 
 from . import placeholders as ph
 from .agents import BriefOutcome, WordingResult, device_words
-from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief
-from .figures import CheckResult, check_brief
+from .briefs import NOT_VERIFIED, BriefDraft, DemandBrief, TemplateBrief
+from .figures import CheckResult, check_brief, check_template
 from .gateway import AuditLog
 from .placeholders import failures_of
 
@@ -185,7 +191,7 @@ class QueueItem(BaseModel):
     brief_id: str
     outcome: BriefOutcome
     state: State
-    current: DemandBrief | None
+    current: DemandBrief | TemplateBrief | None
     edit: DemandBrief | None = None
     last_edit: CheckResult | None = None
     # The wording checks on the last edit, once its code check passed.
@@ -233,6 +239,14 @@ def _facts(texts):
     )
 
 
+def code_check(brief, outcome):
+    """A queued brief's code check now: the template's own, or the agent's
+    brief, or an edit, against the tool calls its outcome holds."""
+    if isinstance(brief, TemplateBrief):
+        return check_template(brief, outcome.rule_level)
+    return check_brief(brief, outcome.ledger, outcome.rule_level)
+
+
 def _figure_set(figures):
     """The cited figures as sortable tuples, to compare sets."""
     return sorted(
@@ -268,6 +282,10 @@ def factual_changes(base, draft):
     statement of fact in words is the approver's to declare."""
     if base is None:
         return ["the brief had no text to compare, so every fact is new"]
+    if isinstance(base, TemplateBrief):
+        return [
+            "the template brief has no draft to compare, so every fact is new"
+        ]
     changes = []
     if _figure_set(base.cited_figures) != _figure_set(draft.cited_figures):
         changes.append("the cited figures changed")
@@ -351,7 +369,7 @@ class ApprovalQueue:
             brief_id=outcome.run_id,
             outcome=outcome,
             state=state,
-            current=outcome.brief,
+            current=outcome.brief or outcome.template,
         )
         self._items[item.brief_id] = item
         return item
@@ -378,10 +396,11 @@ class ApprovalQueue:
 
     def _recheck(self, item, draft):
         """The edited brief and its code check; a brief that had no readable
-        text is built from its screen entry and the edit."""
+        text, or a template brief, is built from its screen entry and the
+        edit."""
         base = item.current or item.outcome.brief
         try:
-            if base is None:
+            if base is None or isinstance(base, TemplateBrief):
                 edited = DemandBrief.assemble(
                     item.outcome.entry,
                     draft,
@@ -397,10 +416,7 @@ class ApprovalQueue:
             # The edit breaks a placeholder rule for this brief, such as
             # naming another hospital, so it is refused with each problem.
             return None, CheckResult(passed=False, failures=failures_of(exc))
-        result = check_brief(
-            edited, item.outcome.ledger, item.outcome.rule_level
-        )
-        return edited, result
+        return edited, code_check(edited, item.outcome)
 
     def _decide(self, decision, recorded=None, replaying=False):
         """Apply one decision. In a rebuild from the queue file, an edit's
@@ -549,10 +565,7 @@ class ApprovalQueue:
         approved."""
         approved = [i for i in self._items.values() if i.state in CLOSED[:2]]
         passing = sum(
-            check_brief(
-                i.current, i.outcome.ledger, i.outcome.rule_level
-            ).passed
-            for i in approved
+            code_check(i.current, i.outcome).passed for i in approved
         )
         events = [
             i
@@ -636,7 +649,8 @@ class ApprovalQueue:
         out = {}
         for i in self._items.values():
             brief = i.current or i.outcome.brief
-            if brief is None:
+            # A template brief has no draft to copy.
+            if brief is None or isinstance(brief, TemplateBrief):
                 continue
             path = folder / f"{i.brief_id}.json"
             path.write_text(
@@ -703,6 +717,50 @@ def g6_verdict(queue, built, reader_b_agreeing=None):
         "reader_b_agreeing": reader_b_agreeing,
         "met": met,
     }
+
+
+# How G6's shortfall names a brief's kind, and a count of briefs.
+KIND_WORDS = {
+    "demand": "demand-week",
+    "surge": "surge-week",
+    "latch": "latch-week",
+}
+NUMBER_WORDS = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+
+
+def _fate(item):
+    """What happened to a brief G6 does not count, in words."""
+    refused = item.outcome.status == "not verified"
+    if item.state == "rejected":
+        return "refused and rejected" if refused else "rejected"
+    if item.state in CLOSED[:2]:
+        return "approved with a factual change"
+    if item.state == "edit failed":
+        return "edited, and the edit failed its checks"
+    return "refused and not yet decided" if refused else "not yet decided"
+
+
+def g6_short(queue):
+    """The briefs G6 does not count, and why, in plain words from the
+    queue, like briefs together in the order first queued: "the two
+    demand-week briefs were refused and rejected". Empty when every brief
+    counts."""
+    groups = {}
+    for i in queue.items():
+        if i.state in CLOSED[:2] and not any(
+            d.factual_edit for d in i.decisions
+        ):
+            continue
+        key = (KIND_WORDS[i.outcome.entry.kind], _fate(i))
+        groups[key] = groups.get(key, 0) + 1
+    return "; ".join(
+        (
+            f"the {kind} brief was {fate}"
+            if n == 1
+            else f"the {NUMBER_WORDS.get(n, n)} {kind} briefs were {fate}"
+        )
+        for (kind, fate), n in groups.items()
+    )
 
 
 DECISION_COLUMNS = (

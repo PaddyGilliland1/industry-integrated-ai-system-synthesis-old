@@ -712,3 +712,141 @@ def test_the_shipped_reader_b_sheet_holds_the_four_briefs_the_rule_picks(
         rp.run_id(e) for e in rp.reader_b_four(entries, rp.sizes(replay_run))
     ]
     assert sorted(r.brief_id for r in readings) == sorted(four)
+
+
+# --- a template brief goes to the manager under the same rules ---------------
+
+
+@pytest.fixture
+def template(replay_run, holidays):
+    """Ninewells' demand-week template brief, version 2, as code fills and
+    checks it."""
+    from ae_escalation import template as tp
+    from ae_escalation import tools as tl
+
+    e = next(
+        x for x in tl.screen_at(replay_run, ORIGIN) if x.hospital == "T101H"
+    )
+    return tp.template_outcome(replay_run, holidays, e, "tm", version=2)
+
+
+def test_a_template_brief_awaits_the_managers_decision(template, tmp_path):
+    item = queue(tmp_path, template).item("tm")
+    assert item.state == "awaiting decision"
+    assert item.current == template.template
+    assert item.display() == template.template.text(written_by=True)
+
+
+def test_the_queue_csv_holds_the_template_brief_without_its_author(
+    template, tmp_path
+):
+    q = queue(tmp_path, template)
+    q.export_csv(tmp_path / "queue.csv")
+    with open(tmp_path / "queue.csv", newline="", encoding="utf-8-sig") as fh:
+        (row,) = list(csv.DictReader(fh))
+    assert (row["status"], row["backend"], row["model"]) == (
+        "verified",
+        "template",
+        "version 2",
+    )
+    assert row["brief"] == template.template.text()
+    assert row["kind"] == "demand" and row["level"] == "2"
+
+
+def test_an_approved_template_brief_sets_its_levels_actions(
+    template, settings, tmp_path
+):
+    from ae_escalation import coordinator as co
+
+    item = queue(tmp_path, template).decide(decide("tm", "approve"))
+    assert item.state == "approved"
+    assert [a.code for a in co.plan(item, settings)] == [
+        "check-cover",
+        "hold-leave",
+    ]
+
+
+def test_a_rejected_template_brief_sets_no_action(template, tmp_path):
+    q = queue(tmp_path, template)
+    assert q.decide(decide("tm", "reject")).state == "rejected"
+    assert q.g4()["approved"] == 0
+
+
+def test_an_edit_of_a_template_brief_is_checked_against_its_tool_calls(
+    template, good, tmp_path
+):
+    q = queue(tmp_path, template)
+    item = q.decide(decide("tm", "edit", edited=good))
+    # The template brief has no draft to compare an edit with, so every
+    # fact the edit states is new, and code marks it factual.
+    assert item.state == "approved with edit"
+    assert item.last_edit.passed and item.decisions[0].factual_edit
+    assert isinstance(item.current, br.DemandBrief)
+    assert item.current.backend == "template"
+    assert item.current.text().endswith(
+        "Written by: the template brief, version 2."
+    )
+
+
+def test_an_edit_of_a_template_brief_with_a_wrong_figure_fails(
+    template, replay_run, tmp_path
+):
+    bad = br.BriefDraft.model_validate(planted_draft(replay_run))
+    q = queue(tmp_path, template)
+    item = q.decide(decide("tm", "edit", edited=bad))
+    assert item.state == "edit failed"
+    with pytest.raises(ap.NotApprovable):
+        q.decide(decide("tm", "approve"))
+
+
+def test_g4_rechecks_an_approved_template_brief(template, tmp_path):
+    q = queue(tmp_path, template)
+    q.decide(decide("tm", "approve"))
+    g4 = q.g4()
+    assert (g4["approved"], g4["approved_passing_code_check"]) == (1, 1)
+    assert g4["met"]
+
+
+def test_a_queued_template_brief_is_read_back_from_the_queue_file(
+    template, tmp_path
+):
+    queue(tmp_path, template).decide(decide("tm", "approve"))
+    again = ap.ApprovalQueue(tmp_path / "queue.jsonl").item("tm")
+    assert again.state == "approved" and again.current == template.template
+
+
+def test_a_template_brief_gets_no_prefilled_edit_file(template, tmp_path):
+    # A template brief has no draft: an edit is written in the agent's
+    # form, citing the template's tool calls.
+    assert queue(tmp_path, template).write_edit_files(tmp_path / "e") == {}
+
+
+# --- G6's shortfall in plain words -------------------------------------------
+
+
+def test_g6_says_which_briefs_fell_short_and_why(
+    verified, unverified, tmp_path
+):
+    q = queue(tmp_path, verified, unverified)
+    assert ap.g6_short(q) == (
+        "the demand-week brief was not yet decided; the demand-week brief "
+        "was refused and not yet decided"
+    )
+    q.decide(decide("nw", "approve"))
+    q.decide(decide("pl", "reject"))
+    assert ap.g6_short(q) == "the demand-week brief was refused and rejected"
+
+
+def test_g6_counts_like_briefs_together(replay_run, holidays, tmp_path):
+    from ae_escalation import template as tp
+
+    flags = [e for e in rp.replay_entries(replay_run) if not e.latched]
+    outcomes = [
+        tp.template_outcome(replay_run, holidays, e, rp.run_id(e), version=2)
+        for e in flags
+    ]
+    q = queue(tmp_path, *outcomes)
+    for o in outcomes:
+        q.decide(decide(o.run_id, "reject"))
+    assert len(flags) == 2 and {e.kind for e in flags} == {"demand"}
+    assert ap.g6_short(q) == "the two demand-week briefs were rejected"

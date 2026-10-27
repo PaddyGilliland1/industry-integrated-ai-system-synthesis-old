@@ -775,6 +775,10 @@ def _placeholder_problems(field, text, figures, ctx):
             _echo_problem(text, m, figures, ctx, fail)
         elif name == "LATCHED" and ctx is not None and not ctx.latched_since:
             fail(start, whole, f"{whole}: this brief's drift latch is not set")
+        elif name == "PRIMARY" and ctx is not None and not ctx.primary:
+            # A template brief never ranks the models, so its notifications
+            # cannot name one either.
+            fail(start, whole, f"{whole}: this brief names no primary model")
         elif name == "DEADLINE" and (ctx is None or not ctx.notification):
             fail(start, whole, f"{whole}: only a notification has a deadline")
     rest = PLACEHOLDER.sub(lambda m: " " * len(m.group(0)), text)

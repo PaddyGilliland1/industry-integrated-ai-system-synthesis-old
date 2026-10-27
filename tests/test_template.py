@@ -508,3 +508,116 @@ def test_a_live_brief_gets_the_shipped_template_version(replay_run, shipped):
     e = entry_at(replay_run, "2021-06-13", "T101H")
     brief = tp.weekly_brief(replay_run, e, shipped, RefusingGraph())
     assert brief.version == 2 and RATERS_WORDING in brief.text()
+
+
+# --- the template brief in the approval queue --------------------------------
+
+
+def printed(fig):
+    """A cited figure as the template prints it."""
+    if fig.unit == "attendances":
+        return f"{fig.value:,.0f}"
+    if fig.unit == "%":
+        return f"{fig.value:.1f}%"
+    return f"{fig.value:.0f}"
+
+
+def test_the_template_cites_every_figure_it_prints(demand):
+    figures = demand.cited_figures
+    assert all(printed(f) in demand.text() for f in figures)
+    forecasts = sum(
+        1 + 2 * (f.range_80 is not None) + 2 * (f.range_95 is not None)
+        for f in demand.forecasts.forecasts
+        if f.model in tl.SIMPLE_MODELS
+    )
+    errors = sum(
+        e.mape is not None
+        for at in demand.errors
+        for e in at.errors
+        if e.model in tl.SIMPLE_MODELS
+    )
+    # The track record's sentence states the flags borne out, the flags and
+    # the unflagged outlooks' busy share.
+    track = 0 if demand.track.flags == 0 else 3
+    assert len(figures) == forecasts + errors + track
+
+
+def test_code_checks_every_template_figure_against_its_tool_call(demand):
+    result = fg.check_template(demand, demand.level)
+    assert result.passed
+    assert result.figures_checked == len(demand.cited_figures)
+
+
+def test_a_template_figure_no_tool_returned_fails_the_code_check(demand):
+    rows = demand.forecasts.forecasts
+    n = next(i for i, f in enumerate(rows) if f.model in tl.SIMPLE_MODELS)
+    wrong = rows[n].model_copy(update={"point": rows[n].point + 500})
+    forecasts = demand.forecasts.model_copy(
+        update={"forecasts": [*rows[:n], wrong, *rows[n + 1 :]]}
+    )
+    changed = demand.model_copy(update={"forecasts": forecasts})
+    result = fg.check_template(changed, demand.level)
+    assert not result.passed
+    at = [
+        f"cited_figures[{i}]"
+        for i, f in enumerate(changed.cited_figures)
+        if (f.measure, f.model, f.horizon)
+        == ("point", wrong.model, wrong.release_horizon)
+    ]
+    assert [f.field for f in result.failures] == at
+
+
+def test_a_template_at_another_level_fails_the_code_check(demand):
+    result = fg.check_template(demand, demand.level + 1)
+    assert not result.passed and result.failures[0].field == "level"
+
+
+@pytest.fixture
+def queued(replay_run, holidays):
+    """Ninewells' demand-week template brief as the queue receives it."""
+    e = entry_at(replay_run, "2021-06-13", "T101H")
+    return tp.template_outcome(
+        replay_run, holidays, e, "20210613-T101H", version=2
+    )
+
+
+def test_a_template_brief_reaches_the_queue_verified_by_code(
+    queued, replay_run
+):
+    e = entry_at(replay_run, "2021-06-13", "T101H")
+    assert (queued.status, queued.backend, queued.model) == (
+        "verified",
+        "template",
+        "version 2",
+    )
+    assert queued.template == tp.template_brief(replay_run, e, version=2)
+    assert queued.ledger == queued.template.ledger
+    assert queued.rule_level == e.level and queued.brief is None
+    assert queued.attempts[0].check.passed
+
+
+def test_the_queued_template_brief_names_its_author_only_to_the_manager(
+    queued,
+):
+    shown = queued.display()
+    assert shown == queued.template.text(written_by=True)
+    assert shown.endswith(
+        "Written by: the template brief, version 2, filled by code with no "
+        "model call."
+    )
+    assert queued.display(written_by=False) == queued.template.text()
+
+
+def test_a_template_brief_the_code_check_fails_is_shown_not_verified(
+    queued,
+):
+    failed = fg.check_template(queued.template, queued.rule_level + 1)
+    attempt = queued.attempts[0].model_copy(update={"check": failed})
+    broken = queued.model_copy(
+        update={"status": "not verified", "attempts": [attempt]}
+    )
+    shown = broken.display()
+    assert shown.startswith("NOT VERIFIED, DO NOT ACT")
+    assert "level: the brief's level 2 is not the rule's level 3" in shown
+    assert queued.template.text() in shown
+    assert broken.cause == "the code check"

@@ -881,3 +881,71 @@ def test_live_briefs_routes_flag_weeks_to_the_template(
     assert not {"20210613-T101H", "20230409-C121H"} & asked
     for rid in ("20210613-T101H", "20230409-C121H"):
         assert f"{rid}: the template brief, version 2" in out
+
+
+FLAG_WEEKS = ("20210613-T101H", "20230409-C121H")
+
+
+def queue_rows(tmp_path, backend, label="t1"):
+    """The released queue's rows, by brief id."""
+    path = tmp_path / "approvals" / f"queue_{backend}_{label}.csv"
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        return {r["brief_id"]: r for r in csv.DictReader(fh)}
+
+
+def test_live_briefs_queues_a_flag_week_template_brief_for_approval(
+    tmp_path, pinned
+):
+    # The frontier copy of config.json keeps the shipped template rule, and
+    # the approver's choice releases its queue, as the recorded set's did.
+    stated_case(tmp_path, "t1", pinned)
+    assert frontier(tmp_path, "briefs", "--label", "t1") == 0
+    score_all(tmp_path, "t1", backend="frontier")
+    assert frontier(tmp_path, "adequacy", "--label", "t1") == 0
+    choose = ["choose", "--label", "t1", "--set", "frontier"]
+    assert lv.main([*choose, "--initials", "PG", "--out", str(tmp_path)]) == 0
+    rows = queue_rows(tmp_path, "frontier")
+    assert len(rows) == 7
+    for rid in FLAG_WEEKS:
+        row = rows[rid]
+        assert (row["backend"], row["model"], row["status"]) == (
+            "template",
+            "version 2",
+            "verified",
+        )
+        assert row["action"] == "" and "Written by" not in row["brief"]
+        assert "Drift: No drift alarm is recorded" in row["brief"]
+
+
+def test_only_an_approved_template_brief_sets_actions(tmp_path, pinned):
+    stated_case(tmp_path, "t1", pinned)
+    assert frontier(tmp_path, "briefs", "--label", "t1") == 0
+    score_all(tmp_path, "t1", backend="frontier")
+    assert frontier(tmp_path, "adequacy", "--label", "t1") == 0
+    choose = ["choose", "--label", "t1", "--set", "frontier"]
+    assert lv.main([*choose, "--initials", "PG", "--out", str(tmp_path)]) == 0
+    rows = queue_rows(tmp_path, "frontier")
+    decided = []
+    for rid, action in zip(FLAG_WEEKS, ("approve", "reject")):
+        row = dict(rows[rid])
+        row.update(
+            action=action,
+            initials="AB",
+            decided_at=AFTER_ANY_RUN,
+            factual_edit="no",
+            **{c: "yes" for c in lv.CRITERIA_FIELDS},
+        )
+        decided.append(row)
+    out = tmp_path / "approvals" / "decisions_frontier_t1.csv"
+    with open(out, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(decided[0]))
+        writer.writeheader()
+        writer.writerows(decided)
+    assert frontier(tmp_path, "notify", "--label", "t1") == 0
+    sent = tmp_path / "outbox" / "notifications_frontier_t1.jsonl"
+    written = [json.loads(x) for x in sent.read_text().splitlines()]
+    notified = [r for r in written if r["kind"] == "notification"]
+    assert [(r["brief_id"], r["to"]) for r in notified] == [
+        ("20210613-T101H", "duty manager"),
+        ("20210613-T101H", "rota coordinator"),
+    ]

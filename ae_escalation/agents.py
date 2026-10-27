@@ -40,6 +40,7 @@ from .briefs import (
     BriefFacts,
     DemandBrief,
     DraftFields,
+    TemplateBrief,
     ToolCall,
     backtest_line,
     brief_facts,
@@ -725,6 +726,9 @@ class BriefOutcome(BaseModel):
     facts: BriefFacts | None = None
     rule_level: int | None = None
     brief: DemandBrief | None = None
+    # A flag week's template brief under the template rule, filled and
+    # checked by code; it has no attempts of the agent's.
+    template: TemplateBrief | None = None
     attempts: list[Attempt] = Field(default_factory=list)
     ledger: list[ToolCall] = Field(default_factory=list)
     calls: list[CallRecord] = Field(default_factory=list)
@@ -780,9 +784,21 @@ class BriefOutcome(BaseModel):
         problem code found. A draft the rules refused is shown the same
         way, from its attempt. written_by=False is the raters' view, without
         the author's line."""
+        banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
+        if self.template is not None:
+            shown = self.template.text(written_by=written_by)
+            if self.status != "not verified":
+                return shown
+            return "\n".join(
+                [
+                    banner,
+                    shown,
+                    "Problems found by code:",
+                    *[f"- {f.field}: {f.reason}" for f in self.failures],
+                ]
+            )
         if self.status != "not verified":
             return self.brief.text(written_by=written_by) if self.brief else ""
-        banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
         last = self.attempts[-1] if self.attempts else None
         shown = (
             last

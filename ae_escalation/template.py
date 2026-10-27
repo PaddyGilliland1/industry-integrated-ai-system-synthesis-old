@@ -40,208 +40,57 @@ failed it in the demand week, so explanation_writer applies that rule.
 """
 
 import zlib
-from datetime import date
 from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from . import tools as tl
+from .agents import Attempt, BriefOutcome
 from .approval import Criteria, criteria_from, sheet_rows, yes_no
-from .briefs import LEVEL_FROM, NO_DRIFT_LINES, ToolCall, track_line
-from .placeholders import day_text, release_text, week_text
+from .briefs import (
+    WATCH,
+    TemplateBrief,
+    brief_facts,
+    drift_sentence,
+    template_brief,
+    watch_point,
+)
+from .figures import check_template
+
+# The template brief itself lives in briefs.py, beside the agent's brief,
+# so the approval queue can hold either; these names keep their old place.
+__all__ = [
+    "WATCH",
+    "TemplateBrief",
+    "drift_sentence",
+    "template_brief",
+    "watch_point",
+]
 
 WEEKS = ("national latch week", "demand week")
-WATCH = {
-    "upward": (
-        "Watch: demand is running above the forecasts. Check whether extra "
-        "shifts or bank staff are needed for the next four weeks."
-    ),
-    "downward": (
-        "Watch: the forecasts are untrusted and the level is held. Check "
-        "each released week before changing staffing."
-    ),
-    "flagged": (
-        "Watch: demand is forecast unusually high for the time of year. "
-        "Check whether extra shifts, bank staff or holding leave are needed."
-    ),
-    "otherwise": "Watch: the level suggests no staffing change this week.",
-}
 
 
-def watch_point(latched, direction, flagged):
-    """The watch point's fixed sentence, chosen by rule."""
-    if latched:
-        return WATCH[direction]
-    return WATCH["flagged"] if flagged else WATCH["otherwise"]
-
-
-def drift_sentence(latched, since, direction, version=1):
-    """The drift status's fixed sentence. With no drift alarm it depends on
-    the version: 1 as rated, 2 in the raters' own wording."""
-    if not latched:
-        return NO_DRIFT_LINES[version]
-    article = "an" if direction == "upward" else "a"
-    return (
-        f"Drift: latched since {week_text(since)}, after {article} "
-        f"{direction} breach. The forecasts are untrusted until a person "
-        "approves a latch reset."
-    )
-
-
-def _range(r):
-    """A range as the template prints it."""
-    return "no range" if r is None else f"{r.low:,.0f} to {r.high:,.0f}"
-
-
-class TemplateBrief(BaseModel):
-    """The template brief for one hospital and week, with the tool calls
-    that filled it."""
-
-    model_config = ConfigDict(frozen=True)
-
-    hospital: str
-    name: str
-    week: date
-    release_date: date
-    level: int
-    level_source: Literal["flag", "surge", "held"]
-    latched: bool
-    latched_since: date | None
-    breach_direction: Literal["upward", "downward"] | None
-    flagged: bool
-    forecasts: tl.ForecastResult
-    errors: list[tl.BacktestErrorResult]
-    track: tl.TrackRecordResult
-    ledger: list[ToolCall]
-    version: Literal[1, 2] = 1
-
-    def forecast_rows(self):
-        """Field 3: one row per model, one cell per release horizon."""
-        rows = []
-        for model in tl.SIMPLE_MODELS:
-            cells = [model]
-            for k in (1, 2, 3, 4):
-                f = next(
-                    x
-                    for x in self.forecasts.forecasts
-                    if x.model == model and x.release_horizon == k
-                )
-                cells.append(
-                    f"{f.point:,.0f} (80%: {_range(f.range_80)}; "
-                    f"95%: {_range(f.range_95)})"
-                )
-            rows.append(cells)
-        return rows
-
-    def error_rows(self):
-        """Field 4: the back-test MAPE, one row per model, one cell per
-        release horizon."""
-        rows = []
-        for model in tl.SIMPLE_MODELS:
-            cells = [model]
-            for k in (1, 2, 3, 4):
-                at = next(x for x in self.errors if x.release_horizon == k)
-                e = next(x for x in at.errors if x.model == model)
-                cells.append("none" if e.mape is None else f"{e.mape:.1f}%")
-            rows.append(cells)
-        return rows
-
-    def text(self):
-        """The template brief as a reader sees it."""
-        weeks = sorted({f.week_ending for f in self.forecasts.forecasts})
-        heads = [
-            f"Release horizon {k}, {week_text(w)}"
-            for k, w in enumerate(weeks, 1)
-        ]
-
-        def table(head, rows):
-            """A Markdown table of rows under a heading row."""
-            out = [
-                "| " + " | ".join(["Model", *head]) + " |",
-                "|" + "---|" * (len(head) + 1),
-            ]
-            out += ["| " + " | ".join(r) + " |" for r in rows]
-            return out
-
-        lines = [
-            f"{self.name}, week ending {day_text(self.week)}, released "
-            f"{release_text(self.release_date)}",
-            "",
-            f"Demand level {self.level}, from "
-            f"{LEVEL_FROM[self.level_source]}.",
-            tl.LEVEL_MEANING,
-            tl.level_band(self.level, self.level_source),
-            "",
-            "Forecasts, with their 80% and 95% ranges:",
-            *table(heads, self.forecast_rows()),
-            "",
-            "Back-test error (MAPE) of each model at each release horizon, "
-            "known at the origin:",
-            *table(
-                [f"Release horizon {k}" for k in (1, 2, 3, 4)],
-                self.error_rows(),
-            ),
-            "",
-            track_line(self.track),
-            drift_sentence(
-                self.latched,
-                self.latched_since,
-                self.breach_direction,
-                self.version,
-            ),
-            watch_point(self.latched, self.breach_direction, self.flagged),
-        ]
-        return "\n".join(lines)
-
-
-def template_brief(run, entry, version=1):
-    """Fill the template brief for one screened hospital and origin from
-    the tools, as of the origin. Version 1 is the template as rated, which
-    the comparison uses; version 2 is what live briefs get. The run is not
-    changed."""
-    ledger = []
-
-    def call(name, request, result):
-        """Run one tool call into the ledger and return its result."""
-        ledger.append(
-            ToolCall(
-                id=f"T{len(ledger) + 1}",
-                name=name,
-                request=request.model_dump(mode="json"),
-                result=result.model_dump(mode="json"),
-            )
-        )
-        return result
-
-    req = tl.ForecastRequest(hospital=entry.hospital, as_of=entry.as_of)
-    forecasts = call("get_forecast", req, tl.get_forecast(run, req))
-    errors = []
-    for k in (1, 2, 3, 4):
-        req = tl.BacktestErrorRequest(
-            hospital=entry.hospital, as_of=entry.as_of, horizon=k
-        )
-        errors.append(
-            call("get_backtest_error", req, tl.get_backtest_error(run, req))
-        )
-    req = tl.TrackRecordRequest(hospital=entry.hospital, as_of=entry.as_of)
-    track = call("get_track_record", req, tl.get_track_record(run, req))
-    return TemplateBrief(
+def template_outcome(run, holidays, entry, run_id, version):
+    """The template brief for one screened week as the approval queue
+    receives it, under the same rules as the agent's: code checks every
+    figure it prints against the tool call it came from, and the level
+    against the rule's, before it is queued. It carries the brief's facts,
+    so a manager's edit is assembled and checked as any edit is."""
+    brief = template_brief(run, entry, version=version)
+    check = check_template(brief, entry.level)
+    return BriefOutcome(
+        run_id=run_id,
         hospital=entry.hospital,
-        name=entry.name,
-        week=entry.as_of,
-        release_date=entry.release_date,
-        level=entry.level,
-        level_source=entry.level_source,
-        latched=entry.latched,
-        latched_since=entry.latched_since,
-        breach_direction=entry.breach_direction,
-        flagged=entry.kind == "demand",
-        forecasts=forecasts,
-        errors=errors,
-        track=track,
-        ledger=ledger,
-        version=version,
+        origin=entry.as_of,
+        status="verified" if check.passed else "not verified",
+        entry=entry,
+        facts=brief_facts(run, holidays, entry),
+        rule_level=entry.level,
+        attempts=[Attempt(number=1, check=check)],
+        ledger=brief.ledger,
+        backend="template",
+        model=f"version {version}",
+        template=brief,
     )
 
 

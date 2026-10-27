@@ -223,8 +223,9 @@ def _briefs(settings, paths, model, digest, resume, fetch, budget):
         print(f"  {o.run_id}: {o.status} after {len(o.attempts)} attempt(s)")
     for t in result.templates:
         print(
-            f"  {t.week:%Y%m%d}-{t.hospital}: the template brief, version "
-            f"{t.version}, filled by code with no model call"
+            f"  {t.run_id}: the template brief, version "
+            f"{t.template.version}, filled by code with no model call; "
+            f"{t.status} by the code check"
         )
     events = [o.cause for o in result.outcomes if o.status == "not verified"]
     causes = ", ".join(f"{c}: {events.count(c)}" for c in sorted(set(events)))

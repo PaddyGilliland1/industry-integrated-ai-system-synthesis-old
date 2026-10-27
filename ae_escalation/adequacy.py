@@ -225,11 +225,11 @@ def write_form(result, paths):
     # they are listed for the record, and the test scores the agent's.
     for t in result.templates:
         lines += [
-            f"## {t.week:%Y%m%d}-{t.hospital}: the template brief, version "
-            f"{t.version}, filled by code; not scored, since the test scores "
-            "the agent's briefs",
+            f"## {t.run_id}: the template brief, version "
+            f"{t.template.version}, filled by code; not scored, since the "
+            "test scores the agent's briefs",
             "",
-            t.text(),
+            t.display(written_by=False),
             "",
         ]
     paths.adequacy_form.write_text("\n".join(lines), encoding="utf-8")

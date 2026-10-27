@@ -397,7 +397,12 @@ def _date_lines(brief):
     lines = [
         f"- {{HOSPITAL}}: {ctx.name}",
         f"- {{LEVEL}}: demand level {ctx.level}",
-        f"- {{PRIMARY}}: {ph.render('{PRIMARY}', [], ctx)}",
+        # A template brief names no primary model, so none is offered.
+        *(
+            [f"- {{PRIMARY}}: {ph.render('{PRIMARY}', [], ctx)}"]
+            if ctx.primary
+            else []
+        ),
         f"- {{ORIGIN}}: {ph.week_text(ctx.origin)}, the origin",
         f"- {{RELEASE}}: {ph.release_text(ctx.release)}, the release",
         *[f"- {{WEEK{k}}}: {w}" for k, w in enumerate(weeks, 1)],

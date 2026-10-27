@@ -698,16 +698,7 @@ def check_brief(brief, ledger, rule_level):
     -------
     CheckResult
     """
-    level = []
-    if brief.level != rule_level:
-        level.append(
-            Failure(
-                field="level",
-                found=str(brief.level),
-                reason=f"the brief's level {brief.level} is not the rule's "
-                f"level {rule_level}",
-            )
-        )
+    level = _level_failures(brief, rule_level)
     result = check_draft(
         brief.texts(), brief.cited_figures, ledger, brief.text_context()
     )
@@ -716,4 +707,61 @@ def check_brief(brief, ledger, rule_level):
             "passed": result.passed and not level,
             "failures": level + result.failures,
         }
+    )
+
+
+def _level_failures(brief, rule_level):
+    """The brief's level against the rule's, as a list of at most one
+    failure."""
+    if brief.level == rule_level:
+        return []
+    return [
+        Failure(
+            field="level",
+            found=str(brief.level),
+            reason=f"the brief's level {brief.level} is not the rule's "
+            f"level {rule_level}",
+        )
+    ]
+
+
+def check_template(brief, rule_level):
+    """Check a template brief before it is queued, and again once approved,
+    by the rules check_brief applies to the agent's: the level against the
+    rule's, then every figure it prints against the tool call it cites.
+    Code writes all of the template's words, so no text rule applies, and
+    it states every forecast, so no figure is missing.
+
+    Parameters
+    ----------
+    brief : briefs.TemplateBrief
+    rule_level : int
+
+    Returns
+    -------
+    CheckResult
+    """
+    failures = _level_failures(brief, rule_level)
+    ctx = brief.text_context()
+    by_id = {c.id: c for c in brief.ledger}
+    figures = brief.cited_figures
+    failed = []
+    for i, fig in enumerate(figures):
+        problem = figure_problem(
+            fig, by_id, ctx.hospital, ctx.origin, ctx.targets
+        )
+        if problem:
+            failed.append(i + 1)
+            failures.append(
+                Failure(
+                    field=f"cited_figures[{i}]",
+                    found=plain(fig.value),
+                    reason=problem,
+                )
+            )
+    return CheckResult(
+        passed=not failures,
+        failures=failures,
+        figures_checked=len(figures),
+        failed_figures=failed,
     )

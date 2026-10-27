@@ -320,7 +320,9 @@ class DemandBrief(BaseModel):
     watch_points: list[str]
     cited_figures: list[CitedFigure]
     primary: ModelName
-    backend: Literal["local", "frontier"]
+    # "template" for a manager's edit of a template brief, with model the
+    # template's version.
+    backend: Literal["local", "frontier", "template"]
     model: str
     model_digest: str | None
 
@@ -536,9 +538,315 @@ def brief_text(head, shown, written_by=True):
         "Watch points:",
         *[f"- {w}" for w in points],
     ]
-    if written_by:
+    if written_by and head.backend == "template":
+        lines.append(f"Written by: the template brief, {head.model}.")
+    elif written_by:
         lines.append(f"Written by: the {head.backend} backend, {head.model}.")
     return "\n".join(lines)
+
+
+# --- the template brief ------------------------------------------------------
+
+WATCH = {
+    "upward": (
+        "Watch: demand is running above the forecasts. Check whether extra "
+        "shifts or bank staff are needed for the next four weeks."
+    ),
+    "downward": (
+        "Watch: the forecasts are untrusted and the level is held. Check "
+        "each released week before changing staffing."
+    ),
+    "flagged": (
+        "Watch: demand is forecast unusually high for the time of year. "
+        "Check whether extra shifts, bank staff or holding leave are needed."
+    ),
+    "otherwise": "Watch: the level suggests no staffing change this week.",
+}
+
+
+def watch_point(latched, direction, flagged):
+    """The watch point's fixed sentence, chosen by rule."""
+    if latched:
+        return WATCH[direction]
+    return WATCH["flagged"] if flagged else WATCH["otherwise"]
+
+
+def drift_sentence(latched, since, direction, version=1):
+    """The drift status's fixed sentence. With no drift alarm it depends on
+    the version: 1 as rated, 2 in the raters' own wording."""
+    if not latched:
+        return NO_DRIFT_LINES[version]
+    article = "an" if direction == "upward" else "a"
+    return (
+        f"Drift: latched since {ph.week_text(since)}, after {article} "
+        f"{direction} breach. The forecasts are untrusted until a person "
+        "approves a latch reset."
+    )
+
+
+def _range(r):
+    """A range as the template prints it."""
+    return "no range" if r is None else f"{r.low:,.0f} to {r.high:,.0f}"
+
+
+class TemplateBrief(BaseModel):
+    """The template brief for one hospital and week, with the tool calls
+    that filled it. In the approval queue it stands where an agent's brief
+    would: it cites every figure it prints to its tool call, so code checks
+    them and the coordinator offers them, and it names no primary model, so
+    no notification can."""
+
+    model_config = ConfigDict(frozen=True)
+
+    hospital: str
+    name: str
+    week: date
+    release_date: date
+    kind: Literal["demand", "surge", "latch"]
+    level: int
+    level_source: Literal["flag", "surge", "held"]
+    latched: bool
+    latched_since: date | None
+    breach_direction: Literal["upward", "downward"] | None
+    flagged: bool
+    forecasts: tl.ForecastResult
+    errors: list[tl.BacktestErrorResult]
+    track: tl.TrackRecordResult
+    ledger: list[ToolCall]
+    version: Literal[1, 2] = 1
+
+    def forecast_rows(self):
+        """Field 3: one row per model, one cell per release horizon."""
+        rows = []
+        for model in tl.SIMPLE_MODELS:
+            cells = [model]
+            for k in (1, 2, 3, 4):
+                f = next(
+                    x
+                    for x in self.forecasts.forecasts
+                    if x.model == model and x.release_horizon == k
+                )
+                cells.append(
+                    f"{f.point:,.0f} (80%: {_range(f.range_80)}; "
+                    f"95%: {_range(f.range_95)})"
+                )
+            rows.append(cells)
+        return rows
+
+    def error_rows(self):
+        """Field 4: the back-test MAPE, one row per model, one cell per
+        release horizon."""
+        rows = []
+        for model in tl.SIMPLE_MODELS:
+            cells = [model]
+            for k in (1, 2, 3, 4):
+                at = next(x for x in self.errors if x.release_horizon == k)
+                e = next(x for x in at.errors if x.model == model)
+                cells.append("none" if e.mape is None else f"{e.mape:.1f}%")
+            rows.append(cells)
+        return rows
+
+    @property
+    def cited_figures(self):
+        """Every figure the template prints, in the order it prints them,
+        each as printed and cited to the tool call it came from: each
+        model's forecast and range ends, each back-test error, then the
+        track record's three."""
+        by_name = {}
+        for c in self.ledger:
+            by_name.setdefault(c.name, []).append(c)
+        forecast = by_name["get_forecast"][0].id
+        errors = {
+            c.request["horizon"]: c.id for c in by_name["get_backtest_error"]
+        }
+        track = by_name["get_track_record"][0].id
+        out = []
+        for model in tl.SIMPLE_MODELS:
+            for k in (1, 2, 3, 4):
+                f = next(
+                    x
+                    for x in self.forecasts.forecasts
+                    if x.model == model and x.release_horizon == k
+                )
+                ends = [("point", f.point)]
+                for cover, r in (("80", f.range_80), ("95", f.range_95)):
+                    if r is not None:
+                        ends += [
+                            (f"low_{cover}", r.low),
+                            (f"high_{cover}", r.high),
+                        ]
+                out += [
+                    CitedFigure(
+                        value=round(v),
+                        tool_call_id=forecast,
+                        measure=measure,
+                        model=model,
+                        horizon=k,
+                        unit="attendances",
+                    )
+                    for measure, v in ends
+                ]
+        for model in tl.SIMPLE_MODELS:
+            for k in (1, 2, 3, 4):
+                at = next(x for x in self.errors if x.release_horizon == k)
+                e = next(x for x in at.errors if x.model == model)
+                if e.mape is not None:
+                    out.append(
+                        CitedFigure(
+                            value=round(e.mape, 1),
+                            tool_call_id=errors[k],
+                            measure="error",
+                            model=model,
+                            horizon=k,
+                            unit="%",
+                        )
+                    )
+        if self.track.flags:
+            # The order track_line states them in.
+            for measure, unit, v in (
+                ("borne_out", "count", self.track.borne_out),
+                ("flags", "count", self.track.flags),
+                ("unflagged_busy_pct", "%", self.track.unflagged_busy_pct),
+            ):
+                value = round(v, 1) if unit == "%" else v
+                out.append(
+                    CitedFigure(
+                        value=value,
+                        tool_call_id=track,
+                        measure=measure,
+                        unit=unit,
+                    )
+                )
+        return out
+
+    def text_context(self):
+        """What code knows about this brief, for a notification's
+        placeholders. The template never ranks the models, so it names no
+        primary model."""
+        return ph.TextContext(
+            hospital=self.hospital,
+            name=self.name,
+            kind=self.kind,
+            level=self.level,
+            origin=self.week,
+            release=self.release_date,
+            latched_since=self.latched_since,
+        )
+
+    def rendered(self):
+        """The template as one text field, as the coordinator reads a
+        brief's fields."""
+        return {"template": self.text()}
+
+    def figures_in(self, field):
+        """The cited figures a field states: the template states every
+        figure it cites."""
+        return set(range(1, len(self.cited_figures) + 1))
+
+    def text(self, written_by=False):
+        """The template brief as a reader sees it. The manager's view ends
+        with the line saying who wrote it; the raters' view, and the
+        default, leave it out, as the comparison showed it."""
+        weeks = sorted({f.week_ending for f in self.forecasts.forecasts})
+        heads = [
+            f"Release horizon {k}, {ph.week_text(w)}"
+            for k, w in enumerate(weeks, 1)
+        ]
+
+        def table(head, rows):
+            """A Markdown table of rows under a heading row."""
+            out = [
+                "| " + " | ".join(["Model", *head]) + " |",
+                "|" + "---|" * (len(head) + 1),
+            ]
+            out += ["| " + " | ".join(r) + " |" for r in rows]
+            return out
+
+        lines = [
+            f"{self.name}, week ending {ph.day_text(self.week)}, released "
+            f"{ph.release_text(self.release_date)}",
+            "",
+            f"Demand level {self.level}, from "
+            f"{LEVEL_FROM[self.level_source]}.",
+            tl.LEVEL_MEANING,
+            tl.level_band(self.level, self.level_source),
+            "",
+            "Forecasts, with their 80% and 95% ranges:",
+            *table(heads, self.forecast_rows()),
+            "",
+            "Back-test error (MAPE) of each model at each release horizon, "
+            "known at the origin:",
+            *table(
+                [f"Release horizon {k}" for k in (1, 2, 3, 4)],
+                self.error_rows(),
+            ),
+            "",
+            track_line(self.track),
+            drift_sentence(
+                self.latched,
+                self.latched_since,
+                self.breach_direction,
+                self.version,
+            ),
+            watch_point(self.latched, self.breach_direction, self.flagged),
+        ]
+        if written_by:
+            lines.append(
+                f"Written by: the template brief, version {self.version}, "
+                "filled by code with no model call."
+            )
+        return "\n".join(lines)
+
+
+def template_brief(run, entry, version=1):
+    """Fill the template brief for one screened hospital and origin from
+    the tools, as of the origin. Version 1 is the template as rated, which
+    the comparison uses; version 2 is what live briefs get. The run is not
+    changed."""
+    ledger = []
+
+    def call(name, request, result):
+        """Run one tool call into the ledger and return its result."""
+        ledger.append(
+            ToolCall(
+                id=f"T{len(ledger) + 1}",
+                name=name,
+                request=request.model_dump(mode="json"),
+                result=result.model_dump(mode="json"),
+            )
+        )
+        return result
+
+    req = tl.ForecastRequest(hospital=entry.hospital, as_of=entry.as_of)
+    forecasts = call("get_forecast", req, tl.get_forecast(run, req))
+    errors = []
+    for k in (1, 2, 3, 4):
+        req = tl.BacktestErrorRequest(
+            hospital=entry.hospital, as_of=entry.as_of, horizon=k
+        )
+        errors.append(
+            call("get_backtest_error", req, tl.get_backtest_error(run, req))
+        )
+    req = tl.TrackRecordRequest(hospital=entry.hospital, as_of=entry.as_of)
+    track = call("get_track_record", req, tl.get_track_record(run, req))
+    return TemplateBrief(
+        hospital=entry.hospital,
+        name=entry.name,
+        week=entry.as_of,
+        release_date=entry.release_date,
+        kind=entry.kind,
+        level=entry.level,
+        level_source=entry.level_source,
+        latched=entry.latched,
+        latched_since=entry.latched_since,
+        breach_direction=entry.breach_direction,
+        flagged=entry.kind == "demand",
+        forecasts=forecasts,
+        errors=errors,
+        track=track,
+        ledger=ledger,
+        version=version,
+    )
 
 
 problems_of = ph.problems_of

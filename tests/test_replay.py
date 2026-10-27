@@ -1015,10 +1015,9 @@ def test_a_new_run_under_the_rule_writes_flag_weeks_from_the_template(
     live = rp.run_set(
         replay_run, holidays, rule, paths, live=True, chat_model=stand_in()
     )
-    assert [f"{t.week:%Y%m%d}-{t.hospital}" for t in live.templates] == (
-        FLAG_WEEKS
-    )
-    assert all(t.version == 2 for t in live.templates)
+    assert [t.run_id for t in live.templates] == FLAG_WEEKS
+    assert all(t.template.version == 2 for t in live.templates)
+    assert all(t.status == "verified" for t in live.templates)
     assert not {o.run_id for o in live.outcomes} & set(FLAG_WEEKS)
     assert len(live.outcomes) == 5 and live.planted is not None
     again = rp.run_set(replay_run, holidays, rule, paths, live=False)

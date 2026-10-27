@@ -521,8 +521,9 @@ class ReplaySetResult(BaseModel):
     check: dict
     outcomes: list[BriefOutcome]
     planted: BriefOutcome | None = None
-    # The flag weeks' briefs the template wrote, under the template rule.
-    templates: list[tp.TemplateBrief] = []
+    # The flag weeks' briefs the template wrote under the template rule,
+    # each checked by code and ready for the approval queue.
+    templates: list[BriefOutcome] = []
     backend: str
     model: str
 
@@ -662,9 +663,14 @@ def run_set(
             # the code check on the agent's draft, so it always goes to the
             # agent.
             if plant is None and tp.explanation_writer(e, ran) == "template":
-                brief = tp.template_brief(run, e, ran.template_version)
+                brief = tp.template_outcome(
+                    run, holidays, e, rid, ran.template_version
+                )
                 log.write(
-                    kind="template brief", run_id=rid, version=brief.version
+                    kind="template brief",
+                    run_id=rid,
+                    version=brief.template.version,
+                    status=brief.status,
                 )
                 templates.append(brief)
                 continue
@@ -758,14 +764,15 @@ def blind_retries(paths):
 
 def write_queue(result, paths, log=None):
     """Write the approval queue file and its CSV for the approver, once,
-    with a pre-filled edit file for each brief. An existing
+    with a pre-filled edit file for each agent's brief. The template's
+    briefs are queued after the agent's, under the same rules. An existing
     queue is never overwritten. Each brief queued goes to the
     label's audit log. The designed failure is evidence for
     the check, not a brief to approve, so it is not queued."""
     if paths.queue.exists():
         raise FileExistsError(f"{paths.queue} exists; it is never replaced")
     queue = ApprovalQueue(paths.queue, log=log or AuditLog(paths.audit))
-    for outcome in result.outcomes:
+    for outcome in [*result.outcomes, *result.templates]:
         queue.add(outcome)
     written = queue.write_edit_files(paths.edits)
     names = {
@@ -865,7 +872,7 @@ def queue_with_decisions(
         )
     else:
         queue = ApprovalQueue(log=log, not_before=started, reviewer=reviewer)
-        for outcome in result.outcomes:
+        for outcome in [*result.outcomes, *result.templates]:
             queue.add(outcome)
     if not paths.decisions.exists():
         return queue

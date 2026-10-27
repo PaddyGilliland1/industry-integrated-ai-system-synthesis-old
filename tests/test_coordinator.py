@@ -19,6 +19,7 @@ from ae_escalation import approval as ap
 from ae_escalation import briefs as br
 from ae_escalation import coordinator as co
 from ae_escalation import gateway as gw
+from ae_escalation import placeholders as ph
 from ae_escalation import tools as tl
 from ae_escalation.figures import check_brief
 
@@ -694,3 +695,78 @@ def test_a_coordinator_error_whose_text_is_not_its_message_replays(
     assert again.drafts[0].check.failures[0].reason == (
         live.drafts[0].check.failures[0].reason
     )
+
+
+# --- an approved template brief ----------------------------------------------
+
+# A template brief names no primary model, so its notifications cannot.
+TEMPLATE_GOOD = {
+    "check-cover": (
+        "{HOSPITAL}, {LEVEL}: please check whether extra shifts or bank "
+        "staff are needed for the weeks from {WEEK1} to {WEEK4}; a "
+        "forecast is {F1}. Please reply by {DEADLINE}."
+    ),
+    "hold-leave": GOOD["hold-leave"],
+}
+
+
+@pytest.fixture
+def approved_template(replay_run, holidays):
+    """Ninewells' demand-week template brief, approved by AB."""
+    from ae_escalation import template as tp
+
+    e = next(
+        x for x in tl.screen_at(replay_run, ORIGIN) if x.hospital == "T101H"
+    )
+    q = ap.ApprovalQueue()
+    q.add(tp.template_outcome(replay_run, holidays, e, "tm", version=2))
+    criteria = ap.Criteria(**{k: True for k in ap.Criteria.model_fields})
+    return q.decide(
+        ap.Decision(
+            brief_id="tm",
+            action="approve",
+            initials="AB",
+            decided_at=WHEN,
+            criteria=criteria,
+        )
+    )
+
+
+def test_an_approved_template_brief_is_coordinated_from_its_figures(
+    approved_template, settings, tmp_path
+):
+    model = gw.ScriptedModel(script=[notes(**TEMPLATE_GOOD)])
+    gateway = gw.ModelGateway.for_settings(
+        settings,
+        gw.RecordingStore(tmp_path / "n.jsonl"),
+        live=True,
+        chat_model=model,
+    )
+    out = co.Coordinator(
+        settings, gateway, outbox=tmp_path / "outbox.jsonl"
+    ).coordinate(approved_template)
+    assert all(a.notified for a in out.actions)
+    written = [r for r in outbox(tmp_path) if r["kind"] == "notification"]
+    assert [(r["brief_id"], r["to"]) for r in written] == [
+        ("tm", "duty manager"),
+        ("tm", "rota coordinator"),
+    ]
+    brief = approved_template.current
+    first = ph.shown(brief.cited_figures[0], brief.text_context())
+    assert first in written[0]["message"]
+    prompt = model.seen[0][-1].content
+    assert brief.text() in prompt and "- {PRIMARY}:" not in prompt
+    assert f"- {{F1}}: {first}" in prompt
+
+
+def test_a_template_notification_naming_a_primary_model_is_held(
+    approved_template, settings, tmp_path
+):
+    named = {**TEMPLATE_GOOD, "check-cover": GOOD["check-cover"]}
+    out = coordinator(
+        settings, tmp_path, [notes(**named), notes(**named)]
+    ).coordinate(approved_template)
+    states = {a.code: a.state for a in out.actions}
+    assert states["check-cover"] == "held"
+    reasons = [f.reason for d in out.drafts for f in d.check.failures]
+    assert any("names no primary model" in r for r in reasons)
