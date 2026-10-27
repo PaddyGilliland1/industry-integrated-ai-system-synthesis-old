@@ -200,6 +200,27 @@ New in this project: SA-MA's seasonal index, the flag and drift rules with the d
 demand brief and its five tools, the switch between the local and frontier backends, and the
 coordinator.
 
+## How it was checked, and why it is a pilot
+
+- **The data:** the file is checked against its SHA-256 before it is read, and each anomaly is
+  flagged and kept, with how it is handled set out in the notebook's section 2.
+- **Every figure:** code checks each figure in a brief against its tool result, and a wrong figure
+  planted in a draft was caught at that figure.
+- **Every brief:** a Reviewer checks it, and a brief marked "not verified" can never be approved.
+- **The backends:** the adequacy test was stated before any brief was written, and both backends'
+  results are reported.
+- **The decisions:** an AI independent judge read the briefs first, and I, as the approver, decided
+  each one.
+- **A second reader:** Reader B, a person who read with an AI assistant, read four of the briefs.
+- **The documents:** an independent fact-check covered the notebook, this README and the case study.
+- **The clean room:** the notebook was run twice from a fresh clone and a fresh environment, giving
+  the same outputs.
+
+I chose to keep it a pilot. In real use the same checks would continue, and what refines it is use
+with the duty managers' feedback: shadow mode on new weekly releases, then a pilot with managers who
+did not build it, then tuning over time. So at this stage it gives additional information beside the
+existing process by choice, not by shortfall.
+
 ## Limits and boundaries
 
 - **Advisory only.** The system advises and people decide. It never sets a level by judgement,

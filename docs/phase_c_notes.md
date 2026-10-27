@@ -387,3 +387,13 @@ study. Two change what a code cell prints; the rest change words only.
     09:30 UTC on 27 Oct 2026, a fixed time, after a live run that starts at the clock's now. From
     that moment the queue refused their decisions as made before the run began, which is the rule
     working. They now decide at `AFTER_ANY_RUN` in `tests/conftest.py`; the rule is unchanged.
+
+## The README's checks and the figures in print (27 Oct 2026)
+
+40. **The README says how the work was checked and why it is a pilot.** Paddy asked on 27 Oct 2026
+    for a short section of labelled highlights: the data's hash and anomalies, the code figure check
+    and the planted figure, the Reviewer and "not verified", the adequacy test stated first with
+    both backends reported, the AI independent judge and the approver, Reader B, the fact-check and
+    the clean room run twice. It then says the system stays a pilot by choice: shadow mode, a pilot
+    with managers who did not build it and tuning over time, as the case study's section 14 sets
+    out. It holds no review rounds, finding counts or dates.
