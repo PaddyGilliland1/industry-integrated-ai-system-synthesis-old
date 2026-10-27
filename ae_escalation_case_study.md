@@ -102,7 +102,8 @@ The design has three lanes. **Code decides**: it loads the data, forecasts, sets
 for drift, screens which hospitals reach the agents, and then acts and records. **The agents explain**: an
 Investigator drafts each demand brief from read-only tools, and a Reviewer checks it. **A person
 approves**: the duty manager approves, edits or rejects each brief. The screen is code, so it sits in the
-code lane. Figure 3 draws the code lane in two parts, before and after the person decides.
+code lane. Figure 3 draws the code lane in two parts, before and after the person decides: the first
+on the left, and the second last on the right, below the agents and the person.
 
 Each box names the prior project it comes from, or says it is new in this project:
 
@@ -177,8 +178,9 @@ is escalated to the role above, and a later acknowledgement is recorded as late.
 the manager sees it with its failing figures marked. The action's text is code's; the language model
 drafts the notification's wording, which states only figures the approved brief states.
 
-**The interaction table**, one row for each numbered arrow in Figure 3. Each arrow's label is short, and
-the table says in full what passes.
+**The interaction table**, one row for each numbered arrow in Figure 3. Each arrow carries only its
+number, and the table says what passes. Arrow 8 joins the left column to the right one; it runs from the
+screen to the Investigator.
 
 | # | From | To | What passes |
 |---|---|---|---|

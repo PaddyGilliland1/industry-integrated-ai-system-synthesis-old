@@ -419,3 +419,10 @@ study. Two change what a code cell prints; the rest change words only.
     name: at a 16 cm column Figure 4's smallest text prints at 9.2 pt and Figure 6's at 9.0 pt.
     Figure 6 keeps its footnote, "In-sample" and the steady-year definition among it, in the figure.
     In a fresh kernel only those two images changed.
+44. **Figure 1 fits the paper's figure box.** The APA kit caps a figure at 6.5 inches wide and 8.2
+    inches high, so the portrait Figure 1 was set at about 13.5 cm and printed at about 6.8 pt. It is
+    redrawn, same file name, as two columns: the code lane's first part on the left, and the agents,
+    the person and the code lane's second part on the right. Each arrow carries only its number,
+    and the interaction table says what passes; arrow 8 joins the two columns. The sixteen arrows
+    stay in step with the table, and the "not verified, do not act" route stays dashed red. Its
+    height is 1.10 times its width, and at 6.5 inches its 17 px text prints at 8.6 pt.

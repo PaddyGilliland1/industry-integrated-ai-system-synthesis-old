@@ -149,8 +149,9 @@ the freeze pins.
 
 ![Figure 1: code decides, the agents explain, a person approves](figures/fig1_architecture.png)
 
-Code decides, the agents explain and a person approves. Each arrow in Figure 1 is numbered, and
-each box names the prior project it comes from or says it is new. The weekly flow, in nine steps:
+Code decides, the agents explain and a person approves. Each arrow in Figure 1 is numbered, and the
+case study's interaction table says what each carries. Each box names the prior project it comes from
+or says it is new. The weekly flow, in nine steps:
 
 1. **Weekly load.** Code reads the PHS file, checks its hash, cleans it and flags anomalies, keeping
    every row. It uses only the weeks released by the forecast origin; each Tuesday release covers
