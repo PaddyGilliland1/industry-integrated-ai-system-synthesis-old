@@ -547,7 +547,7 @@ writes those weeks. The local backend: no brief verified in either round. Round 
 out blind, a fault in my code that calls the model, fixed before round 2, and its budget stopped it after 3 of 7; round 2's drafts all
 reached the output cap, and thinking turned off is the untried next step.
 
-**Limits.** The notebook's section 9 sets out seventeen limitations, each with its evidence, what held
+**Limits.** The notebook's section 9 sets out eighteen limitations, each with its evidence, what held
 it and the next step. In short:
 
 1. the track-record line drops the unflagged busy share when a hospital has no past flag; the next step
@@ -578,7 +578,10 @@ it and the next step. In short:
 16. the back-test reads one revised snapshot; archiving each release, or measuring the revisions, is
     next;
 17. the flag's stated chance runs high, and the cause is not known; testing calibration by hospital
-    and horizon comes before any threshold moves.
+    and horizon comes before any threshold moves;
+18. the adequacy test assumed the agent writes every brief; under the template rule it writes fewer,
+    so the 6 of 7 threshold needs restating, for example as all but one of the agent's briefs, before
+    the next live run.
 
 Every figure here is in-sample.
 

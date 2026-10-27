@@ -531,3 +531,9 @@ study. Two change what a code cell prints; the rest change words only.
     their notes, and the decisions were theirs. The runs and scores are mine in the first person;
     the AI reviewer that scored the adequacy test and the AI independent judge stay, as designed
     steps. Round 1's blind retries are a fault in my code that calls the model, fixed before round 2.
+61. **The adequacy threshold is stated as a limitation.** The adequacy test was written for a set in
+    which the agent writes every brief, and under the template rule a new run's agent writes fewer,
+    so the 6 of 7 threshold can no longer send a local set to approval. No code changed: the test
+    was stated before the runs. Limitation 18, in the notebook and the case study, says the
+    threshold needs restating, for example as all but one of the agent's briefs, before the next
+    live run. The case study now counts eighteen limitations.
