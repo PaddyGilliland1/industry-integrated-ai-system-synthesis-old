@@ -1,0 +1,10 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "16px", "fontFamily": "Arial", "primaryColor": "#ffffff", "primaryBorderColor": "#444444", "lineColor": "#444444"}, "flowchart": {"nodeSpacing": 20, "rankSpacing": 22, "padding": 8}}}%%
+flowchart LR
+    A["<b>Now</b><br/>additional<br/>information beside<br/>existing process,<br/>by choice"]
+    B["<b>Shadow mode</b><br/>new weekly<br/>releases, nothing<br/>acted on"]
+    C["<b>Pilot</b><br/>managers who<br/>did not build it;<br/>measure A&amp;E<br/>throughput"]
+    D["<b>Tuning over time</b><br/>duty managers'<br/>feedback and<br/>what planners use"]
+    E["<b>Primary<br/>operational<br/>tool</b>"]
+    A --> B --> C --> D --> E
+    style A fill:#dce8fa,stroke:#2b5797,stroke-width:2px
+    style E fill:#ffffff,stroke:#444444,stroke-dasharray: 5 3

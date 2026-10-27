@@ -397,3 +397,10 @@ study. Two change what a code cell prints; the rest change words only.
     the clean room run twice. It then says the system stays a pilot by choice: shadow mode, a pilot
     with managers who did not build it and tuning over time, as the case study's section 14 sets
     out. It holds no review rounds, finding counts or dates.
+41. **Section 14 follows the path to an operational tool, in Paddy's order.** Now additional
+    information by choice, then shadow mode, then a pilot with managers who did not build it, then
+    tuning over time, then a primary tool. Learning what planners use sits inside the pilot, as part
+    of the managers' feedback, with its routing unchanged; the admissions and occupancy data widen the
+    system once the base is proven. Every item stays; only the order and the linking sentences
+    changed. The README's pilot paragraph uses the same order. The paper's figure of that path ships as
+    `diagram/path_to_operational_tool.mmd` and `figures/fig8_pilot_path.png`.

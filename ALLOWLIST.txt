@@ -116,9 +116,11 @@ figures/fig4_month_chart.png
 figures/fig5_goals_scorecard.png
 figures/fig6_flag_outcomes.png
 figures/fig7_template_comparison.png
+figures/fig8_pilot_path.png
 diagram/architecture.mmd
 diagram/value_chain.mmd
 diagram/weekly_cycle.mmd
+diagram/path_to_operational_tool.mmd
 figures/fig1_architecture.png
 figures/fig2_value_chain.png
 figures/fig3_weekly_cycle.png

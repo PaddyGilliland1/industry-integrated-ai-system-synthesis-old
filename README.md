@@ -216,10 +216,10 @@ coordinator.
 - **The clean room:** the notebook was run twice from a fresh clone and a fresh environment, giving
   the same outputs.
 
-I chose to keep it a pilot. In real use the same checks would continue, and what refines it is use
-with the duty managers' feedback: shadow mode on new weekly releases, then a pilot with managers who
-did not build it, then tuning over time. So at this stage it gives additional information beside the
-existing process by choice, not by shortfall.
+I chose to keep it a pilot. At this stage it gives additional information beside the existing
+process by choice, not by shortfall. In real use the same checks would continue, and what refines it
+is use with the duty managers' feedback: shadow mode on new weekly releases, then a pilot with
+managers who did not build it, then tuning over time, and only then a primary operational tool.
 
 ## Limits and boundaries
 

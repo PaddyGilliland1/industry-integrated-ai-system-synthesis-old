@@ -526,16 +526,20 @@ Every figure here is in-sample.
 
 ## 14. Deployment path and next steps
 
-These are future pre-deployment investigations after this base is proven, in order. Together they are
-the path from additional information beside the duty manager's existing process to a primary
-operational tool.
+At this stage the system gives additional information beside the duty manager's existing process, by
+choice. These are future pre-deployment investigations after this base is proven, in order. Together
+they are the path from that additional information to a primary operational tool.
 
 1. **Shadow mode before any go-live.** The frozen design runs on new weekly releases, every brief written
    and logged and none acted on, and the goals are scored on weeks the design has never seen. Before it
    starts, two gaps this build found need closing: explaining a demand week without claims the tools do
    not support, and the local model tried with its thinking turned off.
-2. **Learn what planners use.** Ask the duty managers what they weigh beyond the tool, and measure which
-    factors would have explained past busy weeks. Then route each one:
+2. **A pilot that measures throughput**, link 5 of the value chain, with managers who did not build the
+   system, and bands set per hospital for fairness. Within the pilot, the managers' feedback includes
+   learning what planners use.
+
+    **Learn what planners use.** Ask the duty managers what they weigh beyond the tool, and measure
+    which factors would have explained past busy weeks. Then route each one:
 
     - a model input, if it recurs with a measured history, tested on the back-test;
     - a manager parameter, if it is known in advance but one-off: a labelled, recorded adjustment, like
@@ -545,14 +549,15 @@ operational tool.
     The named candidates, as illustrations only, are weather, population demographics, and flu strains
     with their expected severity.
 
-3. **The wider system.** Admissions and occupancy data, so the same forecast, flag, explain, approve and
-   act pattern can speak to beds, overflow wards and earlier contact with social care.
+    Tuning over time then acts on what shadow mode and the pilot find, the managers' feedback and what
+    planners use among it.
 
-4. **A pilot that measures throughput**, link 5 of the value chain, with managers who did not build the
-   system, and bands set per hospital for fairness.
+3. **The wider system.** Once the base is proven, admissions and occupancy data widen it, so the same
+   forecast, flag, explain, approve and act pattern can speak to beds, overflow wards and earlier contact
+   with social care.
 
-Each step tunes the design on what it finds. Only after all four could the system move from additional
-information to a primary operational tool.
+Only after shadow mode, the pilot and tuning over time could the system move from additional information
+to a primary operational tool, and the wider system builds on that proven base.
 
 ## References
 
