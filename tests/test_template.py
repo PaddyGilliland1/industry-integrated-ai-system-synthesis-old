@@ -14,6 +14,8 @@ from ae_escalation import figures as fg
 from ae_escalation import template as tp
 from ae_escalation import tools as tl
 
+from .conftest import REPO
+
 
 def entry_at(run, origin, hospital):
     """The screen's entry for one hospital at one origin."""
@@ -365,6 +367,16 @@ def test_only_a_factual_error_in_the_agents_text_counts(tmp_path):
     )
 
 
+def test_the_templates_factual_error_is_kept_but_never_counted(tmp_path):
+    # Figure 7 shows each text's factual error; option A reads the agent's.
+    on_template = ratings_sheet(
+        tmp_path / "t.csv", marked("approver", "template")
+    )
+    ratings = tp.read_ratings(on_template, seed=SEED)
+    assert all(r.template_factual_error for r in ratings)
+    assert tp.comparison_verdict(ratings)["approver"]["overall"] is True
+
+
 def test_a_rater_marks_both_texts_of_a_week_once_each(tmp_path):
     half = [("approver", "demand week", "A", (), False)]
     with pytest.raises(ValueError, match="both texts"):
@@ -375,3 +387,14 @@ def test_a_rater_marks_both_texts_of_a_week_once_each(tmp_path):
     odd = [("approver", "demand week", "C", (), False)]
     with pytest.raises(ValueError, match="row 2"):
         tp.read_ratings(ratings_sheet(tmp_path / "o.csv", odd), seed=SEED)
+
+
+def test_the_shipped_ratings_hold_both_raters_on_both_weeks():
+    # Each returned form, typed in: both texts of both pairs, so every
+    # rater's week reads as one pair rating.
+    ratings = tp.read_ratings(
+        REPO / "approvals" / "template_ratings_frontier_round2.csv", seed=SEED
+    )
+    assert sorted((r.rater, r.week) for r in ratings) == sorted(
+        (rater, week) for rater in tp.RATERS for week in tp.WEEKS
+    )

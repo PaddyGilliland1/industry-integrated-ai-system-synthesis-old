@@ -236,7 +236,8 @@ def template_brief(run, entry):
 
 class PairRating(BaseModel):
     """One rater's marks for one week's pair: the agent's brief and the
-    template brief, each against the six criteria."""
+    template brief, each against the six criteria. The template's factual
+    error is kept for the record and never counted."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -245,6 +246,7 @@ class PairRating(BaseModel):
     agent: Criteria
     template: Criteria
     agent_factual_error: bool
+    template_factual_error: bool = False
 
 
 def adds_value(agent, template, factual_error):
@@ -323,7 +325,7 @@ def read_ratings(path, seed):
             raise ValueError(f"{rater} must mark both texts of the {week}")
         shown = dict(zip(blind_order(week, seed), "AB"))
         agent, factual = marks[(rater, week, shown["agent"])]
-        template, _ = marks[(rater, week, shown["template"])]
+        template, template_factual = marks[(rater, week, shown["template"])]
         out.append(
             PairRating(
                 rater=rater,
@@ -331,6 +333,7 @@ def read_ratings(path, seed):
                 agent=agent,
                 template=template,
                 agent_factual_error=factual,
+                template_factual_error=template_factual,
             )
         )
     return out

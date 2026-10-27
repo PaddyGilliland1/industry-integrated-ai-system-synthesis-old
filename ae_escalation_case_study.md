@@ -336,7 +336,8 @@ above. The design follows the principle that a person can disregard, override or
 
 In the spot check I play the approver, the unscheduled-care lead and the analytics lead. The clinical
 safety reviewer's sign-off is not exercised, because there is no live use. Approving briefs for a system I
-built is a limitation, which a second reader, Reader B, checks; Reader B's reading is not yet recorded.
+built is a limitation, which a second reader, Reader B, a person, who read with an AI assistant,
+checks: Reader B made the same decision as the approver on all four briefs.
 
 An AI independent judge read the seven briefs before I decided. I adopted its five edits as my own, with
 the reset wording corrected, and its notes on the two rejections, as each decision's note records. An AI
@@ -408,6 +409,11 @@ retry went out blind, a bug in my client that round 2 fixed. Round 2 completed a
 draft was cut at the 8,192-token output cap, which counts the model's thinking; a retry with thinking
 turned off is untried (section 14).
 
+**The template comparison** used two of these weeks: the national latch week, w/e 22 Mar 2020, and
+Ninewells' demand week, w/e 13 Jun 2021. By option A, both raters found the agent's text added value
+in the national latch week and not in the demand week, whose brief the checks had refused; section 13
+gives the marks.
+
 ## 12. Plausibility notes
 
 Each designed-only element, and what a live system would do instead.
@@ -425,7 +431,9 @@ Each designed-only element, and what a live system would do instead.
 - **The staffing actions.** Code fixes each action's text by level; the language model drafts only each
   notification's wording. A board would set its own actions and owners.
 - **The roles.** I play three roles, and the clinical safety reviewer's sign-off is not exercised.
-- **The template comparison.** It waits on both raters' marks, so its result is not reported here.
+- **The template comparison.** Two raters marked two weeks, both with an AI assistant, and one of them
+  is the approver, whose marks are not blind. A pilot would repeat it with managers who did not build
+  the system (section 14).
 - **Shadow mode.** The frozen design has not yet run on new weekly releases.
 
 ## 13. Evaluation summary and limits
@@ -448,7 +456,8 @@ G6 is not met because the checks refused both demand briefs.
 - G6, briefs useful to a person, is not met: 5 of the 7 briefs were approved without a factual edit, where 6 are needed. The
   two short are the demand briefs, which the checks refused, so the approver could only reject them;
   none of the five edits was factual. Explaining a demand week without unsupported claims is the next
-  step (section 14). Reader B's reading is not yet recorded.
+  step (section 14). Reader B, a person, who read with an AI assistant, made the same decision as
+  the approver on all four briefs, so G6's second half is met.
 - G7, raised levels rare in steady years, is narrowly missed, as ruled, and nothing was tuned: 10.4% of outlooks were raised in 2018 (from July),
   10.9% in 2023 and 11.7% in 2024, against under 10%. My reading, which the design probes did not test, is that in those
   growth years attendances ran above the three previous years that set the capacity. Shadow mode
@@ -475,6 +484,21 @@ are borne out, against 14.9% of unflagged September outlooks.
 
 **Demand is not pressure.** In the steady years 29.9% of raised outlooks fell in their hospital's worst
 quarter of 4-hour weeks for the year, against 25.4% by chance: a weak link.
+
+**The template comparison.** Both raters marked each text of both pairs against the six criteria.
+Reader B is a person, who read with an AI assistant. The approver's marks were also made with an AI
+assistant, and they are not blind, since the approver had read every agent brief at approval. By
+option A, the agent's text adds value in the national latch week for both raters: it names the
+models' disagreement, which the template does not. In the demand week it does not, for both raters. That text is the refused demand
+brief, so both marked its figures not correct, as it is marked not verified, its uncertainty not
+stated and a factual error, for its claims that recent weeks were rising and the forecasts fit them.
+The checks had already stopped that brief, and the fix comes before shadow mode (section 14). Both
+raters also marked a factual error in the template's drift line. The demand week's pair is not blind,
+and the template was Text A in both weeks.
+
+![Figure 7: template against agent, both raters, both weeks](figures/fig7_template_comparison.png)
+
+*Figure 7 (notebook Figure 7). Template against agent: both raters, both weeks.*
 
 **Failure cases.** COVID, real: the alarm confirms a shock and does not warn; the first breach was w/e 15
 Mar 2020. The planted figure, designed: caught at that figure. The demand briefs, real: the Reviewer

@@ -16,6 +16,7 @@ from ae_escalation import demo as dm
 from ae_escalation import gateway as gw
 from ae_escalation import replay as rp
 
+from .conftest import REPO
 from .scripted import (
     DONE,
     ORIGIN,
@@ -659,3 +660,19 @@ def test_reader_b_reads_the_four_by_the_rule_once_each(
     )
     assert open_one["by_brief"]["pl"]["approver"] is None
     assert open_one["agreeing"] == 0
+
+
+# --- the shipped sheet, typed from Reader B's returned form ------------------
+
+
+def test_the_shipped_reader_b_sheet_holds_the_four_briefs_the_rule_picks(
+    replay_run,
+):
+    readings = ap.read_reader_b(
+        REPO / "approvals" / "reader_b_frontier_round2.csv"
+    )
+    entries = rp.replay_entries(replay_run)
+    four = [
+        rp.run_id(e) for e in rp.reader_b_four(entries, rp.sizes(replay_run))
+    ]
+    assert sorted(r.brief_id for r in readings) == sorted(four)

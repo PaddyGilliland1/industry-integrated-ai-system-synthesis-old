@@ -359,3 +359,31 @@ study. Two change what a code cell prints; the rest change words only.
     - G7: the three growth years, on a reading the design probes did not test; shadow mode tests it
       before any threshold moves;
     - the frontier set: 5 of 7, short of 6, because the checks refused both demand briefs.
+
+## Reader B's return and the template comparison (27 Oct 2026)
+
+36. **Both returned forms are typed into their sheets.** Paddy ruled on 27 Oct 2026 that Reader B's
+    return counts as a human second reader's: Reader B, a person, read with an AI assistant. The
+    approver's pair ratings carry the same description, and they are not blind. No name is written.
+    - `approvals/reader_b_frontier_round2.csv`: the four briefs by the pack's headings, edit, edit,
+      edit and reject, the criteria as ticked, and no factual edit, since each edit's note says no
+      figure, date, hospital or level changes.
+    - `approvals/template_ratings_frontier_round2.csv`: both raters, both weeks, both texts, the
+      criteria and the factual error as ticked. The sheet labels the approver `approver`, the label
+      the code reads.
+    - Each note is kept word for word in a `note` column, with one change: each spaced em dash is
+      written as ": ", so the dash gate holds.
+    - Each sheet has its `!` line in `.gitignore` and its line in `ALLOWLIST.txt`.
+37. **The sheets give G6 and the comparison.** Reader B made the approver's decision on all four
+    briefs, so G6's second half is met; G6 stays not met on its first half, 5 of 7 against 6. By
+    option A both raters found the agent's text added value in the national latch week and not in
+    the demand week, whose brief the checks had refused. Figure 5's G6 row reads Reader B's count
+    from the sheet.
+38. **Figure 7 is drawn.** `figures/fig7_template_comparison.png` shows each rater's marks on both
+    pairs, the template beside the agent's text, each text's factual error and option A's verdict.
+    `PairRating` now keeps the template's factual error for the figure; option A still counts only
+    the agent's. The case study shows it in section 13, and section 11 names the result.
+39. **The tests that decide after a live run use a time after any run.** Four tests decided at
+    09:30 UTC on 27 Oct 2026, a fixed time, after a live run that starts at the clock's now. From
+    that moment the queue refused their decisions as made before the run began, which is the rule
+    working. They now decide at `AFTER_ANY_RUN` in `tests/conftest.py`; the rule is unchanged.

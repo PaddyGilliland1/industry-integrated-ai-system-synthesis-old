@@ -221,5 +221,6 @@ coordinator.
   mode. The notebook's section 9 sets out the limitations in full.
 - **AI in the approvals.** An AI independent judge read the seven briefs before I decided. I adopted
   its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
-  test.
+  test. Reader B, a person, read four of the briefs and both template pairs with an AI assistant, and
+  my own marks on the pairs were made the same way and are not blind.
 - **Not for these uses.** Ranking hospitals, justifying cuts or monitoring the 4-hour standard.

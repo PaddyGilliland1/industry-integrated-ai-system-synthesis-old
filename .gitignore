@@ -56,3 +56,7 @@ Thumbs.db
 !approvals/queue_frontier_round2.csv
 !approvals/adequacy_frontier_round2.csv
 !approvals/adequacy_local_round2.csv
+# Reader B's four decisions and both raters' marks on the template pairs, typed from the
+# returned forms.
+!approvals/reader_b_frontier_round2.csv
+!approvals/template_ratings_frontier_round2.csv
