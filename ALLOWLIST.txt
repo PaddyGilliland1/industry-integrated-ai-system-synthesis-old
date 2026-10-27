@@ -128,3 +128,5 @@ figures/fig2_value_chain.png
 figures/fig3_weekly_cycle.png
 ae_escalation_case_study.md
 ae_escalation_case_study.pdf
+module_summary.pdf
+glossary.pdf

@@ -38,6 +38,8 @@
   every model call of the completed runs, so it needs no language model and no GPU.
 - **The case study:** `ae_escalation_case_study.md`, rendered to `ae_escalation_case_study.pdf`, sets
   out the design, its evaluation and its limits.
+- **The paper:** `module_summary.pdf` is the synthesis paper the brief requires, and `glossary.pdf`
+  defines the terms it uses.
 
 ## Dataset
 
