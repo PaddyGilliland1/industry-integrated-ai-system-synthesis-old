@@ -2,6 +2,10 @@
 
 ## Project description
 
+- **Status, additional information only:** at this stage the system gives the duty manager additional
+  information beside their existing process. It replaces no current process and sets no staffing on
+  its own. Becoming a primary operational tool needs shadow mode, a pilot and tuning over time, which
+  is achievable but not yet done.
 - **What it does:** each week, code forecasts unplanned attendances at Scotland's emergency
   departments for the four weeks after the Tuesday data release, and sets each hospital's demand
   level by fixed rules.
@@ -14,6 +18,9 @@
   need or priority.
 - **What is real:** Public Health Scotland's weekly A&E attendances and GOV.UK's Scottish bank
   holidays.
+- **The drift latch:** once the drift alarm fires, the latch stays set, like an alarm that stays on
+  until someone resets it. While it is set, the forecasts are marked untrusted, and only a person can
+  reset it.
 - **What is simulated or my own design:** the seasonal capacity the level is measured against, the
   latch resets and the staff acknowledgements are simulated; the bands, the staffing actions and
   their reply deadlines are my design.
@@ -197,10 +204,12 @@ coordinator.
   reset.
 - **In-sample.** The design was tuned on the same 2015 to 2026 data that scores it, so every figure
   is in-sample. Before any live use the frozen design would run in shadow mode on new releases.
-- **The agents.** The local model verified none of the replay briefs: round 1 finished 3 of the 7
+- **The agents.** The design runs locally by default, as `config.json`'s `llm_backend` says. The
+  local model verified none of the replay briefs: round 1 finished 3 of the 7
   before its time budget ran out, and round 2 finished all seven with every draft cut at the output
-  cap. The frontier model verified five, and both demand briefs were refused for claims no tool
-  result supports. The notebook's section 9 sets out the limitations in full.
+  cap. So the frontier model ran once, as ruled before the runs, and its set is the one approved: it
+  verified five, short of the adequacy test's six, and both demand briefs were refused for claims no
+  tool result supports. The local model stays an option to retest with its thinking turned off. The notebook's section 9 sets out the limitations in full.
 - **AI in the approvals.** An AI independent judge read the seven briefs before I decided. I adopted
   its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
   test.
