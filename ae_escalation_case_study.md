@@ -250,8 +250,13 @@ they are repeatable and checkable. The language model adds explanation only, and
 calls and a person's time.
 
 **The model backend.** The local model runs on this machine, costs nothing per call and is pinned by
-digest; it verified none in either round, and round 1 finished only 3 of the 7 before its budget ran out. The frontier model verified 5 of 7, and its
-set is the one approved, at the cost of money, an outside service and a model that cannot be pinned the same way.
+digest. It verified none in either round. In round 1 each retry went out blind, a bug in my client that
+round 2 fixed, and the time budget stopped the run after 3 of the 7. In round 2 every draft reached the
+8,192-token output cap, which counts the model's thinking; a retry with thinking turned off is untried
+and is a next step (section 14). The frontier model verified 5 of 7, short of the adequacy test's 6:
+the checks refused both demand briefs for claims no tool result supports, and closing that gap comes
+before shadow mode (section 14). Its set is the one approved, at the cost of money, an outside service
+and a model that cannot be pinned the same way.
 
 ## 6. Constraints
 
@@ -274,10 +279,13 @@ set is the one approved, at the cost of money, an outside service and a model th
    isolation" (Scottish Government, 2026). The Scottish Government committed to an NHS Scotland OPEL
    system in June 2025 (Scottish Government, 2025, recommendation 33). *Shaped*: the bands borrow only the
    structure of England's OPEL framework, and the level never sets an escalation stage.
-7. **Runtime and tools.** The design runs locally by default: `config.json`'s `llm_backend` is
-   `local`. The local model did not write adequate briefs in either round, so the frontier model ran
-   once, as ruled before the runs. Its set is the one approved: it verified 5 of 7, short of the
-   adequacy test's 6, and the approver chose it on those facts. The local model stays an option to retest with its thinking turned off. Each GPU run
+7. **Runtime and tools.** `config.json`'s `llm_backend` is `frontier`: the frontier set is the one
+   approved, and the recordings make the notebook reproducible on either setting. Setting it to
+   `local` selects the local model. The local model did not write adequate briefs in either round, its
+   retries blind in round 1 and its drafts cut at the output cap in round 2, so the frontier model ran
+   once, as ruled before the runs. It verified 5 of 7, short of the adequacy test's 6, as the checks
+   refused both demand briefs, and the approver chose its set on those facts. The local model stays an
+   option to retest with its thinking turned off. Each GPU run
    was meant to stay under 15 minutes. Round 1 stopped at its 840-second budget; for round 2 I allowed up
    to 60 minutes and set a 30-minute budget, and it used 657 seconds after a 95-second model load. Only
    tools from the prior projects are used, with one ruled exception: the switch to a frontier model with
@@ -390,13 +398,15 @@ outcomes were written before any agent ran; the pre-run check found the same sev
 | w/e 8 Dec 2019 (Tue 17 Dec 2019) | 0: the week before that winter's worst national 4-hour week, with no series flagged | No brief |
 | w/e 15 Mar 2020 (Tue 24 Mar 2020) | 0: the first breach, with no alarm yet | No brief |
 | w/e 22 Mar 2020 (Tue 31 Mar 2020) | 4: latch, for the national series, Edinburgh, Ninewells and the Queen Elizabeth; Lorn & Islands not latched | All four verified, one on the first attempt; each approved with an edit. Level 1, held, so no staffing action |
-| w/e 13 Jun 2021 (Tue 22 Jun 2021) | 1: Ninewells, demand, flagged | Not verified: the code check refused the first draft and the wording check the second. Rejected. The designed failure, a second run of this brief with a figure planted by code in its first readable draft, was caught at that figure |
-| w/e 9 Apr 2023 (Tue 18 Apr 2023) | 1: Lorn & Islands, demand, flagged | Not verified, as for Ninewells. Rejected |
+| w/e 13 Jun 2021 (Tue 22 Jun 2021) | 1: Ninewells, demand, flagged | Not verified: the code check refused the first draft, and the wording check refused the second for claims no tool result supports, such as recent weeks rising. It reached the approver marked "not verified, do not act" and was rejected; the fix comes before shadow mode (section 14). The designed failure, a second run of this brief with a figure planted by code in its first readable draft, was caught at that figure |
+| w/e 9 Apr 2023 (Tue 18 Apr 2023) | 1: Lorn & Islands, demand, flagged | Not verified, as for Ninewells: its second draft said the forecasts fit recent weeks, which no tool result supports. Rejected, with the same next step |
 | **Total** | **7**: 4 latch, 1 surge, 2 demand | 5 verified, approved with an edit; 2 rejected |
 
-Neither local set verified a brief. Round 1 completed 3 of its 7 briefs before its 840-second budget
-stopped it, and the text rules refused both drafts of each, the retry sent blind. Round 2 completed all
-seven, and every draft was cut at the output cap.
+Neither local set verified a brief, so none of its briefs could be approved. Round 1 completed 3 of its
+7 briefs before its 840-second budget stopped it, and the text rules refused both drafts of each: each
+retry went out blind, a bug in my client that round 2 fixed. Round 2 completed all seven, and every
+draft was cut at the 8,192-token output cap, which counts the model's thinking; a retry with thinking
+turned off is untried (section 14).
 
 ## 12. Plausibility notes
 
@@ -424,7 +434,8 @@ Each designed-only element, and what a live system would do instead.
 
 *Figure 5 (notebook Figure 5). Goals G1 to G8, each against its threshold.*
 
-**The goals.** Five goals are met, the invariant holds, one goal is narrowly missed and one is not met.
+**The goals.** Five goals are met, the invariant holds, G7 is narrowly missed in three growth years and
+G6 is not met because the checks refused both demand briefs.
 
 - G1, forecasts a manager can plan with, G2, honest uncertainty, G3, shocks are caught, and G8, a flag
   tells a manager something, are met, in-sample. The primary's national error is within 1 point of the best simple
@@ -434,11 +445,14 @@ Each designed-only element, and what a live system would do instead.
   as the base rate in the steady years.
 - G4, no unchecked number reaches a manager as approved, is met: all 5 approved briefs pass the code check again, neither brief that was not verified was
   approved, and the planted figure was caught. G5, the agent never sets a level, holds in all 7 briefs written.
-- G6, briefs useful to a person, is not met: 5 of the 7 briefs were approved without a factual edit, where 6 are needed. Reader B's
-  reading is not yet recorded.
+- G6, briefs useful to a person, is not met: 5 of the 7 briefs were approved without a factual edit, where 6 are needed. The
+  two short are the demand briefs, which the checks refused, so the approver could only reject them;
+  none of the five edits was factual. Explaining a demand week without unsupported claims is the next
+  step (section 14). Reader B's reading is not yet recorded.
 - G7, raised levels rare in steady years, is narrowly missed, as ruled, and nothing was tuned: 10.4% of outlooks were raised in 2018 (from July),
   10.9% in 2023 and 11.7% in 2024, against under 10%. My reading, which the design probes did not test, is that in those
-  growth years attendances ran above the three previous years that set the capacity.
+  growth years attendances ran above the three previous years that set the capacity. Shadow mode
+  tests that reading on weeks the design has never seen, before any threshold moves (section 14).
 
 **The headline, in its two units.** In the steady years, a flag means an unusually busy week is likely in
 the next four: that held 53.8% of the time, against 21.2% without a flag. The exact week named was right
@@ -464,7 +478,10 @@ quarter of 4-hour weeks for the year, against 25.4% by chance: a weak link.
 
 **Failure cases.** COVID, real: the alarm confirms a shock and does not warn; the first breach was w/e 15
 Mar 2020. The planted figure, designed: caught at that figure. The demand briefs, real: the Reviewer
-refused both for claims no tool result supports. The local backend: no brief verified in either round, and round 1 stopped after 3 of 7.
+refused both for claims no tool result supports, so neither could be approved; the fix comes before
+shadow mode (section 14). The local backend: no brief verified in either round. Round 1's retries went
+out blind, a bug that round 2 fixed, and its budget stopped it after 3 of 7; round 2's drafts all
+reached the output cap, and thinking turned off is the untried next step.
 
 **Limits.** The notebook's section 9 sets out twelve limitations, each with its evidence. In short:
 
@@ -478,7 +495,7 @@ refused both for claims no tool result supports. The local backend: no brief ver
 8. the template comes first in both pairs;
 9. a level-2 action holds leave while the forecasts are untrusted;
 10. a range can join the ends of two weeks;
-11. G6 is not met, with the builder as approver;
+11. G6 is not met, as both demand briefs were refused and rejected, with the builder as approver;
 12. round 1's retries went out blind.
 
 Every figure here is in-sample.

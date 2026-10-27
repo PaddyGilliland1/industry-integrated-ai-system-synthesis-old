@@ -325,3 +325,37 @@ study. Two change what a code cell prints; the rest change words only.
 33. **The old copy of Figure 4 is deleted.** `figures/month_attendances_and_4_hours.png` was
     identical to `fig4_month_chart.png`, and a search found nothing that referenced it. Paddy agreed
     to the deletion on 27 Oct 2026, and it is off `ALLOWLIST.txt`.
+
+## The frontier default and every failure qualified (27 Oct 2026)
+
+34. **`config.json` ships with `llm_backend` set to `frontier`.** Paddy ruled on 27 Oct 2026: the
+    frontier set is the one approved, and the recordings make the notebook reproducible on either
+    setting. Setting `llm_backend` to `local` selects the local model, and the README says what each
+    needs for a live run: Ollama with the model pulled at its digest, or the key in the git-ignored
+    `.env`. The frontier set did not pass the adequacy test: it verified 5 of 7, short of 6.
+    - Amends item 31: the design no longer runs locally by default, and `config.json` changed.
+    - The `Settings` model's own default stays `local`, so a file that names no backend runs the
+      local model, which needs no key.
+    - The tests that drive the local path with a stand-in model now pin `local` through
+      `tests/conftest.py`'s `local_settings` and `local_config`; the shipped-config test checks
+      `frontier`.
+    - The notebook's backend cell, `8e59b9a7`, prints the configured backend, then each backend's
+      settings. A fresh kernel ran every code cell in order, and only that cell's output changed.
+    - A fresh clone of `dev` with this change applied, no `.env`, no key in the environment and no
+      network ran the notebook end to end; its outputs match the working notebook's, and all 1,019
+      tests passed there.
+35. **Every failure is qualified.** Paddy ruled on 27 Oct 2026, with no follow-up run, so the frozen
+    result stands. Each "not met", "narrowly missed", "not verified" or "verified none" in the case
+    study, the README and the notebook's markdown carries its cause as the outputs show it, what the
+    safeguard did where one acted, and the future-work step:
+    - the demand briefs: claims no tool result supports, such as recent weeks rising or the forecasts
+      fitting; the checks refused them, so neither could be approved; explaining a demand week only
+      from what the tools return comes before shadow mode;
+    - local round 1: the retries went out blind, a bug in the client that round 2 fixed, and the time
+      budget stopped the run after 3 of 7;
+    - local round 2: every draft reached the 8,192-token output cap, which counts the model's
+      thinking; thinking turned off is untried;
+    - G6: the two short are the refused demand briefs, and none of the five edits was factual;
+    - G7: the three growth years, on a reading the design probes did not test; shadow mode tests it
+      before any threshold moves;
+    - the frontier set: 5 of 7, short of 6, because the checks refused both demand briefs.

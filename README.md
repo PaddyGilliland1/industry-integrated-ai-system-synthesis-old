@@ -73,8 +73,8 @@ Python 3.12.3.
    jupyter notebook ae_escalation_spot_check.ipynb
    ```
 
-   Sections 5 to 7 replay the live runs from `recordings/`, so no language model runs and Ollama is
-   not needed. The GRU comparator runs on the CPU.
+   Sections 5 to 7 replay the live runs from `recordings/`, so no language model runs, and neither a
+   key nor Ollama is needed. The GRU comparator runs on the CPU.
 
 4. Run the tests:
 
@@ -82,10 +82,17 @@ Python 3.12.3.
    python -m pytest
    ```
 
-**Running the agents live** is not needed to reproduce the notebook. The local backend needs Ollama
-serving `nemotron-3.5-lightning:30b-a3b` at the digest in `config.json`. The frontier backend needs a
-Claude API key in a file named `.env` in the repository root, as `ANTHROPIC_API_KEY=...`; create it
-only if you use that backend, and never commit it, which `.gitignore` prevents. The steps are:
+**The model backend.** `config.json` sets `llm_backend` to `"frontier"`, because the frontier set is
+the one approved, and the recordings make the notebook reproducible on either setting: the replay
+needs no key, no Ollama and no network. To use the local model instead, set `llm_backend` to
+`"local"`. Each setting needs something different only for a live run:
+
+| Setting | What a live run needs |
+|---|---|
+| `"frontier"` | A Claude API key in a file named `.env` in the repository root, as `ANTHROPIC_API_KEY=...`, created only for a live run and never committed, which `.gitignore` prevents |
+| `"local"` | Ollama on this machine, serving `nemotron-3.5-lightning:30b-a3b` pulled at the digest in `config.json`; no key |
+
+**Running the agents live** is not needed to reproduce the notebook. The steps are:
 
 ```bash
 python -m ae_escalation.live briefs --label <label>      # the seven replay briefs and the designed failure
@@ -103,7 +110,7 @@ It holds no key, token or password.
 
 | Field | What it sets |
 |---|---|
-| `llm_backend` | The model backend: `local`, the default, or `frontier` |
+| `llm_backend` | The model backend: `frontier`, as shipped, or `local` |
 | `local.model` | The local model's name in Ollama, `nemotron-3.5-lightning:30b-a3b` |
 | `local.digest` | The digest Ollama lists for that model, so a run traces to the exact weights |
 | `local.temperature` | The local model's temperature, 0 |
@@ -204,12 +211,14 @@ coordinator.
   reset.
 - **In-sample.** The design was tuned on the same 2015 to 2026 data that scores it, so every figure
   is in-sample. Before any live use the frozen design would run in shadow mode on new releases.
-- **The agents.** The design runs locally by default, as `config.json`'s `llm_backend` says. The
-  local model verified none of the replay briefs: round 1 finished 3 of the 7
-  before its time budget ran out, and round 2 finished all seven with every draft cut at the output
-  cap. So the frontier model ran once, as ruled before the runs, and its set is the one approved: it
-  verified five, short of the adequacy test's six, and both demand briefs were refused for claims no
-  tool result supports. The local model stays an option to retest with its thinking turned off. The notebook's section 9 sets out the limitations in full.
+- **The agents.** The local model verified none of the replay briefs. Round 1's retries went out
+  blind, a bug in my client that round 2 fixed, and its time budget stopped it after 3 of the 7.
+  Round 2 finished all seven, but every draft reached the 8,192-token output cap, which counts the
+  model's thinking; a retry with thinking turned off is untried future work. So the frontier model
+  ran once, as ruled before the runs, and its set is the one approved. It verified five, short of the
+  adequacy test's six: the checks refused both demand briefs for claims no tool result supports, such
+  as recent weeks rising, so neither could be approved, and the fix is future work before shadow
+  mode. The notebook's section 9 sets out the limitations in full.
 - **AI in the approvals.** An AI independent judge read the seven briefs before I decided. I adopted
   its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
   test.
