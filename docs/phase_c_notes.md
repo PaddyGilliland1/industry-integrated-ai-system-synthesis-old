@@ -415,3 +415,7 @@ study. Two change what a code cell prints; the rest change words only.
     - Figure 5 is a narrower table with larger text: 8.8 pt at 16 cm. Its code cell is the only one
       whose output changed, and only in the figure.
     - Figure 7 was drawn at that size from the start: 8.2 pt at 16 cm.
+43. **Figures 4 and 6 read in print too.** Each is narrower, with larger text, and keeps its file
+    name: at a 16 cm column Figure 4's smallest text prints at 9.2 pt and Figure 6's at 9.0 pt.
+    Figure 6 keeps its footnote, "In-sample" and the steady-year definition among it, in the figure.
+    In a fresh kernel only those two images changed.
