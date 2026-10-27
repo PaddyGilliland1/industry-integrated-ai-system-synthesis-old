@@ -301,3 +301,24 @@ study. Two change what a code cell prints; the rest change words only.
 27. **The AI in the approvals is disclosed** in the case study and the README: an AI independent
     judge read the seven briefs before the approver decided, its five edits were adopted with the
     reset wording corrected, and an AI reviewer scored the adequacy test.
+
+## Paddy's comments on the case study (27 Oct 2026)
+
+28. **The drift latch is defined in plain words at first use** in the case study, the README and the
+    notebook: an alarm that stays on until someone resets it, the forecasts untrusted while it is set,
+    and only a person able to reset it. The term stays, since the code, the recorded briefs and the
+    notebook's outputs use it.
+29. **The system's status is stated: additional information only.** At this stage it gives the duty
+    manager additional information beside their existing process, replaces no current process and
+    sets no staffing on its own; becoming a primary operational tool needs shadow mode, a pilot and
+    tuning over time. The case study's risks, boundaries and next steps are read in that light.
+30. **The caution is rewritten:** the money saving mainly the agency premium, the wider value in links
+    3 and 4 of the value chain, sourced and hypothesised, and figures on lives or harm the stakes,
+    never claims.
+31. **The runtime says what happened.** The design runs locally by default, as `config.json` sets.
+    The local model wrote no adequate brief in either round, so the frontier model ran once, as ruled
+    before the runs; its set, 5 of 7 verified, short of the adequacy test's 6, is the one the approver
+    chose. The local model stays an option to retest with its thinking turned off. `config.json` is
+    unchanged.
+32. **Each goal is named at its first use in a case study section**, and the approver is referred to
+    by role.
