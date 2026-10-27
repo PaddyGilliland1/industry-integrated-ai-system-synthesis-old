@@ -537,3 +537,11 @@ study. Two change what a code cell prints; the rest change words only.
     was stated before the runs. Limitation 18, in the notebook and the case study, says the
     threshold needs restating, for example as all but one of the agent's briefs, before the next
     live run. The case study now counts eighteen limitations.
+62. **The figures are mapped, and the sample brief is named as the paper numbers it.** The README
+    has a figure map giving each file's number in the paper, the notebook and the case study, with
+    the paper's order checked against the APA kit's figure list. `examples/README.md`, written by
+    the examples generator, names `figures/fig9_sample_brief.png` as Figure 5 of the paper. The
+    notebook's sentence on numbering now points to the map, since the paper numbers its figures in
+    its own order. The README says the decision notes in `approvals/` are the approver's recorded
+    notes, kept as written, and that their references to "the main session" and to `reviews/` paths
+    point to the author's private working records. No notebook output changed.

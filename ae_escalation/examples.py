@@ -3,7 +3,8 @@ and the code, with no model call.
 
     python -m ae_escalation.examples
 
-writes examples/ and the paper's Figure 9, figures/fig9_sample_brief.png:
+writes examples/ and the sample brief figure, figures/fig9_sample_brief.png,
+which is Figure 5 of the paper:
 
 - the Royal Infirmary of Edinburgh's surge brief as the approver saw it,
   then as approved with the edit;
@@ -44,10 +45,10 @@ OUTBOX_FILE = "outbox_edinburgh.md"
 NOT_VERIFIED_FILE = "not_verified_brief_ninewells.md"
 COMMAND = "`python -m ae_escalation.examples`"
 
-# Figure 9 is drawn at the paper's column width, 16.5 cm, so its text
-# prints at the size it is set. The APA kit caps a figure at 8.2 inches
-# high, which holds about 46 lines at this size; a longer brief shows its
-# top part and says where the rest is.
+# The sample brief figure is drawn at the paper's column width, 16.5 cm,
+# so its text prints at the size it is set. The APA kit caps a figure at 8.2
+# inches high, which holds about 46 lines at this size; a longer brief shows
+# its top part and says where the rest is.
 FIG9_WIDTH_IN = 16.5 / 2.54
 FIG9_FONT_PT = 8.5
 FIG9_CHARS = 84
@@ -293,7 +294,7 @@ def readme():
         f"Each file is rendered from the recorded {BACKEND} set, {LABEL}, "
         f"the set the approver chose, and the code, with no model call. "
         f"{COMMAND} writes them again, and a test checks that they match. "
-        "The paper's Figure 9, `figures/fig9_sample_brief.png`, is the "
+        "Figure 5 of the paper, `figures/fig9_sample_brief.png`, is the "
         "first file's approved brief.",
         "",
         f"- `{SURGE_FILE}`: the Royal Infirmary of Edinburgh's surge brief, "
@@ -328,7 +329,7 @@ def _recorded():
 
 def _render():
     """Every example's text, by file name, and the approved surge brief
-    Figure 9 draws."""
+    the sample brief figure draws."""
     run, holidays, settings, chosen, paths, fresh, decided = _recorded()
     texts = {
         "README.md": readme(),
@@ -346,10 +347,10 @@ def render_examples():
 
 
 def fig9_lines(text):
-    """The brief's lines as Figure 9 draws them, each wrapped to the
-    figure's width, and whether the brief was cut short: a brief longer
-    than the figure can hold keeps its top part and ends with the
-    "continues" mark."""
+    """The brief's lines as the sample brief figure draws them, each
+    wrapped to the figure's width, and whether the brief was cut short: a
+    brief longer than the figure can hold keeps its top part and ends with
+    the "continues" mark."""
     lines = []
     for line in text.splitlines():
         lines += textwrap.wrap(line, FIG9_CHARS, subsequent_indent="  ") or [
@@ -361,7 +362,8 @@ def fig9_lines(text):
 
 
 def draw_fig9(text, path):
-    """Draw the approved brief as Figure 9: its text in a plain frame, at
+    """Draw the approved brief as the sample brief figure, Figure 5 of the
+    paper: its text in a plain frame, at
     the paper's column width, with no title, since the paper's caption is
     its title."""
     import matplotlib
@@ -406,7 +408,8 @@ def draw_fig9(text, path):
 
 
 def write_examples(folder=REPO / "examples", figure=None):
-    """Write every example and Figure 9; return the file names written."""
+    """Write every example and the sample brief figure; return the file
+    names written."""
     texts, approved = _render()
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)

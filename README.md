@@ -217,6 +217,24 @@ weekly flow, in nine steps:
 *Figure 3. One week: Tuesday release to the duty manager's decision.* The dates illustrate the release timing for
 one replay week, Ninewells Hospital's demand week ending 13 Jun 2021; that week's brief was rejected.
 
+### The figures, by number
+
+Each document numbers the figures its own way: the paper and the case study in the order they
+use them, and the notebook as the table shows.
+
+| File in `figures/` | Paper | Notebook | Case study |
+|---|---|---|---|
+| `fig1_architecture.png` | 1 | 1 | 3 |
+| `fig2_value_chain.png` | 2 | 2 | 1 |
+| `fig3_weekly_cycle.png` | 3 | 3 | 4 |
+| `fig4_month_chart.png` | 4 | 4 | 2 |
+| `fig9_sample_brief.png` | 5 | none; its brief is in `examples/surge_brief_edinburgh.md` | none |
+| `fig5_goals_scorecard.png` | 6 | 5 | 5 |
+| `fig6_flag_outcomes.png` | 7 | 6 | 6 |
+| `fig7_template_comparison.png` | 8 | 7 | 7 |
+| `fig8_pilot_path.png` | 9 | none | none |
+| `national_weekly_attendances.png`, `drift_march_2020.png` | none | unnumbered, sections 2 and 4 | none |
+
 ## Prior project artefacts reused
 
 Each pattern is adapted for this project, never copied in as a file, and each module names the
@@ -283,5 +301,6 @@ who did not build it, then tuning over time. Only then could it be a primary ope
   its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
   test. Reader B read four of the briefs and both template pairs; my own marks on
   the pairs are not blind, since I had read every agent brief at approval. The decision notes in
-  `approvals/` stay as recorded; a path in them under `reviews/` names a file in my private records.
+  `approvals/` are the approver's recorded notes, kept as written; their references to "the main
+  session" and to `reviews/` paths point to the author's private working records.
 - **Not for these uses.** Ranking hospitals, justifying cuts or monitoring the 4-hour standard.

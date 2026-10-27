@@ -1,6 +1,7 @@
 """The examples shipped in examples/: each rendered from the recorded set the
 approver chose and the code, with no model call, so each shipped file must be
-what the code renders now, and Figure 9 must read in print."""
+what the code renders now, and the sample brief figure, Figure 5 of the
+paper, must read in print."""
 
 import csv
 import json
@@ -91,7 +92,7 @@ def test_no_example_names_the_approver_by_initials(rendered):
         assert "PG" not in text
 
 
-def test_figure_9_prints_its_smallest_text_at_8_pt_or_more():
+def test_the_sample_brief_figure_prints_its_text_at_8_pt_or_more():
     # The figure is drawn at the paper's column width, so its text prints
     # at the size it is set.
     assert ex.FIG9_WIDTH_IN * 2.54 == pytest.approx(16.5, abs=0.01)
@@ -99,7 +100,7 @@ def test_figure_9_prints_its_smallest_text_at_8_pt_or_more():
     assert (REPO / "figures" / "fig9_sample_brief.png").exists()
 
 
-def test_figure_9_marks_a_brief_cut_short_as_continuing():
+def test_the_sample_brief_figure_marks_a_brief_cut_short_as_continuing():
     lines, cut = ex.fig9_lines("word " * 2000)
     assert cut and lines[-1] == ex.CONTINUES
     whole, cut = ex.fig9_lines("Demand level 2.\nShort.")
