@@ -459,7 +459,44 @@ def test_a_template_week_is_written_by_code_with_no_model_call(
     for e in replay_set_entries(replay_run):
         brief = tp.weekly_brief(replay_run, e, settings, graph)
         if e.kind == "demand":
-            assert brief == tp.template_brief(replay_run, e)
+            assert brief == tp.template_brief(
+                replay_run, e, version=settings.template_version
+            )
         else:
             assert brief == f"{e.as_of:%Y%m%d}-{e.hospital}"
     assert len(graph.asked) == 5
+
+
+# --- the drift line, versioned -----------------------------------------------
+
+RATED = "Drift: none. The forecasts fit recent weeks."
+RATERS_WORDING = (
+    "Drift: No drift alarm is recorded; this alone does not establish "
+    "forecast fit."
+)
+
+
+def test_version_1_is_the_template_as_rated(demand):
+    # The comparison's texts stay as the raters read them.
+    assert demand.version == 1
+    assert f"\n{RATED}\n" in demand.text()
+
+
+def test_version_2_uses_the_raters_wording_for_the_drift_line(replay_run):
+    e = entry_at(replay_run, "2021-06-13", "T101H")
+    text = tp.template_brief(replay_run, e, version=2).text()
+    assert f"\n{RATERS_WORDING}\n" in text and RATED not in text
+
+
+def test_a_latched_drift_line_is_the_same_in_both_versions(replay_run):
+    e = entry_at(replay_run, "2020-03-22", "Scotland")
+    one = tp.template_brief(replay_run, e, version=1).text()
+    two = tp.template_brief(replay_run, e, version=2).text()
+    assert one == two
+
+
+def test_a_live_brief_gets_the_shipped_template_version(replay_run, settings):
+    assert settings.template_version == 2
+    e = entry_at(replay_run, "2021-06-13", "T101H")
+    brief = tp.weekly_brief(replay_run, e, settings, RefusingGraph())
+    assert brief.version == 2 and RATERS_WORDING in brief.text()

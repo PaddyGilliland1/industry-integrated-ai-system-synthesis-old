@@ -1,6 +1,7 @@
 {
   "llm_backend": "frontier",
   "explanation": "template_by_default",
+  "template_version": 2,
   "local": {
     "model": "nemotron-3.5-lightning:30b-a3b",
     "digest": "e7a64ff15fb174c42b4f463e5c888c4f2c7b9cabf9e8d65a1c0874405426c1b2",
@@ -21,7 +22,8 @@
     "tool_call_cap": 8,
     "retries": 1,
     "time_limit_s": 240,
-    "run_budget_s": 840
+    "run_budget_s": 840,
+    "no_drift_line": 2
   },
   "coordinator": {
     "start_hour": 10,

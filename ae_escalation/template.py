@@ -48,7 +48,7 @@ from pydantic import BaseModel, ConfigDict
 
 from . import tools as tl
 from .approval import Criteria, criteria_from, sheet_rows, yes_no
-from .briefs import LEVEL_FROM, ToolCall, track_line
+from .briefs import LEVEL_FROM, NO_DRIFT_LINES, ToolCall, track_line
 from .placeholders import day_text, release_text, week_text
 
 WEEKS = ("national latch week", "demand week")
@@ -76,10 +76,11 @@ def watch_point(latched, direction, flagged):
     return WATCH["flagged"] if flagged else WATCH["otherwise"]
 
 
-def drift_sentence(latched, since, direction):
-    """The drift status's fixed sentence."""
+def drift_sentence(latched, since, direction, version=1):
+    """The drift status's fixed sentence. With no drift alarm it depends on
+    the version: 1 as rated, 2 in the raters' own wording."""
     if not latched:
-        return "Drift: none. The forecasts fit recent weeks."
+        return NO_DRIFT_LINES[version]
     article = "an" if direction == "upward" else "a"
     return (
         f"Drift: latched since {week_text(since)}, after {article} "
@@ -113,6 +114,7 @@ class TemplateBrief(BaseModel):
     errors: list[tl.BacktestErrorResult]
     track: tl.TrackRecordResult
     ledger: list[ToolCall]
+    version: Literal[1, 2] = 1
 
     def forecast_rows(self):
         """Field 3: one row per model, one cell per release horizon."""
@@ -183,16 +185,21 @@ class TemplateBrief(BaseModel):
             "",
             track_line(self.track),
             drift_sentence(
-                self.latched, self.latched_since, self.breach_direction
+                self.latched,
+                self.latched_since,
+                self.breach_direction,
+                self.version,
             ),
             watch_point(self.latched, self.breach_direction, self.flagged),
         ]
         return "\n".join(lines)
 
 
-def template_brief(run, entry):
+def template_brief(run, entry, version=1):
     """Fill the template brief for one screened hospital and origin from
-    the tools, as of the origin. The run is not changed."""
+    the tools, as of the origin. Version 1 is the template as rated, which
+    the comparison uses; version 2 is what live briefs get. The run is not
+    changed."""
     ledger = []
 
     def call(name, request, result):
@@ -234,6 +241,7 @@ def template_brief(run, entry):
         errors=errors,
         track=track,
         ledger=ledger,
+        version=version,
     )
 
 
@@ -244,9 +252,9 @@ def explanation_writer(entry, settings):
     The comparison, judged by option A, failed in the demand week, and the
     rule set before the ratings then has the template write the explanation
     by default, and the agent only in drift, surge or model-disagreement
-    weeks. Drift and surge weeks are the latched ones. The design has no
-    measure of model disagreement, so no week is kept for the agent on that
-    ground.
+    weeks. Drift and surge weeks are the latched ones. The rule's
+    model-disagreement ground has no threshold set before the ratings, so no
+    week is kept for the agent on that ground.
     """
     if settings.explanation == "agent" or entry.latched:
         return "agent"
@@ -261,7 +269,7 @@ def weekly_brief(run, entry, settings, graph):
     from .replay import run_id
 
     if explanation_writer(entry, settings) == "template":
-        return template_brief(run, entry)
+        return template_brief(run, entry, version=settings.template_version)
     return graph.run(entry.as_of, entry.hospital, run_id(entry))
 
 

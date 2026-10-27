@@ -138,6 +138,10 @@ class AgentSettings(_Frozen):
     # config.json's budget stays under 15 minutes; --budget-s may raise one
     # briefs run to 30, and the run's record says so.
     run_budget_s: float = Field(gt=0, le=900)
+    # The line the Investigator is given in a week with no drift: 2, the
+    # raters' wording, for new runs; a recorded label replays with the line
+    # it was recorded with.
+    no_drift_line: Literal[1, 2] = 2
 
 
 class CoordinatorSettings(_Frozen):
@@ -190,6 +194,9 @@ class Settings(_Frozen):
     explanation: Literal["agent", "template_by_default"] = (
         "template_by_default"
     )
+    # The template brief's version for live briefs: 2 says only that no
+    # drift alarm is recorded. The comparison keeps version 1, as rated.
+    template_version: Literal[1, 2] = 2
     local: LocalBackend
     frontier: FrontierBackend
     agents: AgentSettings

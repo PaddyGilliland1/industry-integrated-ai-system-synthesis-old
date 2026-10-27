@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
+from ae_escalation import agents as ag
 from ae_escalation import approval as ap
 from ae_escalation import briefs as br
 from ae_escalation import figures as fg
@@ -948,3 +949,49 @@ def test_a_resume_marks_the_audit_entries_it_repeats(
     assert len(outcomes) == len(set(outcomes)) == 8
     assert sum(e["kind"] == "pre-run check" for e in fresh) == 1
     assert rp.progress(paths)[-1]["spent_s"] >= stopped["spent_s"]
+
+
+# --- a label replays with the no-drift line it was recorded with -------------
+
+
+def with_no_drift_line(settings, version):
+    """The settings with the Investigator's no-drift line at a version."""
+    agents = settings.agents.model_copy(update={"no_drift_line": version})
+    return settings.model_copy(update={"agents": agents})
+
+
+def test_a_label_recorded_with_the_old_line_replays_under_the_new(
+    replay_run, holidays, settings, tmp_path
+):
+    # The recorded runs gave the Investigator the old line; new runs get
+    # the raters' wording, and a replay rebuilds each request as recorded.
+    old = with_no_drift_line(settings, 1)
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    live = rp.run_set(
+        replay_run, holidays, old, paths, live=True, chat_model=stand_in()
+    )
+    recorded = paths.briefs.read_text(encoding="utf-8")
+    assert ag.NO_DRIFT_LINES[1] in recorded
+    assert ag.NO_DRIFT_LINES[2] not in recorded
+    new = with_no_drift_line(settings, 2)
+    again = rp.run_set(replay_run, holidays, new, paths, live=False)
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]
+
+
+def test_a_new_live_run_gives_the_investigator_the_raters_wording(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    rp.run_set(
+        replay_run,
+        holidays,
+        with_no_drift_line(settings, 2),
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    recorded = paths.briefs.read_text(encoding="utf-8")
+    assert ag.NO_DRIFT_LINES[2] in recorded
+    assert ag.NO_DRIFT_LINES[1] not in recorded

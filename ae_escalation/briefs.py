@@ -221,6 +221,19 @@ def backtest_line(result):
     return f"{head} {ph.figure_text(round(error.mape, 1))}%."
 
 
+# The drift line for a week with no drift alarm, by version. Version 1 is
+# the line the recorded runs gave the Investigator and the rated template
+# printed; both raters marked it a factual error, since no alarm alone does
+# not show that the forecasts fit. Version 2 is the raters' own wording.
+NO_DRIFT_LINES = {
+    1: "Drift: none. The forecasts fit recent weeks.",
+    2: (
+        "Drift: No drift alarm is recorded; this alone does not establish "
+        "forecast fit."
+    ),
+}
+
+
 def track_line(record):
     """The track record's fixed sentence, as code writes it from
     get_track_record, in the agent's brief and the template brief alike.

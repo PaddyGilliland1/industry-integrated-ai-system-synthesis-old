@@ -44,7 +44,7 @@ from .adequacy import BudgetStop
 from .agents import BriefGraph, BriefOutcome, load_prompts
 from .approval import ApprovalQueue, Refused, read_decisions
 from .backtest import site_sizes
-from .briefs import CitedFigure
+from .briefs import NO_DRIFT_LINES, CitedFigure
 from .coordinator import Coordinator
 from .design import NATIONAL, REPLAY
 from .figures import ledger_numbers, plain, within_rounding
@@ -458,11 +458,14 @@ def label_settings(settings, store):
     as it ran after the tuning round changes them, as it does with its own
     prompts; a store with no recordings keeps config.json's.
 
+    The Investigator's no-drift line is the one the recordings hold, so a
+    label recorded before the raters' wording replays with the old line.
+
     Raises
     ------
     ReplayMiss
         If the recordings hold more than one set of generation settings, or
-        one config.json cannot name.
+        one config.json cannot name, or both no-drift lines.
     """
     held = {
         json.dumps(r["request"]["options"], sort_keys=True)
@@ -487,7 +490,26 @@ def label_settings(settings, store):
             f"the generation settings recorded in {store.path}, {options}, "
             "are not ones config.json can name"
         )
-    return ran
+    return _recorded_no_drift_line(ran, store)
+
+
+def _recorded_no_drift_line(settings, store):
+    """The settings with the Investigator's no-drift line the recordings
+    hold; unchanged when they hold neither version."""
+    sent = [json.dumps(r["request"]) for r in store.records()]
+    found = {
+        version
+        for version, line in NO_DRIFT_LINES.items()
+        if any(line in text for text in sent)
+    }
+    if len(found) > 1:
+        raise ReplayMiss(
+            f"the recordings in {store.path} hold both no-drift lines"
+        )
+    if not found:
+        return settings
+    agents = settings.agents.model_copy(update={"no_drift_line": found.pop()})
+    return settings.model_copy(update={"agents": agents})
 
 
 class ReplaySetResult(BaseModel):
@@ -565,8 +587,11 @@ def run_set(
             spent_before=spent(paths, "briefs") if resume else 0.0,
         )
     store = RecordingStore(paths.briefs)
+    # A label replays, and resumes, with the settings it was recorded with;
+    # a new label's store is empty, so it runs with config.json's.
+    ran = label_settings(settings, store)
     gateway = ModelGateway.for_settings(
-        settings if live else label_settings(settings, store),
+        settings if live else ran,
         store,
         live=live,
         chat_model=chat_model,
@@ -580,7 +605,7 @@ def run_set(
     graph = BriefGraph(
         run,
         holidays,
-        settings,
+        ran,
         gateway,
         prompts=label_prompts(paths, live),
         log=log,

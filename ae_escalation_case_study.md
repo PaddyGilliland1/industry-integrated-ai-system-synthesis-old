@@ -511,15 +511,17 @@ template cannot, because it marked every model untrusted while latched and ranke
 week it does not, for both raters. That text is the refused demand-week brief. Both marked its figures
 not correct because it is marked not verified, though its figures had passed the code check. They also
 marked its uncertainty not stated, and a factual error in its claims that recent weeks were rising and
-the forecasts fit them. Both also marked a factual error in the template's drift line, the line code gives
-the Investigator too.
+the forecasts fit them. Both also marked a factual error in the template's drift line, the line code gave
+the Investigator too. The shipped template, version 2, and new runs now use the raters' own wording, "No
+drift alarm is recorded; this alone does not establish forecast fit.", and the comparison stays on the
+rated version 1.
 
 The comparison failed in the demand week, whose brief the checks had already stopped, so no manager
 could approve it. A rule set before any rating then applies. The template writes the brief's
 explanation by default, and the agent only in drift, surge or model-disagreement weeks. `config.json`'s
 `explanation` setting now applies it: the two demand weeks get the template brief, and the five latched
-weeks keep the agent. The design has no measure of model disagreement, so no week is kept for the agent
-on that ground. The recorded runs ran the agent throughout and replay as they ran. Neither pair was
+weeks keep the agent. The rule's model-disagreement ground has no threshold set before the ratings, so
+no week is kept for the agent on that ground; defining one is a next step. The recorded runs ran the agent throughout and replay as they ran. Neither pair was
 blind to Reader B, since each agent text was one of the four briefs Reader B had rated, and the
 template was Text A in both weeks.
 
@@ -547,8 +549,8 @@ it and the next step. In short:
    that trial is next;
 5. explaining a demand week overreached; the checks stopped both briefs, the template now writes those
    weeks, and a trend must cite the weeks it rests on;
-6. the drift line claims the forecasts fit recent weeks on the drift rule alone; the Reviewer refused
-   the agent's copy, and the next step drops the claim;
+6. the rated drift line claimed the forecasts fit recent weeks on the drift rule alone; the shipped
+   template and new runs now use the raters' wording, and the comparison stays on the rated version;
 7. neither template pair is blind to Reader B; a blind comparison on new weeks is the next step;
 8. the template comes first in both pairs; a new comparison draws the order for each week;
 9. a level-2 action holds leave while the forecasts are untrusted; the approved edits removed two
@@ -578,9 +580,10 @@ they are the path from that additional information to a primary operational tool
 
 1. **Shadow mode before any go-live.** The frozen design runs on new weekly releases, every brief written
    and logged and none acted on, and the goals are scored on weeks the design has never seen. Before it
-   starts, three gaps this build found need closing: the drift line's claim that the forecasts fit recent
-   weeks, a trend claim that cites one week, and a trial of the local model with its thinking turned
-   off.
+   starts, two gaps this build found need closing: a trend claim that cites one week, and a trial of
+   the local model with its thinking turned off. A third, the drift line's claim that the forecasts fit
+   recent weeks, is closed in the shipped template and in new runs. The template rule's
+   model-disagreement ground also needs a threshold.
 2. **A pilot that measures throughput**, link 5 of the value chain, with managers who did not build the
    system, and bands set per hospital for fairness. Within the pilot, the managers' feedback includes
    learning what planners use.

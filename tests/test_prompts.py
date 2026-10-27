@@ -480,3 +480,22 @@ def test_no_prompt_names_a_replay_series_with_a_replay_briefs_dates(
         }
     )
     assert not (named and dated), f"{agent} names {named} with {dated}"
+
+
+# --- the Investigator's line in a week with no drift, versioned --------------
+
+
+def test_the_investigator_gets_the_raters_no_drift_line_by_default(raigmore):
+    entry, _, _ = raigmore
+    assert not entry.latched
+    assert ag.NO_DRIFT_LINES[2] in ag.entry_text(entry)
+    assert ag.NO_DRIFT_LINES[1] in ag.entry_text(entry, no_drift=1)
+    assert ag.NO_DRIFT_LINES[1] not in ag.entry_text(entry)
+
+
+def test_the_shipped_config_gives_new_runs_the_raters_wording():
+    from ae_escalation import config as cf
+
+    from .conftest import REPO
+
+    assert cf.load_config(REPO / "config.json").agents.no_drift_line == 2

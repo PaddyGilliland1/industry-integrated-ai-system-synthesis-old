@@ -34,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, Strict, ValidationError
 from . import placeholders as ph
 from . import tools as tl
 from .briefs import (
+    NO_DRIFT_LINES,
     NOT_VERIFIED,
     BriefDraft,
     BriefFacts,
@@ -263,11 +264,12 @@ class InvestigatorPass(BaseModel):
     cut: bool = False
 
 
-def entry_text(entry, facts=None):
+def entry_text(entry, facts=None, no_drift=2):
     """What the screen tells the Investigator: code-set facts only, with
     the band line code writes under the level's meaning, what code writes
     for each token in this brief and, given the brief's facts, the fact
-    lines code writes after the Investigator's fields."""
+    lines code writes after the Investigator's fields. no_drift is the
+    version of the line for a week with no drift."""
     weeks = [w.date() for w in release_horizon_weeks(entry.as_of)]
     ctx = entry_context(entry)
     tokens = ["HOSPITAL", "PRIMARY", "LEVEL", "ORIGIN", "RELEASE"]
@@ -307,7 +309,7 @@ def entry_text(entry, facts=None):
             f"this is {how}."
         )
     else:
-        lines.append("Drift: none. The forecasts fit recent weeks.")
+        lines.append(NO_DRIFT_LINES[no_drift])
     lines.append(f"Tokens, as code writes them for this brief: {written}.")
     if facts is not None:
         lines += [
@@ -396,6 +398,7 @@ def investigator_pass(
     problems=(),
     raw=None,
     cut=False,
+    no_drift=2,
 ):
     """One pass of the Investigator: the tool loop, then the draft as
     typed JSON. A retry first shows the problems and the previous draft;
@@ -420,7 +423,9 @@ def investigator_pass(
         tool_call_cap=cap,
     )
     messages = [SystemMessage(content=system)]
-    messages.append(HumanMessage(content=entry_text(entry, facts)))
+    messages.append(
+        HumanMessage(content=entry_text(entry, facts, no_drift=no_drift))
+    )
     if previous is not None:
         messages.append(
             HumanMessage(
@@ -918,6 +923,7 @@ class BriefGraph:
             problems=state.get("problems", []) if attempt > 1 else [],
             raw=raw,
             cut=state.get("cut", False) if attempt > 1 else False,
+            no_drift=self.settings.agents.no_drift_line,
         )
         record = Attempt(
             number=attempt, stop_reason=out.stop_reason, cut=out.cut

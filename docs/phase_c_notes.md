@@ -465,3 +465,15 @@ study. Two change what a code cell prints; the rest change words only.
 52. **Not changed.** The decision CSV and every file under `recordings/` stay as recorded. The
     template's and the Investigator's drift line, which both raters marked a factual error, is
     left for a ruling, since it is part of the rated template and the recorded requests.
+53. **The drift line is versioned, and the shipped version uses the raters' wording.** Ruled on 27
+    Oct 2026. Where no drift alarm has fired, the rated template and the Investigator's prompt said
+    "Drift: none. The forecasts fit recent weeks.", which both raters marked a factual error.
+    - `config.json`'s `template_version` ships as 2: the template brief live briefs get says "No
+      drift alarm is recorded; this alone does not establish forecast fit.", the raters' own
+      wording. Version 1 is the template as rated, and the comparison cells keep it, so Figure 7 and
+      the ratings stay true to the rated texts.
+    - `agents.no_drift_line` ships as 2, so new runs give the Investigator the same wording. A
+      recorded label replays with the line its recordings hold, so every request hash is unchanged.
+    - The template rule's model-disagreement ground has no threshold set before the ratings, so no
+      week is kept for the agent on that ground; defining one is a next step. The README, case study
+      and notebook say so in the same words.

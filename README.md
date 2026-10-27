@@ -16,8 +16,11 @@
   if the agent fails in either week, the template writes the explanation by default, and the agent
   only in drift, surge or model-disagreement weeks. The agent failed in the demand week, so
   `config.json`'s `explanation` now applies the rule: a flag week gets the template brief, filled by
-  code, and a latched week the agent's. The design has no measure of model disagreement, so no week
-  is kept for the agent on that ground.
+  code, and a latched week the agent's. The rule's model-disagreement ground has no threshold set
+  before the ratings, so no week is kept for the agent on that ground; defining one is a next step.
+  The template sent is version 2: where no drift alarm has fired, it says "No drift alarm is
+  recorded; this alone does not establish forecast fit.", the raters' own wording for the rated
+  line they marked a factual error. The comparison stays on the rated version 1.
 - **Who decides:** a duty manager approves, edits or rejects each brief. Code sets the staffing
   actions for an approved brief, and the language model drafts each notification, which code checks
   before writing it to an outbox file, never sent.
@@ -123,6 +126,7 @@ It holds no key, token or password.
 |---|---|
 | `llm_backend` | The model backend: `frontier`, as shipped, or `local` |
 | `explanation` | Who writes a brief's explanation: `template_by_default`, as shipped, the template in flag weeks and the agent in latched weeks, or `agent` in every week |
+| `template_version` | The template brief live briefs get: 2, as shipped, with the raters' drift line, or 1, as rated |
 | `local.model` | The local model's name in Ollama, `nemotron-3.5-lightning:30b-a3b` |
 | `local.digest` | The digest Ollama lists for that model, so a run traces to the exact weights |
 | `local.temperature` | The local model's temperature, 0 |
@@ -139,6 +143,7 @@ It holds no key, token or password.
 | `agents.retries` | The one retry after a failed check |
 | `agents.time_limit_s` | The limit on one model call, 240 seconds |
 | `agents.run_budget_s` | The time budget for a whole live run, 840 seconds |
+| `agents.no_drift_line` | The Investigator's line in a week with no drift: 2, the raters' wording, for new runs; a recorded label replays with the line it had |
 | `coordinator.start_hour` | The hour, UK time, the replay's clock starts on release day: 10 |
 | `coordinator.reply_deadline_hours` | The assumed reply deadline by level: 48 hours at level 2, 24 at level 3, 12 at level 4 |
 | `coordinator.acknowledged_share` | The simulated chance that an owner acknowledges an action at all, 0.75 |
@@ -254,8 +259,8 @@ who did not build it, then tuning over time. Only then could it be a primary ope
   ran once, as the adequacy test set out before the runs, and its set is the one approved. It
   verified five, short of the adequacy test's six. The checks refused both demand-week briefs:
   Ninewells' claimed a rising trend from one cited actual, and both repeated code's own line that
-  the forecasts fit recent weeks. So neither could be approved, and the template now writes those
-  weeks. The
+  the forecasts fit recent weeks, which new runs now replace with the raters' wording. So neither
+  could be approved, and the template now writes those weeks. The
   notebook's section 9 sets out the limitations in full.
 - **The template comparison.** Both raters found the agent's text added value in the national latch
   week and not in the demand week, whose brief the checks had refused. That failure triggered the
