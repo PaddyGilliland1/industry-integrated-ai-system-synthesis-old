@@ -2,28 +2,41 @@
 config:
   theme: base
   themeVariables:
-    fontSize: 15px
+    fontSize: 17px
     fontFamily: "DejaVu Sans, Arial, sans-serif"
     primaryTextColor: "#0b0b0b"
     lineColor: "#52514e"
+    clusterBkg: "#ffffff"
+    clusterBorder: "#ffffff"
   flowchart:
     curve: basis
     htmlLabels: true
-    wrappingWidth: 260
+    wrappingWidth: 240
     nodeSpacing: 24
-    rankSpacing: 34
+    rankSpacing: 22
 ---
-flowchart LR
+flowchart TB
 %% Figure 2: the value chain. Each link's style is its evidence label from
 %% TERMS.md: measured in-sample, sourced and hypothesised, or to be tested.
 %% Link 1's counts come from the notebook's Figure 6; links 2 to 4 name the
 %% checked sources that support them, none an effect this system has shown.
-  L1["<b>1. Earlier notice of unusually busy weeks</b><br/>Measured, in-sample:<br/>the mean steady year gave notice of<br/>57.0 of 142.5 busy hospital-weeks (40.0%)"]
-  L2["<b>2. Planned bank cover instead of late agency cover</b><br/>Sourced, hypothesised:<br/>Audit Scotland (2025);<br/>Public Services Delivery Scotland (2026);<br/>Hu et al. (2025)"]
-  L3["<b>3. Less stress for permanent staff</b><br/>Sourced, hypothesised:<br/>Imamura et al. (2026);<br/>RCEM (2026)"]
-  L4["<b>4. Better patient care</b><br/>Sourced, hypothesised:<br/>Rivet et al. (2026);<br/>Jones et al. (2022)"]
-  L5["<b>5. Better A&amp;E throughput</b><br/>To be tested:<br/>a pilot with managers<br/>who did not build it"]
-  L1 --> L2 --> L3 --> L4 --> L5
+%% The links sit on two rows, so that the smallest text prints at 8 pt or more
+%% at a 16 cm column; each row's frame is drawn white, and the arrow between
+%% the rows carries link 3 on to link 4.
+  subgraph ROW1[" "]
+    direction LR
+    L1["<b>1. Earlier notice of<br/>unusually busy weeks</b><br/>Measured, in-sample:<br/>the mean steady year<br/>gave notice of 57.0 of<br/>142.5 busy hospital-weeks<br/>(40.0%)"]
+    L2["<b>2. Planned bank cover<br/>instead of late agency cover</b><br/>Sourced, hypothesised:<br/>Audit Scotland (2025);<br/>Public Services Delivery<br/>Scotland (2026);<br/>Hu et al. (2025)"]
+    L3["<b>3. Less stress for<br/>permanent staff</b><br/>Sourced, hypothesised:<br/>Imamura et al. (2026);<br/>RCEM (2026)"]
+    L1 --> L2 --> L3
+  end
+  subgraph ROW2[" "]
+    direction LR
+    L4["<b>4. Better patient care</b><br/>Sourced, hypothesised:<br/>Rivet et al. (2026);<br/>Jones et al. (2022)"]
+    L5["<b>5. Better A&amp;E throughput</b><br/>To be tested:<br/>a pilot with managers<br/>who did not build it"]
+    L4 --> L5
+  end
+  ROW1 --> ROW2
   classDef measured fill:#dbeafe,stroke:#1d4ed8,stroke-width:3px
   classDef sourced fill:#fde68a,stroke:#b45309,stroke-width:2px
   classDef tested fill:#ffffff,stroke:#52514e,stroke-width:2px,stroke-dasharray:6 4

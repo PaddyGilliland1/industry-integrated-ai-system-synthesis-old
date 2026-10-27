@@ -404,3 +404,14 @@ study. Two change what a code cell prints; the rest change words only.
     system once the base is proven. Every item stays; only the order and the linking sentences
     changed. The README's pilot paragraph uses the same order. The paper's figure of that path ships as
     `diagram/path_to_operational_tool.mmd` and `figures/fig8_pilot_path.png`.
+42. **Figures 1, 2, 3 and 5 read in print.** At a 16 cm text column their smallest text printed at
+    about 5 to 6 pt; each is redrawn so that it prints at 8 pt or more, with the same file names.
+    - Figure 1 is portrait: the code lane is drawn in two parts, before and after the person
+      decides, each arrow's label is short and the interaction table says in full what passes, so
+      the sixteen arrows and the table stay in step. The forecasts box writes "GRU (gated recurrent
+      unit)" in full. At 23 cm tall its 17 px text prints at 8.8 pt.
+    - Figures 2 and 3 sit on two rows: 8.3 pt and 9.5 pt at 16 cm. Figure 2's link 1 keeps the
+      notice wording the notebook checks.
+    - Figure 5 is a narrower table with larger text: 8.8 pt at 16 cm. Its code cell is the only one
+      whose output changed, and only in the figure.
+    - Figure 7 was drawn at that size from the start: 8.2 pt at 16 cm.
