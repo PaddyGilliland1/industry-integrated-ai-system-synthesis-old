@@ -1,6 +1,6 @@
-# Weekly A&E demand and escalation briefing: design case study
+# Weekly accident and emergency (A&E) demand and escalation briefing: design case study
 
-Patrick Gilliland, 26 October 2026
+Patrick Gilliland, 27 October 2026
 
 Every figure in this case study comes from the spot-check notebook, `ae_escalation_spot_check.ipynb`, or
 from a source in the reference list. The notebook's figures are in-sample: the design was tuned on the
@@ -11,7 +11,10 @@ are attendances above simulated capacity in busy weeks. An outlook is one hospit
 one origin; a hospital-week counted once is one hospital's one week, however many outlooks covered it.
 The drift alarm fires when a series' actual attendances fall outside the range its forecast expected for
 two released weeks running. Once it fires, the drift latch stays set, like an alarm that stays on until
-someone resets it. While it is set, the forecasts are marked untrusted, and only a person can reset it.
+someone resets it. While it is set, the forecasts are marked untrusted. In the design only a person can
+reset it; in this build each reset is simulated at its review prompt. A latch after an upward breach is a
+surge, and its level comes from the latest released week; after a downward breach the level is held at
+what the flag gave the week before the alarm.
 The steady years are 2018 from July, 2019 and 2023 to 2026, and the mean steady year is the mean of
 2019, 2023, 2024 and 2025. Each figure caption gives the figure's number in the notebook, which its file
 name in `figures/` carries.
@@ -21,16 +24,16 @@ name in `figures/` carries.
 Industry: healthcare operations, unplanned attendances at Scotland's emergency departments, for the duty
 managers who staff the front door.
 
-**Status: additional information only.** At this stage the system gives the duty manager additional
-information beside their existing process. It replaces no current process and sets no staffing on its
-own. Becoming a primary operational tool needs shadow mode, a pilot and tuning over time, which is
-achievable but not yet done (section 14).
+**Status: additional information only.** At this stage the system is a pilot build that gives the duty
+manager additional information beside their existing process, by choice. It replaces no current process
+and sets no staffing on its own. Becoming a primary operational tool needs shadow mode, a pilot with
+managers who did not build it and tuning over time, which is achievable but not yet done (section 14).
 
 **The problem.** Emergency department rotas are set weeks ahead. In England the rota code expects resident
 doctors in training to get duty rosters at least 6 weeks before a new rotation starts (NHS England,
 2025). So when a week turns out unusually busy, the front door is staffed for the usual week. Scottish
 guidance says emergency department crowding "is linked to increased morbidity and mortality" (Scottish
-Government, 2016). A forecast one to four weeks ahead can still inform short-notice changes inside a rota
+Government, 2016, Background section). A forecast one to four weeks ahead can still inform short-notice changes inside a rota
 already issued: extra shifts, bank staff or holding leave.
 
 **The users.** A health board's duty managers, who staff the front door, and its unscheduled-care lead,
@@ -72,16 +75,15 @@ a pilot would test. None is an effect this system has shown.
 
 **The scale.** In 2024/25 Scotland spent £256m on agency staff of all kinds and, separately, £353m on the
 nursing bank, about £0.6bn together (Audit Scotland, 2025). Scotland's A&E sites, minor
-injury units included, saw 137,703 attendances a month in 2025, about 1.65m in the year (Public Health
-Scotland, 2026b). The weekly data holds 1,405,613 attendances at the 30 emergency departments for weeks
-ending in 2025, my sum in the notebook (Public Health Scotland, 2026a). At that scale a small improvement
-is material.
+injury units included, saw 137,703 attendances a month in 2025, about 1.65m in the year (PHS, 2026b). The
+weekly data holds 1,405,613 attendances at the 30 emergency departments for weeks ending in 2025, my sum
+in the notebook (PHS, 2026a). At that scale, a small share of that spend is a large sum.
 
 **The caution.** The money saving would be mainly the agency premium, agency hours moved to planned
 bank hours, not the whole supplementary spend, and the agency figure covers every specialty, not only
 A&E. The wider value lies in links 3 and 4 of the value chain, less stress for permanent staff and
-better patient care, which are sourced and hypothesised, not measured here. Figures on lives or harm
-remain the stakes, never claims.
+better patient care, which are sourced and hypothesised, not measured here. I quote figures on lives or
+harm only to show what is at stake; this system has not shown any effect on them.
 
 **The wider system.** The data holds attendances, which run highest in May and June, while the share seen
 within 4 hours is lowest in December and January, and waits over 12 hours peak in January (Figure 2). It
@@ -89,8 +91,9 @@ holds no beds, so uses for beds and social care need admissions and occupancy da
 
 ![Figure 2: monthly attendances against 4-hour performance](figures/fig4_month_chart.png)
 
-*Figure 2 (notebook Figure 4). Monthly attendances against 4-hour performance.* Seasonality only: Public Health Scotland says
-these weekly figures should not be used to monitor against the 4-hour A&E access standard.
+*Figure 2 (notebook Figure 4). Monthly attendances against 4-hour performance.* Seasonality only: PHS says
+these weekly figures "should not be used to monitor against the 4-hour A&E access standard" (PHS, 2026a,
+data set description).
 
 ## 2. Architecture
 
@@ -105,9 +108,9 @@ approves**: the duty manager approves, edits or rejects each brief. The screen i
 code lane. Figure 3 draws the code lane in two parts, before and after the person decides: the first
 on the left, and the second last on the right, below the agents and the person.
 
-Each box names the prior project it comes from, or says it is new in this project:
+Each box names the prior capstone project it comes from, or says it is new in this project:
 
-- **Weekly PHS data**: real, under the Open Government Licence.
+- **Weekly PHS data**: real, under the Open Government Licence (OGL).
 - **Clean, flag, keep**: AI Programming Foundations.
 - **Forecasts and back-test**: Conduct a Statistical Analysis Using Python ("Statistical Analysis" below),
   with a comparator from Deep Learning Systems, a recurrent network, a GRU (gated recurrent unit), never
@@ -117,16 +120,16 @@ Each box names the prior project it comes from, or says it is new in this projec
 - **The screen, the Investigator, the Reviewer, the approval queue, and the audit log and replay**:
   Agentic AI Systems, the Reviewer extended with a wording check.
 
-Each arrow carries a number, which is its row in the interaction table in section 3.
+Each arrow carries only its number, which is its row in the interaction table in section 3.
 
 ## 3. Data flow and orchestration
 
 **The weekly flow, in nine steps.**
 
-1. **Weekly load.** Code reads the Public Health Scotland file, checks its SHA-256, cleans it and flags
+1. **Weekly load.** Code reads the PHS file, checks its SHA-256, cleans it and flags
    anomalies, keeping every row. It uses only the weeks released by the forecast origin.
-2. **Forecast.** Seasonal naive, the 4-week moving average, a linear model and SA-MA, the 4-week moving
-   average with a seasonal index, forecast the four
+2. **Forecast.** Seasonal naive, the 4-week moving average, a linear model and SA-MA, the seasonally
+   adjusted moving average, which is the 4-week moving average with a seasonal index, forecast the four
    week-endings after the release, each with an 80% and a 95% range. One primary model drives the flag.
    It starts as linear and is re-selected among the four at each latch reset. A GRU runs beside them as a
    comparator.
@@ -147,12 +150,13 @@ Each arrow carries a number, which is its row in the interaction table in sectio
 8. **Coordinate.** Code sets the staffing actions for the level, assigns each an owner and a reply
    deadline, tracks it and escalates it. The language model drafts only each notification's wording.
 9. **Audit.** Every tool call, draft, check and decision is logged with the backend that wrote it, and
-   every model call is recorded, so the notebook replays the run exactly.
+   every model call is recorded, so the notebook replays the run exactly. Each recording file's SHA-256
+   is in `recordings_manifest.tsv`, so a changed reply stops the replay as a changed request does.
 
 **The Tuesday release and the four release horizons.** Each week is published on the Tuesday, 9 days
-after its week ends. A forecast origin is the latest released week. The four release horizons are the four
-week-endings after the release: for the origin w/e 22 Mar 2020, released on Tue 31 Mar 2020, they are the
-weeks ending 5, 12, 19 and 26 Apr 2020, data horizons 2 to 5.
+after its week ends. A forecast origin is the latest released week, named by its week ending (w/e). The
+four release horizons are the four week-endings after the release. For the origin w/e 22 Mar 2020,
+released on Tue 31 Mar 2020, they are the weeks ending 5, 12, 19 and 26 Apr 2020, data horizons 2 to 5.
 
 ![Figure 4: one week, from the week's end to the duty manager's decision](figures/fig3_weekly_cycle.png)
 
@@ -181,6 +185,10 @@ drafts the notification's wording, which states only figures the approved brief 
 **The interaction table**, one row for each numbered arrow in Figure 3. Each arrow carries only its
 number, and the table says what passes. Arrow 8 joins the left column to the right one; it runs from the
 screen to the Investigator.
+
+**Who writes a brief's explanation.** The Investigator writes it in a drift or surge week, which is
+latched. In a flag week the template brief does, filled by code with no model call, by the rule set
+before the template comparison's ratings, which the demand-week result triggered (section 13).
 
 | # | From | To | What passes |
 |---|---|---|---|
@@ -231,7 +239,7 @@ Items 1 to 7 are assumed, each with where it comes from; item 8 says how the spo
 at each latch reset. The GRU runs as a comparator only. Outside each series' drift episodes, the window
 that G1, forecasts a manager can plan with, scores, no release horizon of the five replay series had a paired interval favouring the GRU, and 16
 of the 20 favoured the primary. Outside March 2020 to March 2022, the data test's window, one did: the
-Queen Elizabeth at release horizon 4, by 0.56 points (0.06 to 1.01). As I stated before the run, the GRU
+Queen Elizabeth University Hospital at release horizon 4, by 0.56 points (0.06 to 1.01). As I stated before the run, the GRU
 stays a comparator for operational reasons.
 The gain from the simple primary is a forecast a manager can check in one sentence, with no yearly refit
 and no seeds to average. The cost is a forecast that cannot learn patterns the four simple models miss.
@@ -257,14 +265,14 @@ digest. It verified none in either round. In round 1 each retry went out blind, 
 round 2 fixed, and the time budget stopped the run after 3 of the 7. In round 2 every draft reached the
 8,192-token output cap, which counts the model's thinking; a retry with thinking turned off is untried
 and is a next step (section 14). The frontier model verified 5 of 7, short of the adequacy test's 6:
-the checks refused both demand briefs for claims no tool result supports, and closing that gap comes
-before shadow mode (section 14). Its set is the one approved, at the cost of money, an outside service
+the checks refused both demand-week briefs for claims their cited figures did not support, and the
+template now writes those weeks (section 13). Its set is the one approved, at the cost of money, an outside service
 and a model that cannot be pinned the same way.
 
 ## 6. Constraints
 
 1. **Rotas are set ahead.** Rosters reach resident doctors weeks before a rotation (NHS England, 2025),
-   and rota guidance describes shifts known months in advance (Royal College of Emergency Medicine, 2019).
+   and rota guidance describes shifts known months in advance (RCEM, 2019).
    Neither source is Scottish. *Shaped*: the four release horizons and front-door staffing actions only.
 2. **The publication lag.** Each Tuesday release covers the week that ended 9 days earlier. *Shaped*: the
    horizons count from the release.
@@ -279,20 +287,23 @@ and a model that cannot be pinned the same way.
    ready to move, department occupancy and ambulance delays (Scottish Government, 2016), none of them
    attendances, so a forecast of attendances cannot set a stage.
    The October 2026 surge framework says "No single indicator should determine escalation decisions in
-   isolation" (Scottish Government, 2026). The Scottish Government committed to an NHS Scotland OPEL
+   isolation" (Scottish Government, 2026, Section 2). The Scottish Government committed to an NHS Scotland OPEL
    system in June 2025 (Scottish Government, 2025, recommendation 33). *Shaped*: the bands borrow only the
    structure of England's OPEL framework, and the level never sets an escalation stage.
 7. **Runtime and tools.** `config.json`'s `llm_backend` is `frontier`: the frontier set is the one
    approved, and the recordings make the notebook reproducible on either setting. Setting it to
    `local` selects the local model. The local model did not write adequate briefs in either round, its
    retries blind in round 1 and its drafts cut at the output cap in round 2, so the frontier model ran
-   once, as ruled before the runs. It verified 5 of 7, short of the adequacy test's 6, as the checks
-   refused both demand briefs, and the approver chose its set on those facts. The local model stays an
+   once, as the adequacy test set out before the runs. It verified 5 of 7, short of the adequacy test's
+   6, as the checks refused both demand-week briefs, and the approver chose its set on those facts. The local model stays an
    option to retest with its thinking turned off. Each GPU run
    was meant to stay under 15 minutes. Round 1 stopped at its 840-second budget; for round 2 I allowed up
-   to 60 minutes and set a 30-minute budget, and it used 657 seconds after a 95-second model load. Only
-   tools from the prior projects are used, with one ruled exception: the switch to a frontier model with
-   a stated case. *Shaped*: the bounded replay set, the local model and the backend switch.
+   to 60 minutes and set a 30-minute budget, and it used 657 seconds after a 95-second model load. The
+   one technology not used in an earlier capstone project is the Anthropic client behind the frontier
+   backend. It is a new library in an existing pattern, behind the same model gateway as Agentic AI
+   Systems' OpenAI client, used only with the stated case the adequacy test set out before the runs. The
+   notebook's replay needs neither it nor a key. *Shaped*: the bounded replay set, the local model and
+   the backend switch.
 8. **Time.** The aim was to submit within a week, with quality before the date. *Shaped*: a tight build,
    with shadow mode on new releases stated as a pre-deployment step.
 
@@ -302,11 +313,11 @@ and a model that cannot be pinned the same way.
 |---|---|---|---|---|
 | 1 | The front door is staffed for the usual week when demand is not usual (Scottish Government, 2016) | Harm from crowding; waits also depend on beds and flow, which the system does not see | Earlier notice of unusual demand beside the manager's usual information; the level's meaning on every brief | Duty manager |
 | 2 | A shock breaks every forecast: the linear model's national forecast made at w/e 8 Mar 2020 missed by 152.8% three weeks later | Levels and briefs built on broken forecasts | The drift latch; the surge rule; forecasts marked untrusted; re-selection at each latch reset | Unscheduled-care lead (reset); analytics lead (re-selection) |
-| 3 | False flags and alert fatigue: the mean steady year raised 145 outlook flags, 66 of them not borne out. September's flags were borne out 40.4% of the time, against 14.9% for unflagged September outlooks | Staff time spent for nothing; briefs ignored | Approval of every brief; the hospital's track record on every brief; the sensitivity table; the flag reported by month | Unscheduled-care lead (thresholds) |
+| 3 | False flags and alert fatigue, the habit of ignoring flags when many are false: the mean steady year raised 145 outlook flags, 66 of them not borne out. September's flags were borne out 40.4% of the time, against 14.9% for unflagged September outlooks | Staff time spent for nothing; briefs ignored | Approval of every brief; the hospital's track record on every brief; the sensitivity table; the flag reported by month | Unscheduled-care lead (thresholds) |
 | 4 | A missed busy week: the flag caught 21.0% of busy outlooks in the steady years, and the mean steady year left 85.5 of 142.5 busy hospital-weeks with no notice | No extra notice of an unusual week, so staffing rests on the existing process alone | The range and the hospital's own error on every brief; recall and notice reported; learning what planners use (section 14) | Unscheduled-care lead |
-| 5 | Bias by hospital size: seasonal naive's median error is 11.0% at sites under 300 attendances a week and 5.4% at 1,300 and over. The raised share varies widely by site: the five most raised, two children's hospitals and three hospitals under 800 attendances a week, raised 35.7% to 18.8% of their outlooks, while among the largest adult departments the Queen Elizabeth raised 16.6%, Edinburgh 4.7% and Glasgow Royal Infirmary none | Attention spread unevenly, by noise at small sites and not by need | Each brief shows its own site's error and track record; the level is never read as need or priority; the level reported by site | Unscheduled-care lead |
-| 6 | Misuse as a league table, a case for cuts, or 4-hour monitoring | Harm to the hospitals the size bias already burdens | The stated purpose on every brief, the README and the notebook | Unscheduled-care lead |
-| 7 | Classification as a medical device (Medicines and Healthcare products Regulatory Agency, 2023) | Regulatory duties the design does not meet | Aggregate planning only; a code screen for the MHRA's indicative words; advisory status; my reading kept as an open risk | Clinical safety reviewer |
+| 5 | Bias by hospital size: seasonal naive's median error is 11.0% at sites under 300 attendances a week and 5.4% at 1,300 and over. The raised share varies more by site than by size: the most raised, the Royal Hospital for Children at 35.7% of its outlooks, and Glasgow Royal Infirmary, raised in none, are both in the largest band, 1,300 attendances a week and over | Attention spread unevenly, by noise at small sites and not by need | Each brief shows its own site's error and track record; the level is never read as need or priority; the level reported by site | Unscheduled-care lead |
+| 6 | Misuse as a league table, a case for cuts, or 4-hour monitoring | Harm to the hospitals the size bias already burdens | The level's meaning on every brief; the stated purpose in the README, the notebook and this case study | Unscheduled-care lead |
+| 7 | Classification as a medical device (Medicines and Healthcare products Regulatory Agency, 2023) | Regulatory duties the design does not meet | Aggregate planning only; a code screen for the MHRA's indicative words; status as additional information; my reading kept as an open risk | Clinical safety reviewer |
 | 8 | An invented or misattached figure | A manager misled by a wrong number or date beside their usual information | The code figure check on every brief, edit and notification; a "not verified" brief never approved; a planted figure caught in the test | Analytics lead (the check); duty manager (approval) |
 | 9 | Automation bias (Goddard et al., 2012) | A manager approves without reading, or weighs a brief above their usual information | Ranges, disagreement and the track record shown; six approval criteria; a second reader in the evaluation | Duty manager |
 | 10 | In-sample design tuning | Figures better than a new period would give | The notebook re-measures every figure; shadow mode on new releases before any go-live | Analytics lead |
@@ -324,7 +335,7 @@ hospitals, justifying cuts or monitoring the 4-hour standard.
 
 **Where a person takes over.** The duty manager approves, edits or rejects every brief, and only an
 approved, verified brief leads to staffing actions, each assigned to a person who decides what to do. While the drift latch is set the forecasts are untrusted, and only
-a person approves a latch reset. People acknowledge each action, and a missed deadline goes to the role
+a person approves a latch reset; in this build each reset is simulated at its review prompt. People acknowledge each action, and a missed deadline goes to the role
 above. The design follows the principle that a person can disregard, override or reverse the output
 (European Union, 2024, Article 14), as a principle, not a legal duty.
 
@@ -365,8 +376,8 @@ reuses in a comment. Each repository is at github.com/PaddyGilliland1, and cell 
 | Load, clean, flag and keep | AI Programming Foundations | None needed |
 | Confidence intervals and a seeded bootstrap; the paired comparison of two models | Statistical Analysis | None needed |
 | The linear model: a trend line plus four sine and cosine pairs | The trend line from Statistical Analysis; the sine and cosine terms my own extension | Hyndman and Athanasopoulos (2021), section 7.4 |
-| The rolling-origin back-test, scored by MAPE | Statistical Analysis, its time-based hold-out repeated every week | Hyndman and Athanasopoulos (2021), sections 5.10 and 5.8 |
-| The moving-block bootstrap | Statistical Analysis, its bootstrap resampled in blocks | Hyndman and Athanasopoulos (2021), section 12.5; Kunsch (1989) |
+| The rolling-origin back-test, scored by the mean absolute percentage error (MAPE) | Statistical Analysis, its time-based hold-out repeated every week | Hyndman and Athanasopoulos (2021), sections 5.10 and 5.8 |
+| The moving-block bootstrap | Statistical Analysis, its bootstrap resampled in blocks | Hyndman and Athanasopoulos (2021), section 12.5; Künsch (1989) |
 | Seasonal naive and the moving average as bars to beat | Deep Learning Systems | Hyndman and Athanasopoulos (2021), section 5.2 |
 | SA-MA, the moving average with a seasonal index | New in this project | Described as my own extension |
 | The probability flag | New, on Statistical Analysis's interval from past values | Described as my own design |
@@ -399,11 +410,11 @@ outcomes were written before any agent ran; the pre-run check found the same sev
 | Origin (release) | Expected briefs | Observed, frontier set |
 |---|---|---|
 | w/e 6 Oct 2019 (Tue 15 Oct 2019) | 1: Royal Infirmary of Edinburgh, surge, its forecasts untrusted | Verified on the retry; approved with an edit. Its two notifications and one escalation reached the outbox, never sent |
-| w/e 8 Dec 2019 (Tue 17 Dec 2019) | 0: the week before that winter's worst national 4-hour week, with no series flagged | No brief |
-| w/e 15 Mar 2020 (Tue 24 Mar 2020) | 0: the first breach, with no alarm yet | No brief |
+| w/e 8 Dec 2019 (Tue 17 Dec 2019) | 0: the week before that winter's worst national 4-hour week, with none of the five replay series flagged (the full screen sends 4) | No brief |
+| w/e 15 Mar 2020 (Tue 24 Mar 2020) | 0: the first breach, with no alarm yet among the five replay series (the full screen sends 1) | No brief |
 | w/e 22 Mar 2020 (Tue 31 Mar 2020) | 4: latch, for the national series, Edinburgh, Ninewells and the Queen Elizabeth; Lorn & Islands not latched | All four verified, one on the first attempt; each approved with an edit. Level 1, held, so no staffing action |
-| w/e 13 Jun 2021 (Tue 22 Jun 2021) | 1: Ninewells, demand, flagged | Not verified: the code check refused the first draft, and the wording check refused the second for claims no tool result supports, such as recent weeks rising. It reached the approver marked "not verified, do not act" and was rejected; the fix comes before shadow mode (section 14). The designed failure, a second run of this brief with a figure planted by code in its first readable draft, was caught at that figure |
-| w/e 9 Apr 2023 (Tue 18 Apr 2023) | 1: Lorn & Islands, demand, flagged | Not verified, as for Ninewells: its second draft said the forecasts fit recent weeks, which no tool result supports. Rejected, with the same next step |
+| w/e 13 Jun 2021 (Tue 22 Jun 2021) | 1: Ninewells, demand, flagged | Not verified: the code check refused the first draft, and the wording check refused the second. It claimed a rising trend from one cited actual, though the history tool had returned the rising weeks, and repeated code's own line that the forecasts fit recent weeks. It reached the approver marked "not verified, do not act" and was rejected; the template now writes this kind of week. The designed failure, a second run of this brief with a figure planted by code in its first readable draft, was caught at that figure |
+| w/e 9 Apr 2023 (Tue 18 Apr 2023) | 1: Lorn & Islands, demand, flagged | Not verified, as for Ninewells: its second draft repeated code's line that the forecasts fit recent weeks, with other claims its figures did not support. Rejected, with the same next step |
 | **Total** | **7**: 4 latch, 1 surge, 2 demand | 5 verified, approved with an edit; 2 rejected |
 
 Neither local set verified a brief, so none of its briefs could be approved. Round 1 completed 3 of its
@@ -414,8 +425,9 @@ turned off is untried (section 14).
 
 **The template comparison** used two of these weeks: the national latch week, w/e 22 Mar 2020, and
 Ninewells' demand week, w/e 13 Jun 2021. By option A, both raters found the agent's text added value
-in the national latch week and not in the demand week, whose brief the checks had refused; section 13
-gives the marks.
+in the national latch week and not in the demand week, whose brief the checks had refused. That result
+triggered the rule set before the ratings, so the template now writes a flag week's explanation;
+section 13 gives the marks.
 
 ## 12. Plausibility notes
 
@@ -445,8 +457,8 @@ Each designed-only element, and what a live system would do instead.
 
 *Figure 5 (notebook Figure 5). Goals G1 to G8, each against its threshold.*
 
-**The goals.** Five goals are met, the invariant holds, G7 is narrowly missed in three growth years and
-G6 is not met because the checks refused both demand briefs.
+**The goals.** Five goals are met, the invariant holds, G7 is narrowly missed in 2018, 2023 and 2024,
+and G6 is not met because the checks refused both demand-week briefs.
 
 - G1, forecasts a manager can plan with, G2, honest uncertainty, G3, shocks are caught, and G8, a flag
   tells a manager something, are met, in-sample. The primary's national error is within 1 point of the best simple
@@ -457,13 +469,13 @@ G6 is not met because the checks refused both demand briefs.
 - G4, no unchecked number reaches a manager as approved, is met: all 5 approved briefs pass the code check again, neither brief that was not verified was
   approved, and the planted figure was caught. G5, the agent never sets a level, holds in all 7 briefs written.
 - G6, briefs useful to a person, is not met: 5 of the 7 briefs were approved without a factual edit, where 6 are needed. The
-  two short are the demand briefs, which the checks refused, so the approver could only reject them;
-  none of the five edits was factual. Explaining a demand week without unsupported claims is the next
-  step (section 14). Reader B, a person, who read with an AI assistant, made the same decision as
+  two short are the demand-week briefs, which the checks refused, so the approver could only reject
+  them; none of the five edits was factual. The template now writes those weeks. Reader B, a person, who read with an AI assistant, made the same decision as
   the approver on all four briefs, so G6's second half is met.
-- G7, raised levels rare in steady years, is narrowly missed, as ruled, and nothing was tuned: 10.4% of outlooks were raised in 2018 (from July),
-  10.9% in 2023 and 11.7% in 2024, against under 10%. My reading, which the design probes did not test, is that in those
-  growth years attendances ran above the three previous years that set the capacity. Shadow mode
+- G7, raised levels rare in steady years, is narrowly missed, as set before the run, and nothing was
+  tuned: 10.4% of outlooks were raised in 2018 (from July), 10.9% in 2023 and 11.7% in 2024, against
+  under 10%. My reading, which nothing here tests, is that in those years attendances ran above the
+  three previous years that set the capacity. Shadow mode
   tests that reading on weeks the design has never seen, before any threshold moves (section 14).
 
 **The headline, in its two units.** In the steady years, a flag means an unusually busy week is likely in
@@ -471,7 +483,8 @@ the next four: that held 53.8% of the time, against 21.2% without a flag. The ex
 27.6% of the time, against 7.8% for a week without a flag.
 
 **Notice, each hospital-week counted once.** The mean steady year gave notice of 57.0 of 142.5 busy
-hospital-weeks (40.0%), 49.0 of them before the week began. Over the steady years, 280 of 713 busy
+hospital-weeks (40.0%), 49.0 of them before the week began. This is the notice the flag alone would give,
+before any brief is verified or approved; in the replay set neither flag week's brief could be approved. Over the steady years, 280 of 713 busy
 hospital-weeks had notice, carrying 19,806 of 46,243 extra patients; 197 had it from the week's own flag.
 
 ![Figure 6: busy hospital-weeks given notice in the mean steady year](figures/fig6_flag_outcomes.png)
@@ -480,7 +493,8 @@ hospital-weeks had notice, carrying 19,806 of 46,243 extra patients; 197 had it 
 
 **Calibration.** Each week's own stated chance runs high: in the steady years it averaged 0.162, and 8.9%
 of those weeks were busy. So the brief quotes the hospital's track record, never the chance. The flag
-still beats each hospital's real-time busy share, with a Brier skill of 0.128.
+still beats each hospital's real-time busy share, with a Brier skill of 0.128. Why the chance runs high is
+not known; testing calibration by hospital and horizon comes before any threshold moves.
 
 **The September residue.** 12.8% of steady-year September outlooks are flagged, and 40.4% of those flags
 are borne out, against 14.9% of unflagged September outlooks.
@@ -488,42 +502,71 @@ are borne out, against 14.9% of unflagged September outlooks.
 **Demand is not pressure.** In the steady years 29.9% of raised outlooks fell in their hospital's worst
 quarter of 4-hour weeks for the year, against 25.4% by chance: a weak link.
 
-**The template comparison.** Both raters marked each text of both pairs against the six criteria.
-Reader B is a person, who read with an AI assistant. The approver's marks were also made with an AI
-assistant, and they are not blind, since the approver had read every agent brief at approval. By
-option A, the agent's text adds value in the national latch week for both raters: it names the
-models' disagreement, which the template does not. In the demand week it does not, for both raters. That text is the refused demand
-brief, so both marked its figures not correct, as it is marked not verified, its uncertainty not
-stated and a factual error, for its claims that recent weeks were rising and the forecasts fit them.
-The checks had already stopped that brief, and the fix comes before shadow mode (section 14). Both
-raters also marked a factual error in the template's drift line. The demand week's pair is not blind,
-and the template was Text A in both weeks.
+**The template comparison.** Both raters marked each text of both pairs against the six criteria, the
+two texts shown as Text A and Text B in an order hidden from them. Reader B is a person, who read with
+an AI assistant. The approver's marks were also made with an AI assistant, and they are not blind,
+since the approver had read every agent brief at approval. By option A, the agent's text adds value in
+the national latch week for both raters. Both counted it as naming the models' disagreement, which the
+template cannot, because it marked every model untrusted while latched and ranked none. In the demand
+week it does not, for both raters. That text is the refused demand-week brief. Both marked its figures
+not correct because it is marked not verified, though its figures had passed the code check. They also
+marked its uncertainty not stated, and a factual error in its claims that recent weeks were rising and
+the forecasts fit them. Both also marked a factual error in the template's drift line, the line code gives
+the Investigator too.
+
+The comparison failed in the demand week, whose brief the checks had already stopped, so no manager
+could approve it. A rule set before any rating then applies. The template writes the brief's
+explanation by default, and the agent only in drift, surge or model-disagreement weeks. `config.json`'s
+`explanation` setting now applies it: the two demand weeks get the template brief, and the five latched
+weeks keep the agent. The design has no measure of model disagreement, so no week is kept for the agent
+on that ground. The recorded runs ran the agent throughout and replay as they ran. Neither pair was
+blind to Reader B, since each agent text was one of the four briefs Reader B had rated, and the
+template was Text A in both weeks.
 
 ![Figure 7: template against agent, both raters, both weeks](figures/fig7_template_comparison.png)
 
 *Figure 7 (notebook Figure 7). Template against agent: both raters, both weeks.*
 
 **Failure cases.** COVID, real: the alarm confirms a shock and does not warn; the first breach was w/e 15
-Mar 2020. The planted figure, designed: caught at that figure. The demand briefs, real: the Reviewer
-refused both for claims no tool result supports, so neither could be approved; the fix comes before
-shadow mode (section 14). The local backend: no brief verified in either round. Round 1's retries went
+Mar 2020. The latch then held each series' level and marked its forecasts untrusted, and shadow mode on
+new releases is the next step. The planted figure, designed: caught at that figure. The demand-week
+briefs, real: the Reviewer refused a rising trend that cited one actual and code's own line that the
+forecasts fit recent weeks, so neither could be approved, and the template now writes those weeks. The local backend: no brief verified in either round. Round 1's retries went
 out blind, a bug that round 2 fixed, and its budget stopped it after 3 of 7; round 2's drafts all
 reached the output cap, and thinking turned off is the untried next step.
 
-**Limits.** The notebook's section 9 sets out twelve limitations, each with its evidence. In short:
+**Limits.** The notebook's section 9 sets out seventeen limitations, each with its evidence, what held
+it and the next step. In short:
 
-1. the track-record line drops the unflagged busy share when a hospital has no past flag;
-2. a back-test error sits beside "forecasts untrusted";
-3. the Reviewer's reasons are noisy;
-4. the local model was not tried with its thinking turned off;
-5. explaining a demand week overreached;
-6. the template's drift line rests on the drift rule alone;
-7. the demand week's template pair is not blind;
-8. the template comes first in both pairs;
-9. a level-2 action holds leave while the forecasts are untrusted;
-10. a range can join the ends of two weeks;
-11. G6 is not met, as both demand briefs were refused and rejected, with the builder as approver;
-12. round 1's retries went out blind.
+1. the track-record line drops the unflagged busy share when a hospital has no past flag; the next step
+   states it;
+2. a back-test error sits beside "forecasts untrusted"; the approved edits say it is historical, and
+   code will say so next;
+3. the Reviewer's reasons are noisy, though its verdicts held; the next step asks it for failures only;
+4. the local model was not tried with its thinking turned off; the checks let no draft through, and
+   that trial is next;
+5. explaining a demand week overreached; the checks stopped both briefs, the template now writes those
+   weeks, and a trend must cite the weeks it rests on;
+6. the drift line claims the forecasts fit recent weeks on the drift rule alone; the Reviewer refused
+   the agent's copy, and the next step drops the claim;
+7. neither template pair is blind to Reader B; a blind comparison on new weeks is the next step;
+8. the template comes first in both pairs; a new comparison draws the order for each week;
+9. a level-2 action holds leave while the forecasts are untrusted; the approved edits removed two
+   blanket holds, and the next step makes the hold a separate decision;
+10. a range can join the ends of two weeks; the approver's note caught it, and a code check that both
+    ends share a week is next;
+11. G6 is not met, as both demand-week briefs were refused and rejected, with the builder as approver;
+    Reader B made the same decisions;
+12. round 1's retries went out blind; round 2's client fixed it;
+13. a notification's wording is checked for its figures and words, not its meaning; a wording check
+    on each notification is next;
+14. the Reviewer reads the brief inline, so a draft could address it; the code check runs first, and
+    marking the brief off from the instructions waits for a new run;
+15. G1 and G2 are scored on a mask set afterwards; scoring the forecasts trusted when issued is next;
+16. the back-test reads one revised snapshot; archiving each release, or measuring the revisions, is
+    next;
+17. the flag's stated chance runs high, and the cause is not known; testing calibration by hospital
+    and horizon comes before any threshold moves.
 
 Every figure here is in-sample.
 
@@ -535,8 +578,9 @@ they are the path from that additional information to a primary operational tool
 
 1. **Shadow mode before any go-live.** The frozen design runs on new weekly releases, every brief written
    and logged and none acted on, and the goals are scored on weeks the design has never seen. Before it
-   starts, two gaps this build found need closing: explaining a demand week without claims the tools do
-   not support, and the local model tried with its thinking turned off.
+   starts, three gaps this build found need closing: the drift line's claim that the forecasts fit recent
+   weeks, a trend claim that cites one week, and a trial of the local model with its thinking turned
+   off.
 2. **A pilot that measures throughput**, link 5 of the value chain, with managers who did not build the
    system, and bands set per hospital for fairness. Within the pilot, the managers' feedback includes
    learning what planners use.
@@ -568,9 +612,9 @@ Audit Scotland. (2025, December 4). *NHS in Scotland 2025: Finance and performan
 https://audit.scot/uploads/2025-11/nr_251204_NHS_in_Scotland_2025.pdf
 
 European Union. (2024). Regulation (EU) 2024/1689 of the European Parliament and of the Council of 13 June
-2024 laying down harmonised rules on artificial intelligence (Artificial Intelligence Act). *Official
-Journal of the European Union*, L, 2024/1689. http://data.europa.eu/eli/reg/2024/1689/oj (as amended by
-Regulation (EU) 2026/1744)
+2024 laying down harmonised rules on artificial intelligence (Artificial Intelligence Act), as amended
+by Regulation (EU) 2026/1744. *Official Journal of the European Union*, L, 2024/1689.
+http://data.europa.eu/eli/reg/2024/1689/oj
 
 Goddard, K., Roudsari, A., & Wyatt, J. C. (2012). Automation bias: A systematic review of frequency,
 effect mediators, and mitigators. *Journal of the American Medical Informatics Association, 19*(1),
@@ -592,7 +636,7 @@ Jones, S., Moulton, C., Swift, S., Molyneux, P., Black, S., Mason, N., Oakley, R
 Association between delays to patient admission from the emergency department and all-cause 30-day
 mortality. *Emergency Medicine Journal, 39*(3), 168-173. https://doi.org/10.1136/emermed-2021-211572
 
-Kunsch, H. R. (1989). The jackknife and the bootstrap for general stationary observations. *The Annals of
+Künsch, H. R. (1989). The jackknife and the bootstrap for general stationary observations. *The Annals of
 Statistics, 17*(3), 1217-1241. https://doi.org/10.1214/aos/1176347265
 
 Medicines and Healthcare products Regulatory Agency. (2023). *Medical device stand-alone software including
@@ -635,14 +679,14 @@ https://rcem.ac.uk/wp-content/uploads/2021/10/EM-POWER_A_practical_guide_to_flex
 Royal College of Emergency Medicine. (2026). *The state of emergency medicine in Scotland* [Report].
 https://rcem.ac.uk/wp-content/uploads/2026/03/RCEM_SoEM_Scotland_A4_0326.pdf
 
-Scottish Government. (2016). *Emergency department capacity management: guidance*.
+Scottish Government. (2016). *Emergency department capacity management: Guidance*.
 https://www.gov.scot/publications/emergency-department-capacity-management-guidance-2/
 
 Scottish Government. (2025, June 30). *NHS Greater Glasgow and Clyde emergency department review:
-response*.
+Response*.
 https://www.gov.scot/publications/nhs-greater-glasgow-and-clyde-emergency-department-review-response/pages/response/
 
-Scottish Government. (2026, October 8). *Health and social care - surge preparedness: national planning
+Scottish Government. (2026, October 8). *Health and social care - surge preparedness: National planning
 priorities and principles*.
 https://www.gov.scot/publications/health-social-care-surge-preparedness-national-planning-priorities-principles/
 

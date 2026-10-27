@@ -426,3 +426,42 @@ study. Two change what a code cell prints; the rest change words only.
     and the interaction table says what passes; arrow 8 joins the two columns. The sixteen arrows
     stay in step with the table, and the "not verified, do not act" route stays dashed red. Its
     height is 1.10 times its width, and at 6.5 inches its 17 px text prints at 8.6 pt.
+
+## The stage 5 fix batch (27 Oct 2026)
+
+45. **The template rule set before the ratings now applies.** Paddy ruled on 27 Oct 2026 to apply it:
+    the comparison failed in the demand week, so the template writes a brief's explanation by
+    default, and the agent only in drift, surge or model-disagreement weeks. `config.json`'s new
+    `explanation` setting ships as `template_by_default`, and `agent` switches it back.
+    `template.explanation_writer` gives the template to a flag week and the agent to a latched week;
+    `template.weekly_brief` fills the template with no model call. The design has no measure of
+    model disagreement, so no week is kept for the agent on that ground, and none is invented. The
+    replay set ran the agent on every brief and replays as it ran; a new notebook cell shows what the
+    rule does for the two demand weeks.
+46. **The Reviewer's verdict fails closed when it contradicts itself.** A pass that names problems,
+    a pass written as a word, or a verdict quoted inside prose is a slip: asked once more, then not
+    verified as the Reviewer's error. The verdict must be the whole reply. None of the recorded
+    verdicts does any of these, so no recorded result changes.
+47. **The device-word screen catches every form of a listed word**, such as "predictive",
+    "unpredictable" and "risks of". No recorded text holds one.
+48. **Code marks an edit factual when it swaps or moves a figure.** Field by field and in order,
+    each placeholder is compared by the figure it resolves to. The five recorded edits stay
+    non-factual, so G6 is unchanged.
+49. **A resume never gains a fresh budget.** Ctrl-C now leaves its stop and the time spent, and a
+    start with nothing after it, as when the process is killed, is charged the whole time since it
+    began. `live choose` without `--set` is refused, a budget stop after a completed step no longer
+    raises, and the edits and notifications replay with their recorded generation settings.
+50. **Every shipped recording is pinned by SHA-256.** `recordings_manifest.tsv` lists each file under
+    `recordings/`, and a replay gateway refuses a listed file that no longer matches, so a changed
+    reply stops the notebook as a changed request does. No recorded file changed.
+51. **The text follows the reviews.** "Advisory" is gone as a name for the status; the current
+    system is the pilot build, and the later step a pilot with managers who did not build it. The
+    demand-week briefs' cause now says what the outputs show: a trend cited from one actual, and
+    code's own line that the forecasts fit recent weeks. Every limitation gives what held it and
+    the next step, and five are added from the reviews. The human latch reset is the design's, and
+    this build simulates it. Figure 7's note says neither pair was blind to Reader B. The notebook
+    shows recorded notes with the approver by role and no private path. The code's docstrings
+    say what each decision says, in place of its id.
+52. **Not changed.** The decision CSV and every file under `recordings/` stay as recorded. The
+    template's and the Investigator's drift line, which both raters marked a factual error, is
+    left for a ruling, since it is part of the rated template and the recorded requests.

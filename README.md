@@ -1,31 +1,38 @@
-# Weekly A&E demand and escalation briefing
+# Weekly accident and emergency (A&E) demand and escalation briefing
 
 ## Project description
 
-- **Status, additional information only:** at this stage the system gives the duty manager additional
-  information beside their existing process. It replaces no current process and sets no staffing on
-  its own. Becoming a primary operational tool needs shadow mode, a pilot and tuning over time, which
-  is achievable but not yet done.
+- **Status, additional information only:** at this stage the system is a pilot build that gives the
+  duty manager additional information beside their existing process, by choice. It replaces no
+  current process and sets no staffing on its own. Becoming a primary operational tool needs shadow
+  mode, a pilot with managers who did not build it and tuning over time, which is achievable but not
+  yet done.
 - **What it does:** each week, code forecasts unplanned attendances at Scotland's emergency
   departments for the four weeks after the Tuesday data release, and sets each hospital's demand
   level by fixed rules.
 - **Where the AI sits:** for a hospital the rules pick out, a language-model Investigator drafts a
   demand brief from read-only tools, and a Reviewer checks every figure in code, then the wording.
+- **Who writes a brief's explanation:** a rule set before the template comparison's ratings says that
+  if the agent fails in either week, the template writes the explanation by default, and the agent
+  only in drift, surge or model-disagreement weeks. The agent failed in the demand week, so
+  `config.json`'s `explanation` now applies the rule: a flag week gets the template brief, filled by
+  code, and a latched week the agent's. The design has no measure of model disagreement, so no week
+  is kept for the agent on that ground.
 - **Who decides:** a duty manager approves, edits or rejects each brief. Code sets the staffing
   actions for an approved brief, and the language model drafts each notification, which code checks
   before writing it to an outbox file, never sent.
 - **What the demand level means:** demand unusually high for the time of year. It is not pressure,
   need or priority.
-- **What is real:** Public Health Scotland's weekly A&E attendances and GOV.UK's Scottish bank
+- **What is real:** Public Health Scotland's (PHS) weekly A&E attendances and GOV.UK's Scottish bank
   holidays.
 - **The drift latch:** once the drift alarm fires, the latch stays set, like an alarm that stays on
-  until someone resets it. While it is set, the forecasts are marked untrusted, and only a person can
-  reset it.
+  until someone resets it. While it is set, the forecasts are marked untrusted. In the design only a
+  person can reset it; in this build each reset is simulated at its review prompt.
 - **What is simulated or my own design:** the seasonal capacity the level is measured against, the
   latch resets and the staff acknowledgements are simulated; the bands, the staffing actions and
   their reply deadlines are my design.
 - **The spot check:** `ae_escalation_spot_check.ipynb` runs the design on the real data and replays
-  every recorded model call, so it needs no language model and no GPU.
+  every model call of the completed runs, so it needs no language model and no GPU.
 - **The case study:** `ae_escalation_case_study.md`, rendered to `ae_escalation_case_study.pdf`, sets
   out the design, its evaluation and its limits.
 
@@ -74,7 +81,8 @@ Python 3.12.3.
    ```
 
    Sections 5 to 7 replay the live runs from `recordings/`, so no language model runs, and neither a
-   key nor Ollama is needed. The GRU comparator runs on the CPU.
+   key nor Ollama is needed. The gated recurrent unit (GRU) comparator runs on the CPU. A recording
+   file that no longer matches its SHA-256 in `recordings_manifest.tsv` stops the replay.
 
 4. Run the tests:
 
@@ -92,7 +100,11 @@ needs no key, no Ollama and no network. To use the local model instead, set `llm
 | `"frontier"` | A Claude API key in a file named `.env` in the repository root, as `ANTHROPIC_API_KEY=...`, created only for a live run and never committed, which `.gitignore` prevents |
 | `"local"` | Ollama on this machine, serving `nemotron-3.5-lightning:30b-a3b` pulled at the digest in `config.json`; no key |
 
-**Running the agents live** is not needed to reproduce the notebook. The steps are:
+**Running the agents live** is not needed to reproduce the notebook, and it is a new experiment, not
+a reproduction. It needs a new label, since a label already recorded is never run again. A frontier
+run also needs the local set's adequacy record for that label to state the case for it. Between the
+steps, the adequacy reviewer fills in the scores sheet that `briefs` writes, and the approver saves
+the decisions sheet and any edit files before `notify`. The steps are:
 
 ```bash
 python -m ae_escalation.live briefs --label <label>      # the seven replay briefs and the designed failure
@@ -101,8 +113,7 @@ python -m ae_escalation.live choose --label <label> --set <local|frontier> --ini
 python -m ae_escalation.live notify --label <label>      # check each edit, draft the notifications
 ```
 
-A label already recorded is never run again, and `--budget-s` sets one briefs run's time budget, at
-most 1,800 seconds.
+`--budget-s` sets one briefs run's time budget, at most 1,800 seconds.
 
 ### The configuration, `config.json`
 
@@ -111,6 +122,7 @@ It holds no key, token or password.
 | Field | What it sets |
 |---|---|
 | `llm_backend` | The model backend: `frontier`, as shipped, or `local` |
+| `explanation` | Who writes a brief's explanation: `template_by_default`, as shipped, the template in flag weeks and the agent in latched weeks, or `agent` in every week |
 | `local.model` | The local model's name in Ollama, `nemotron-3.5-lightning:30b-a3b` |
 | `local.digest` | The digest Ollama lists for that model, so a run traces to the exact weights |
 | `local.temperature` | The local model's temperature, 0 |
@@ -149,14 +161,16 @@ the freeze pins.
 
 ![Figure 1: code decides, the agents explain, a person approves](figures/fig1_architecture.png)
 
-Code decides, the agents explain and a person approves. Each arrow in Figure 1 is numbered, and the
-case study's interaction table says what each carries. Each box names the prior project it comes from
-or says it is new. The weekly flow, in nine steps:
+Code decides, the agents explain and a person approves. The figures carry the paper's numbers. Each
+arrow in Figure 1 is numbered, and the case study's interaction table says what each carries. Each
+box names the prior capstone project it comes from or says it is new. The weekly flow, in nine
+steps:
 
 1. **Weekly load.** Code reads the PHS file, checks its hash, cleans it and flags anomalies, keeping
    every row. It uses only the weeks released by the forecast origin; each Tuesday release covers
    the week that ended 9 days earlier.
-2. **Forecast.** Seasonal naive, the 4-week moving average, a linear model and SA-MA forecast the
+2. **Forecast.** Seasonal naive, the 4-week moving average, a linear model and SA-MA, a seasonally
+   adjusted moving average, forecast the
    four week-endings after the release, each with a range. One primary model drives the flag, and
    it is re-selected among the four at each latch reset. A GRU runs beside them as a comparator and
    is never shown to a manager.
@@ -201,7 +215,7 @@ New in this project: SA-MA's seasonal index, the flag and drift rules with the d
 demand brief and its five tools, the switch between the local and frontier backends, and the
 coordinator.
 
-## How it was checked, and why it is a pilot
+## How it was checked, and why it is a pilot build
 
 - **The data:** the file is checked against its SHA-256 before it is read, and each anomaly is
   flagged and kept, with how it is handled set out in the notebook's section 2.
@@ -217,32 +231,38 @@ coordinator.
 - **The clean room:** the notebook was run twice from a fresh clone and a fresh environment, giving
   the same outputs.
 
-I chose to keep it a pilot. At this stage it gives additional information beside the existing
-process by choice, not by shortfall. In real use the same checks would continue, and what refines it
-is use with the duty managers' feedback: shadow mode on new weekly releases, then a pilot with
-managers who did not build it, then tuning over time, and only then a primary operational tool.
+I chose to keep it a pilot build. At this stage it gives additional information beside the existing
+process by choice, not by shortfall. In real use the same checks would continue. What refines it is
+use with the duty managers' feedback: shadow mode on new weekly releases, then a pilot with managers
+who did not build it, then tuning over time. Only then could it be a primary operational tool.
 
 ## Limits and boundaries
 
-- **Advisory only.** The system advises and people decide. It never sets a level by judgement,
-  never sends without approval and never sees patient data.
+- **Additional information only.** The system informs and people decide. It never sets a level by
+  judgement, never sends without approval and never sees patient data.
 - **A demand level, not pressure.** The level shows demand for the time of year. The capacity behind
   it is a demand percentile, not beds or staff, so the levels and actions are illustrative.
 - **Weeks, not days.** The forecasts and levels are weekly; the system does not forecast days.
 - **Drift.** When drift fires, the forecasts are marked untrusted until a person approves a latch
-  reset.
+  reset; in this build each reset is simulated at its review prompt.
 - **In-sample.** The design was tuned on the same 2015 to 2026 data that scores it, so every figure
   is in-sample. Before any live use the frozen design would run in shadow mode on new releases.
 - **The agents.** The local model verified none of the replay briefs. Round 1's retries went out
   blind, a bug in my client that round 2 fixed, and its time budget stopped it after 3 of the 7.
   Round 2 finished all seven, but every draft reached the 8,192-token output cap, which counts the
   model's thinking; a retry with thinking turned off is untried future work. So the frontier model
-  ran once, as ruled before the runs, and its set is the one approved. It verified five, short of the
-  adequacy test's six: the checks refused both demand briefs for claims no tool result supports, such
-  as recent weeks rising, so neither could be approved, and the fix is future work before shadow
-  mode. The notebook's section 9 sets out the limitations in full.
+  ran once, as the adequacy test set out before the runs, and its set is the one approved. It
+  verified five, short of the adequacy test's six. The checks refused both demand-week briefs:
+  Ninewells' claimed a rising trend from one cited actual, and both repeated code's own line that
+  the forecasts fit recent weeks. So neither could be approved, and the template now writes those
+  weeks. The
+  notebook's section 9 sets out the limitations in full.
+- **The template comparison.** Both raters found the agent's text added value in the national latch
+  week and not in the demand week, whose brief the checks had refused. That failure triggered the
+  rule set before the ratings, which `explanation` now applies.
 - **AI in the approvals.** An AI independent judge read the seven briefs before I decided. I adopted
   its five edits as my own, with the reset wording corrected. An AI reviewer scored the adequacy
   test. Reader B, a person, read four of the briefs and both template pairs with an AI assistant, and
-  my own marks on the pairs were made the same way and are not blind.
+  my own marks on the pairs were made the same way and are not blind. The decision notes in
+  `approvals/` stay as recorded; a path in them under `reviews/` names a file in my private records.
 - **Not for these uses.** Ranking hospitals, justifying cuts or monitoring the 4-hour standard.
