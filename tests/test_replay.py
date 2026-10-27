@@ -995,3 +995,57 @@ def test_a_new_live_run_gives_the_investigator_the_raters_wording(
     recorded = paths.briefs.read_text(encoding="utf-8")
     assert ag.NO_DRIFT_LINES[2] in recorded
     assert ag.NO_DRIFT_LINES[1] not in recorded
+
+
+# --- the template rule on the replay set -------------------------------------
+
+FLAG_WEEKS = ["20210613-T101H", "20230409-C121H"]
+
+
+def under_the_rule(settings):
+    """The settings with the template rule, as config.json ships it."""
+    return settings.model_copy(update={"explanation": "template_by_default"})
+
+
+def test_a_new_run_under_the_rule_writes_flag_weeks_from_the_template(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    rule = under_the_rule(settings)
+    live = rp.run_set(
+        replay_run, holidays, rule, paths, live=True, chat_model=stand_in()
+    )
+    assert [f"{t.week:%Y%m%d}-{t.hospital}" for t in live.templates] == (
+        FLAG_WEEKS
+    )
+    assert all(t.version == 2 for t in live.templates)
+    assert not {o.run_id for o in live.outcomes} & set(FLAG_WEEKS)
+    assert len(live.outcomes) == 5 and live.planted is not None
+    again = rp.run_set(replay_run, holidays, rule, paths, live=False)
+    assert again.templates == live.templates
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]
+    # The run's record says how it routed, so it replays the same way under
+    # either setting.
+    back = rp.run_set(replay_run, holidays, settings, paths, live=False)
+    assert back.templates == live.templates
+
+
+def test_a_label_recorded_with_the_agent_replays_with_the_agent(
+    replay_run, holidays, settings, tmp_path
+):
+    # The recorded runs had the agent write every brief, so a replay under
+    # the template rule still runs them through the agent.
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    live = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    assert {o.run_id for o in live.outcomes} >= set(FLAG_WEEKS)
+    again = rp.run_set(
+        replay_run, holidays, under_the_rule(settings), paths, live=False
+    )
+    assert not again.templates
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]

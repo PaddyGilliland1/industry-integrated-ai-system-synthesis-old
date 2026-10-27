@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from . import agents as ag
 from . import evaluation as ev
+from . import template as tp
 from . import tools as tl
 from .adequacy import BudgetStop
 from .agents import BriefGraph, BriefOutcome, load_prompts
@@ -520,6 +521,8 @@ class ReplaySetResult(BaseModel):
     check: dict
     outcomes: list[BriefOutcome]
     planted: BriefOutcome | None = None
+    # The flag weeks' briefs the template wrote, under the template rule.
+    templates: list[tp.TemplateBrief] = []
     backend: str
     model: str
 
@@ -531,6 +534,28 @@ def set_runs(run):
     target = planted_entry(entries)
     runs = [(e, run_id(e), None) for e in entries]
     return runs + [(target, f"{run_id(target)}-planted", plant_figure)]
+
+
+def _label_explanation(settings, paths, store, flag_ids):
+    """Who wrote this label's flag weeks: the explanation setting and
+    template version its first start recorded; for a label recorded before
+    the setting existed, the agent when its recordings hold a flag week's
+    calls; for a new label, config.json's."""
+    starts = [
+        e
+        for e in progress(paths)
+        if e.get("step") == "briefs" and e["event"] == "started"
+    ]
+    if starts and "explanation" in starts[0]:
+        return settings.model_copy(
+            update={
+                "explanation": starts[0]["explanation"],
+                "template_version": starts[0]["template_version"],
+            }
+        )
+    if any(r.get("run_id") in flag_ids for r in store.records()):
+        return settings.model_copy(update={"explanation": "agent"})
+    return settings
 
 
 def run_set(
@@ -589,7 +614,10 @@ def run_set(
     store = RecordingStore(paths.briefs)
     # A label replays, and resumes, with the settings it was recorded with;
     # a new label's store is empty, so it runs with config.json's.
-    ran = label_settings(settings, store)
+    flag_ids = {run_id(e) for e in replay_entries(run) if not e.latched}
+    ran = _label_explanation(
+        label_settings(settings, store), paths, store, flag_ids
+    )
     gateway = ModelGateway.for_settings(
         settings if live else ran,
         store,
@@ -623,10 +651,23 @@ def run_set(
             budget_s=budget.limit_s,
             budget_from=budget.source,
             config_budget_s=settings.agents.run_budget_s,
+            explanation=ran.explanation,
+            template_version=ran.template_version,
         )
-    outcomes = []
+    outcomes, templates = [], []
     try:
         for e, rid, plant in todo:
+            # Under the template rule a flag week's brief is the template's,
+            # filled by code with no model call. The designed failure tests
+            # the code check on the agent's draft, so it always goes to the
+            # agent.
+            if plant is None and tp.explanation_writer(e, ran) == "template":
+                brief = tp.template_brief(run, e, ran.template_version)
+                log.write(
+                    kind="template brief", run_id=rid, version=brief.version
+                )
+                templates.append(brief)
+                continue
             try:
                 outcomes.append(
                     graph.run(e.as_of, e.hospital, rid, plant=plant)
@@ -655,6 +696,7 @@ def run_set(
         check=check,
         outcomes=[o for o in outcomes if o.run_id != planted_id],
         planted=next((o for o in outcomes if o.run_id == planted_id), None),
+        templates=templates,
         backend=gateway.backend,
         model=gateway.model_name,
     )

@@ -49,22 +49,27 @@ def holidays():
 
 
 def local_settings():
-    """The repository's config.json with the local backend chosen. The
-    shipped file names frontier; the tests that drive the local path with a
-    stand-in model pin local here, and the frontier path has its own tests."""
+    """The repository's config.json with the local backend chosen and the
+    agent writing every brief. The shipped file names frontier and the
+    template rule; the tests that drive the replay set with a stand-in model
+    pin both here, as the recorded runs ran, and the frontier path and the
+    template rule have their own tests."""
     from ae_escalation import config as cf
 
     shipped = cf.load_config(REPO / "config.json")
-    return shipped.model_copy(update={"llm_backend": "local"})
+    return shipped.model_copy(
+        update={"llm_backend": "local", "explanation": "agent"}
+    )
 
 
 def local_config(tmp_path):
-    """A copy of config.json naming the local backend, for the command
-    line, which reads a file."""
+    """A copy of config.json naming the local backend, with the agent
+    writing every brief, for the command line, which reads a file."""
     raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
     path = tmp_path / "config_local.json"
     path.write_text(
-        json.dumps({**raw, "llm_backend": "local"}), encoding="utf-8"
+        json.dumps({**raw, "llm_backend": "local", "explanation": "agent"}),
+        encoding="utf-8",
     )
     return str(path)
 

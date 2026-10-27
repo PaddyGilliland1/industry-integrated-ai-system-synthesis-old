@@ -844,3 +844,40 @@ def test_a_budget_stop_after_a_completed_step_says_what_it_can(
     rp.note_progress(paths, "completed", step="briefs", spent_s=1.0)
     assert lv._stopped(gw.BudgetExceeded("budget"), paths) == 3
     assert "completed: none" in capsys.readouterr().out
+
+
+# --- the template rule on the live path --------------------------------------
+
+
+def rule_config(tmp_path):
+    """config.json on the local backend with the template rule as shipped,
+    so a flag week's brief is the template's."""
+    raw = json.loads((REPO / "config.json").read_text(encoding="utf-8"))
+    raw.update(llm_backend="local", explanation="template_by_default")
+    path = tmp_path / "config_rule.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    return str(path)
+
+
+def test_live_briefs_routes_flag_weeks_to_the_template(
+    tmp_path, pinned, capsys
+):
+    args = ["briefs", "--label", "t1", "--out", str(tmp_path)]
+    args += ["--config", rule_config(tmp_path)]
+    assert lv.main(args, chat_model=stand_in(), fetch=pinned) == 0
+    out = capsys.readouterr().out
+    paths = rp.Paths.under(tmp_path, "local", "t1")
+    asked = {r["run_id"] for r in gw.RecordingStore(paths.briefs).records()}
+    latched = {
+        "20191006-S314H",
+        "20200322-Scotland",
+        "20200322-S314H",
+        "20200322-T101H",
+        "20200322-G405H",
+    }
+    # The two flag weeks make no model call; the latched weeks go to the
+    # agent, and the designed failure still tests the agent's draft.
+    assert latched <= asked and "20210613-T101H-planted" in asked
+    assert not {"20210613-T101H", "20230409-C121H"} & asked
+    for rid in ("20210613-T101H", "20230409-C121H"):
+        assert f"{rid}: the template brief, version 2" in out

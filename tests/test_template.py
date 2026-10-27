@@ -403,6 +403,14 @@ def test_the_shipped_ratings_hold_both_raters_on_both_weeks():
 # --- the template rule: who writes a brief's explanation ---------------------
 
 
+@pytest.fixture
+def shipped():
+    """config.json as shipped: the template rule, template version 2."""
+    from ae_escalation import config as cf
+
+    return cf.load_config(REPO / "config.json")
+
+
 def replay_set_entries(run):
     """The replay set's seven screened entries."""
     from ae_escalation import replay as rp
@@ -410,18 +418,18 @@ def replay_set_entries(run):
     return rp.replay_entries(run)
 
 
-def test_the_shipped_config_applies_the_template_rule(settings):
-    assert settings.explanation == "template_by_default"
+def test_the_shipped_config_applies_the_template_rule(shipped):
+    assert shipped.explanation == "template_by_default"
 
 
 def test_a_demand_week_takes_the_template_and_a_latched_week_the_agent(
-    replay_run, settings
+    replay_run, shipped
 ):
     # The comparison failed in the demand week, so by the rule set before
     # the ratings the template writes a flag week's explanation; drift and
     # surge weeks, which are latched, keep the agent.
     writers = {
-        (e.kind, tp.explanation_writer(e, settings))
+        (e.kind, tp.explanation_writer(e, shipped))
         for e in replay_set_entries(replay_run)
     }
     assert writers == {
@@ -431,8 +439,8 @@ def test_a_demand_week_takes_the_template_and_a_latched_week_the_agent(
     }
 
 
-def test_the_rule_can_be_switched_back_to_the_agent(replay_run, settings):
-    back = settings.model_copy(update={"explanation": "agent"})
+def test_the_rule_can_be_switched_back_to_the_agent(replay_run, shipped):
+    back = shipped.model_copy(update={"explanation": "agent"})
     assert {
         tp.explanation_writer(e, back) for e in replay_set_entries(replay_run)
     } == {"agent"}
@@ -453,14 +461,14 @@ class RefusingGraph:
 
 
 def test_a_template_week_is_written_by_code_with_no_model_call(
-    replay_run, settings
+    replay_run, shipped
 ):
     graph = RefusingGraph()
     for e in replay_set_entries(replay_run):
-        brief = tp.weekly_brief(replay_run, e, settings, graph)
+        brief = tp.weekly_brief(replay_run, e, shipped, graph)
         if e.kind == "demand":
             assert brief == tp.template_brief(
-                replay_run, e, version=settings.template_version
+                replay_run, e, version=shipped.template_version
             )
         else:
             assert brief == f"{e.as_of:%Y%m%d}-{e.hospital}"
@@ -495,8 +503,8 @@ def test_a_latched_drift_line_is_the_same_in_both_versions(replay_run):
     assert one == two
 
 
-def test_a_live_brief_gets_the_shipped_template_version(replay_run, settings):
-    assert settings.template_version == 2
+def test_a_live_brief_gets_the_shipped_template_version(replay_run, shipped):
+    assert shipped.template_version == 2
     e = entry_at(replay_run, "2021-06-13", "T101H")
-    brief = tp.weekly_brief(replay_run, e, settings, RefusingGraph())
+    brief = tp.weekly_brief(replay_run, e, shipped, RefusingGraph())
     assert brief.version == 2 and RATERS_WORDING in brief.text()
