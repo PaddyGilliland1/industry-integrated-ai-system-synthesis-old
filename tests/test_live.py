@@ -11,7 +11,7 @@ from ae_escalation import gateway as gw
 from ae_escalation import live as lv
 from ae_escalation import replay as rp
 
-from .conftest import REPO, local_config, local_settings
+from .conftest import AFTER_ANY_RUN, REPO, local_config, local_settings
 from .scripted import LOADED, stand_in
 
 FAKE_KEY = "-".join(["sk", "ant", "test", "not", "a", "real", "key", "0000"])
@@ -616,7 +616,7 @@ def test_an_edits_wording_check_is_recorded_live_and_replayed(
     row.update(
         action="edit",
         initials="AB",
-        decided_at="2026-10-27T09:30:00+00:00",
+        decided_at=AFTER_ANY_RUN,
         factual_edit="no",
         **{c: "yes" for c in lv.CRITERIA_FIELDS},
     )

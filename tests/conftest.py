@@ -15,6 +15,10 @@ HOLIDAYS = DATA / "bank-holidays_20261024.json"
 HOLIDAYS_SHA256 = (
     "538b3482c28b85ecd2db606a0d5ae6ad17248900b6498700ce0a48d26a3ecde6"
 )
+# The queue refuses a decision made before its run began, and a test's live
+# run begins at the clock's now, so a decision in such a test needs a time
+# after any day the suite runs on.
+AFTER_ANY_RUN = "2099-01-01T09:30:00+00:00"
 
 
 @pytest.fixture(scope="session")

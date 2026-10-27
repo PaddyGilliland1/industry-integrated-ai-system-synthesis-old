@@ -16,6 +16,7 @@ from ae_escalation import figures as fg
 from ae_escalation import gateway as gw
 from ae_escalation import replay as rp
 
+from .conftest import AFTER_ANY_RUN
 from .scripted import stand_in
 
 # --- the set and its rules ---------------------------------------------------
@@ -631,12 +632,12 @@ def decisions_csv(paths, rows):
 
 
 def approval_row(brief_id):
-    """One approval by AB, every criterion met."""
+    """One approval by AB, every criterion met, after the run began."""
     return {
         "brief_id": brief_id,
         "action": "approve",
         "initials": "AB",
-        "decided_at": "2026-10-27T09:30:00+00:00",
+        "decided_at": AFTER_ANY_RUN,
         "factual_edit": "no",
         **{c.field: "yes" for c in ap.CRITERIA},
         "note": "",
