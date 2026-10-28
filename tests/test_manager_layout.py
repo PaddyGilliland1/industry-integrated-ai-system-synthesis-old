@@ -331,10 +331,29 @@ def test_version_3_cites_every_tool_figure_it_prints(edinburgh):
     figures = edinburgh.cited_figures
     assert all(printed(f) in edinburgh.text() for f in figures)
     # The tables' 80 forecast figures and 16 errors, then the track
-    # record's flags borne out and flags; version 3 does not print the
-    # unflagged outlooks' share.
-    assert len(figures) == 80 + 16 + 2
-    assert fg.check_template(edinburgh, 2).figures_checked == 98
+    # record's three, as version 2 states them: version 3 states every fact
+    # version 2 did.
+    assert len(figures) == 80 + 16 + 3
+    assert fg.check_template(edinburgh, 2).figures_checked == 99
+
+
+def test_version_3_ends_its_detail_with_version_2s_track_sentence(
+    replay_run,
+):
+    for week in (EDINBURGH, NINEWELLS, SURGE, LATCH):
+        brief = v3(replay_run, week)
+        detail = brief.text().split("\nThe detail\n")[1]
+        tail = f"\n\n{br.track_line(brief.track)}"
+        assert detail.endswith(tail), week
+        assert detail.index("Average forecast error") < detail.index(tail)
+
+
+def test_a_wrong_unflagged_share_in_the_detail_fails_the_check(edinburgh):
+    track = edinburgh.track.model_copy(update={"unflagged_busy_pct": 31.6})
+    planted = edinburgh.model_copy(update={"track": track})
+    result = fg.check_template(planted, planted.level)
+    assert not result.passed
+    assert any("31.6%" in f.found for f in result.failures)
 
 
 def test_a_latched_version_3_brief_cites_the_released_weeks_it_quotes(
@@ -618,7 +637,76 @@ def test_a_notification_is_offered_version_3s_tool_figures(replay_run):
     # unlatched brief, and in a latched one no forecast, since each is
     # untrusted, and no past week's actual.
     brief = v3(replay_run, EDINBURGH)
-    assert co.offered_figures(brief) == list(range(1, 99))
+    assert co.offered_figures(brief) == list(range(1, 100))
     surge = v3(replay_run, SURGE)
     offered = [surge.cited_figures[n - 1] for n in co.offered_figures(surge)]
-    assert {f.measure for f in offered} == {"error", "borne_out", "flags"}
+    assert {f.measure for f in offered} == {
+        "error",
+        "borne_out",
+        "flags",
+        "unflagged_busy_pct",
+    }
+
+
+# --- a brief that can never be approved sets no action ----------------------
+
+CANNOT = (
+    "What to do: this brief cannot be approved. Check the released weeks "
+    "yourself before changing staffing."
+)
+
+
+def no_action_offered(shown):
+    """A not-verified brief's view: the banner, the heading that says it
+    cannot be approved, and no action code sets."""
+    assert shown.startswith("NOT VERIFIED, DO NOT ACT")
+    assert f"\n{CANNOT}\n" in shown
+    assert "What to do, if you approve" not in shown
+    for spec in co.ACTIONS_BY_LEVEL[4]:
+        owner = spec.owner[0].upper() + spec.owner[1:]
+        assert f"- {owner}:" not in shown
+
+
+def test_a_refused_agent_brief_sets_no_action(replay_run, holidays, settings):
+    from ae_escalation import demo as dm
+
+    refused = dm.scripted_brief(
+        replay_run, holidays, settings, plants=2, run_id="nw"
+    )
+    assert refused.status == "not verified" and refused.entry.level == 2
+    no_action_offered(refused.display())
+    # The agent's points stay, as written and marked.
+    assert "Also check (the agent's points):" in refused.display()
+    # The rated layout, which has no actions to drop, is as it was.
+    assert "Watch points:" in refused.display(layout="rated")
+
+
+def test_an_edit_that_failed_its_checks_sets_no_action(
+    replay_run, holidays, settings
+):
+    from ae_escalation import demo as dm
+
+    shown = dm.safeguards(replay_run, holidays, settings).failed_edit
+    no_action_offered(shown)
+
+
+def test_a_version_3_template_the_check_failed_sets_no_action(
+    replay_run, holidays
+):
+    queued = tp.template_outcome(
+        replay_run, holidays, entry_at(replay_run, EDINBURGH), "rie", 3
+    )
+    failed = fg.check_template(queued.template, queued.rule_level + 1)
+    attempt = queued.attempts[0].model_copy(update={"check": failed})
+    broken = queued.model_copy(
+        update={"status": "not verified", "attempts": [attempt]}
+    )
+    no_action_offered(broken.display())
+    # A verified one still sets its level's actions.
+    assert "What to do, if you approve\n- Duty manager:" in queued.display()
+
+
+def test_a_verified_brief_still_sets_its_actions(queued):
+    shown = queued.display(written_by=False)
+    assert "What to do, if you approve\n- Duty manager:" in shown
+    assert CANNOT not in shown

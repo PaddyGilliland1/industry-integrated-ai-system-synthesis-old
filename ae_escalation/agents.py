@@ -791,9 +791,14 @@ class BriefOutcome(BaseModel):
         line, as the raters' view does; layout="rated" is the order the
         raters read. A template brief's order is its version's."""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
+        # A brief that is not verified can never be approved, so it lists no
+        # action in the manager's layout.
+        approvable = self.status != "not verified"
         if self.template is not None:
-            shown = self.template.text(written_by=written_by)
-            if self.status != "not verified":
+            shown = self.template.text(
+                written_by=written_by, approvable=approvable
+            )
+            if approvable:
                 return shown
             return "\n".join(
                 [
@@ -821,7 +826,7 @@ class BriefOutcome(BaseModel):
         marks = check.failures if check else []
         if self.brief is not None:
             text = self.brief.text(
-                failed, written_by=written_by, layout=layout
+                failed, written_by=written_by, layout=layout, approvable=False
             )
         else:
             text = refused_text(
@@ -834,6 +839,7 @@ class BriefOutcome(BaseModel):
                 marks=marks,
                 written_by=written_by,
                 layout=layout,
+                approvable=False,
             )
         notes = []
         if check and not check.passed:

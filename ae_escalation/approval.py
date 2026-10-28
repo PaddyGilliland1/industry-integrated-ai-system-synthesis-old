@@ -217,7 +217,10 @@ class QueueItem(BaseModel):
                 named = "\n".join(f"- {f.field}: {f.reason}" for f in failures)
                 return f"{banner}\nYour edit was refused:\n{named}"
             failed = set(self.last_edit.failed_figures)
-            text = self.edit.text(failed, written_by=written_by, layout=layout)
+            # An edit that failed its checks leaves the brief unapprovable.
+            text = self.edit.text(
+                failed, written_by=written_by, layout=layout, approvable=False
+            )
             wording = self.edit_wording
             if self.last_edit.passed and wording and not wording.passed:
                 named = "\n".join(f"- {p}" for p in wording.problems)

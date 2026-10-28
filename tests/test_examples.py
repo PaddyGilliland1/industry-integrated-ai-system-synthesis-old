@@ -100,7 +100,7 @@ def test_the_current_brief_is_edinburghs_latest_unlatched_flag(rendered):
     )
     assert "awaiting decision" in text and "version 3" in text
     assert (
-        "The code check: 98 figures checked against the tool calls they "
+        "The code check: 99 figures checked against the tool calls they "
         "came from, none wrong" in text
     )
     assert "\nAt a glance\n" in text and "What to do, if you approve" in text
@@ -154,6 +154,23 @@ def test_the_not_verified_example_carries_the_managers_banner(rendered):
     seen = recorded_queue()[ex.NOT_VERIFIED]["brief"]
     assert seen.startswith("NOT VERIFIED, DO NOT ACT")
     assert f"```text\n{seen}\n```" in text
+
+
+def test_the_not_verified_example_in_the_shipped_layout_sets_no_action(
+    rendered,
+):
+    text = rendered[ex.NOT_VERIFIED_FILE]
+    assert text.index("## As the manager saw it") < text.index(
+        "## In the shipped layout"
+    )
+    shipped = text.split("## In the shipped layout")[1]
+    assert "```text\nNOT VERIFIED, DO NOT ACT" in shipped
+    assert (
+        "What to do: this brief cannot be approved. Check the released "
+        "weeks yourself before changing staffing." in shipped
+    )
+    assert "What to do, if you approve" not in shipped
+    assert "after the ratings" in shipped
 
 
 def test_no_example_names_the_approver_by_initials(rendered):

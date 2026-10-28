@@ -15,7 +15,8 @@ which is Figure 5 of the paper:
 - the version 3 template brief a new run writes for Ninewells Hospital's
   demand week, w/e 13 Jun 2021, as the queue holds it;
 - Edinburgh's staff notifications and escalation, from the outbox;
-- a brief marked "not verified, do not act", as the manager saw it.
+- a brief marked "not verified, do not act", as the manager saw it, then in
+  the shipped layout, which lists no action for it.
 
 The manager's layout came after the ratings: the raters and the approver
 read the rated layout, and testing the new one is a pilot step. The
@@ -63,11 +64,11 @@ COMMAND = "`python -m ae_escalation.examples`"
 # The sample brief figure is drawn at the paper's column width, 16.5 cm,
 # so its text prints at the size it is set. Nothing is trimmed: the brief's
 # tables are drawn whole, so the figure is as tall as the brief needs. At 8
-# pt and this leading the current brief's 53 lines come under the APA kit's
+# pt and this leading the current brief's 56 lines come under the APA kit's
 # 8.2 inch cap on a figure's height.
 FIG9_WIDTH_IN = 16.5 / 2.54
 FIG9_FONT_PT = 8
-FIG9_LEADING = 1.3
+FIG9_LEADING = 1.25
 FIG9_PAD_IN = 0.18
 FIG9_CHARS = 88
 # The block headings of the manager's layout, drawn bold like the heading.
@@ -414,6 +415,16 @@ def not_verified_example(fresh, decided):
         "",
         *_block(seen.display(written_by=False, layout="rated")),
         "",
+        "## In the shipped layout",
+        "",
+        "The same brief as the queue's sheet now shows it, in the manager's "
+        "layout, which came after the ratings: it can never be approved, so "
+        "it lists no action and says to check the released weeks. The "
+        "approver read the rated layout above, and testing this one is a "
+        "pilot step.",
+        "",
+        *_block(seen.display(written_by=False)),
+        "",
     ]
     return "\n".join(lines)
 
@@ -444,7 +455,8 @@ def readme():
         f"- `{OUTBOX_FILE}`: Edinburgh's staff notifications and escalation, "
         "from the outbox, never sent.",
         f"- `{NOT_VERIFIED_FILE}`: Ninewells Hospital's demand brief, marked "
-        '"not verified, do not act", as the manager saw it.',
+        '"not verified, do not act", as the manager saw it, then in the '
+        "shipped layout, which lists no action for it.",
         "",
     ]
     return "\n".join(lines)

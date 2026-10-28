@@ -497,7 +497,12 @@ class DemandBrief(BaseModel):
         return ""
 
     def text(
-        self, failed=frozenset(), written_by=True, marks=(), layout="rated"
+        self,
+        failed=frozenset(),
+        written_by=True,
+        marks=(),
+        layout="rated",
+        approvable=True,
     ):
         """The brief with every placeholder filled in by code; the cited
         figures numbered in failed and the problems in marks are marked.
@@ -506,9 +511,10 @@ class DemandBrief(BaseModel):
 
         The layout is "rated" unless asked: the order the raters read, and
         the one the Reviewer's and the coordinator's recorded prompts quote.
-        The approval queue asks for "manager"."""
+        The approval queue asks for "manager", and approvable=False for a
+        brief that can never be approved, which then lists no action."""
         return brief_text(
-            self, self.rendered(failed, marks), written_by, layout
+            self, self.rendered(failed, marks), written_by, layout, approvable
         )
 
 
@@ -540,6 +546,7 @@ def refused_text(
     marks=(),
     written_by=True,
     layout="rated",
+    approvable=True,
 ):
     """A draft the text rules refused, as the manager sees it: the heading
     code sets from the screen's entry, then the draft's words with every
@@ -568,7 +575,7 @@ def refused_text(
         )
         for field, text in draft.texts().items()
     }
-    return brief_text(head, shown, written_by, layout)
+    return brief_text(head, shown, written_by, layout, approvable)
 
 
 def _field_lines(head, shown):
@@ -611,7 +618,7 @@ def _rated_lines(head, shown, points):
     ]
 
 
-def brief_text(head, shown, written_by=True, layout="rated"):
+def brief_text(head, shown, written_by=True, layout="rated", approvable=True):
     """A brief's lines as the manager reads them: the code-set heading of
     head, a DemandBrief or a refused draft's stand-in, the rendered text
     fields in shown, and the fact lines code writes from head's facts.
@@ -620,7 +627,8 @@ def brief_text(head, shown, written_by=True, layout="rated"):
     writes from the brief's facts, at a glance and what to do, then the
     agent's points, then its explanation as written. A brief recorded
     before the manager's layout has no facts to open with, so it is shown
-    in the order it was queued in."""
+    in the order it was queued in. A brief that can never be approved,
+    approvable=False, lists no action in the manager's layout."""
     if layout not in LAYOUTS:
         raise ValueError(f"the layout is one of {LAYOUTS}, not {layout!r}")
     points = [v for k, v in shown.items() if k.startswith("watch_points")]
@@ -628,7 +636,12 @@ def brief_text(head, shown, written_by=True, layout="rated"):
     if layout == "manager" and glance is not None:
         lines = [
             *manager_top(
-                head, head.drift_alarm, glance, head.track_record, points
+                head,
+                head.drift_alarm,
+                glance,
+                head.track_record,
+                points,
+                approvable,
             ),
             "The agent's explanation:",
             *_field_lines(head, shown),
@@ -650,6 +663,12 @@ def brief_text(head, shown, written_by=True, layout="rated"):
 # the brief's facts and tool results, and the rule's constants, never a model.
 
 TOP_LEVEL = len(ru.CUTS) + 1
+# What a brief that can never be approved says in place of its actions: it
+# is marked "not verified, do not act", so no action code sets may follow.
+CANNOT_APPROVE = (
+    "What to do: this brief cannot be approved. Check the released weeks "
+    "yourself before changing staffing."
+)
 NUMBER_NAMES = {4: "four"}
 AHEAD_WORD = tl.AHEAD
 METHODS_WORD = NUMBER_NAMES[len(tl.SIMPLE_MODELS)]
@@ -843,20 +862,24 @@ def warning_line(head, latched):
     )
 
 
-def todo_lines(level, weeks, points=None):
+def todo_lines(level, weeks, points=None, approvable=True):
     """What to do: the staffing actions code sets for the level, each with
     its owner and the task the coordinator notifies, dated; then any points
-    the agent wrote, as written."""
+    the agent wrote, as written. A brief that can never be approved says so
+    and lists no action."""
     # The coordinator imports the agents, which import this module, so its
     # actions are read here rather than at the top.
     from .coordinator import actions_for
 
     first, last = weeks[0], weeks[-1]
-    lines = ["What to do, if you approve"]
-    lines += [
-        f"- {s.owner[0].upper()}{s.owner[1:]}: {s.for_weeks(first, last)}"
-        for s in actions_for(level)
-    ] or ["- No staffing change this week."]
+    if not approvable:
+        lines = [CANNOT_APPROVE]
+    else:
+        lines = ["What to do, if you approve"]
+        lines += [
+            f"- {s.owner[0].upper()}{s.owner[1:]}: {s.for_weeks(first, last)}"
+            for s in actions_for(level)
+        ] or ["- No staffing change this week."]
     if points is not None:
         lines += [
             "Also check (the agent's points):",
@@ -865,7 +888,7 @@ def todo_lines(level, weeks, points=None):
     return lines
 
 
-def manager_top(head, latched, glance, track, points=None):
+def manager_top(head, latched, glance, track, points=None, approvable=True):
     """The manager's layout down to The detail: the heading, the
     at-a-glance block and what to do, from head, a brief or a refused
     draft's stand-in, and its facts. The weeks are the forecast tool's."""
@@ -876,7 +899,7 @@ def manager_top(head, latched, glance, track, points=None):
         "",
         *glance_lines(head, latched, glance, track),
         "",
-        *todo_lines(head.level, weeks, points),
+        *todo_lines(head.level, weeks, points, approvable),
         "",
         "The detail",
     ]
@@ -1038,8 +1061,8 @@ class TemplateBrief(BaseModel):
         ends, each back-test error, then the track record's three, in the
         order versions 1 and 2 print them.
 
-        Version 3 prints the track record's flags borne out and flags,
-        and in a latched week the released weeks it quotes. The figures it
+        Version 3 prints the track record's three too, and in a latched
+        week the released weeks it quotes. The figures it
         works out from these, the expected range rounded to the nearest 10
         and how far the methods differ, are no tool's, so the code check
         holds each line it prints to the line its tool calls give."""
@@ -1093,14 +1116,12 @@ class TemplateBrief(BaseModel):
                         )
                     )
         if self.track.flags:
-            # The order track_line states them in; version 3's line states
-            # the first two.
-            stated = (
+            # The order track_line states them in.
+            for measure, unit, v in (
                 ("borne_out", "count", self.track.borne_out),
                 ("flags", "count", self.track.flags),
                 ("unflagged_busy_pct", "%", self.track.unflagged_busy_pct),
-            )
-            for measure, unit, v in stated[: 2 if self.version >= 3 else 3]:
+            ):
                 value = round(v, 1) if unit == "%" else v
                 out.append(
                     CitedFigure(
@@ -1160,14 +1181,17 @@ class TemplateBrief(BaseModel):
         figure it cites."""
         return set(range(1, len(self.cited_figures) + 1))
 
-    def text(self, written_by=False, layout=None):
+    def text(self, written_by=False, layout=None, approvable=True):
         """The template brief as a reader sees it. The manager's view ends
         with the line saying who wrote it; the raters' view, and the
         default, leave it out, as the comparison showed it.
 
         Its version sets its order, so layout, which an agent's brief
         takes, changes nothing here: versions 1 and 2 are in the order
-        rated, and version 3 in the manager's layout."""
+        rated, and version 3 in the manager's layout, where a brief the
+        code check failed, approvable=False, lists no action. Version 3's
+        detail ends with version 2's track record sentence, so it states
+        every fact version 2 did."""
         weeks = sorted({f.week_ending for f in self.forecasts.forecasts})
         heads = [
             f"Release horizon {k}, {ph.week_text(w)}"
@@ -1189,13 +1213,21 @@ class TemplateBrief(BaseModel):
         )
         if self.version >= 3:
             lines = [
-                *manager_top(self, self.latched, self.glance(), self.track),
+                *manager_top(
+                    self,
+                    self.latched,
+                    self.glance(),
+                    self.track,
+                    approvable=approvable,
+                ),
                 "Each forecast, with the range it expects 8 weeks in 10 (80%) "
                 "and 19 in 20 (95%):",
                 *forecasts,
                 "",
                 "Average forecast error on past weeks (MAPE), by weeks ahead:",
                 *errors,
+                "",
+                track_line(self.track),
             ]
         else:
             lines = [

@@ -6,4 +6,4 @@ Each file is rendered from the recorded frontier set, round2, the set the approv
 - `surge_brief_edinburgh.md`: the Royal Infirmary of Edinburgh's surge brief, w/e 06 Oct 2019, as the approver saw it, then as approved with the edit, then in the shipped layout.
 - `template_brief_ninewells.md`: the version 3 template brief a new run writes for Ninewells Hospital's demand week, w/e 13 Jun 2021, as queued for approval.
 - `outbox_edinburgh.md`: Edinburgh's staff notifications and escalation, from the outbox, never sent.
-- `not_verified_brief_ninewells.md`: Ninewells Hospital's demand brief, marked "not verified, do not act", as the manager saw it.
+- `not_verified_brief_ninewells.md`: Ninewells Hospital's demand brief, marked "not verified, do not act", as the manager saw it, then in the shipped layout, which lists no action for it.

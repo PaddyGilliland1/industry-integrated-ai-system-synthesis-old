@@ -12,7 +12,7 @@ The latest unlatched flag in the data, which runs to w/e 11 Oct 2026, as the shi
 | Written by | the template brief, version 3, filled by code with no model call |
 | Status | verified |
 
-The code check: 98 figures checked against the tool calls they came from, none wrong; every line it prints held to the line those calls give, none off; the level is the rule's. State in the queue: awaiting decision.
+The code check: 99 figures checked against the tool calls they came from, none wrong; every line it prints held to the line those calls give, none off; the level is the rule's. State in the queue: awaiting decision.
 
 ## As queued
 
@@ -50,6 +50,8 @@ Average forecast error on past weeks (MAPE), by weeks ahead:
 | 4-week moving average | 3.2% | 3.4% | 3.7% | 3.9% |
 | linear | 2.9% | 3.0% | 3.1% | 3.1% |
 | SA-MA | 2.9% | 2.9% | 3.3% | 3.3% |
+
+This hospital's past outlook flags were borne out 4 times in 5; its unflagged outlooks turned busy 13.6% of the time.
 ```
 
 ## What followed

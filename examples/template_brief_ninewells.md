@@ -50,4 +50,6 @@ Average forecast error on past weeks (MAPE), by weeks ahead:
 | 4-week moving average | 11.9% | 13.8% | 15.6% | 17.0% |
 | linear | 16.8% | 17.5% | 18.2% | 18.6% |
 | SA-MA | 11.5% | 13.2% | 15.1% | 16.4% |
+
+This hospital has no past flag to judge.
 ```
