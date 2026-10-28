@@ -297,7 +297,10 @@ def test_the_raters_view_of_the_agents_brief_hides_its_author(
     )
     shown = tp.rater_view(outcome)
     assert "Written by" not in shown
-    assert shown == outcome.display(written_by=False)
+    # The raters read the rated layout, never the manager's, which came
+    # after the ratings.
+    assert shown == outcome.display(written_by=False, layout="rated")
+    assert shown != outcome.display(written_by=False)
     assert "Written by" in outcome.display()
 
 
@@ -405,7 +408,7 @@ def test_the_shipped_ratings_hold_both_raters_on_both_weeks():
 
 @pytest.fixture
 def shipped():
-    """config.json as shipped: the template rule, template version 2."""
+    """config.json as shipped: the template rule, template version 3."""
     from ae_escalation import config as cf
 
     return cf.load_config(REPO / "config.json")
@@ -504,10 +507,16 @@ def test_a_latched_drift_line_is_the_same_in_both_versions(replay_run):
 
 
 def test_a_live_brief_gets_the_shipped_template_version(replay_run, shipped):
-    assert shipped.template_version == 2
+    # Version 3, the manager's layout, says in plain words that no drift
+    # alarm is recorded, and never that the forecasts fit.
+    assert shipped.template_version == 3
     e = entry_at(replay_run, "2021-06-13", "T101H")
     brief = tp.weekly_brief(replay_run, e, shipped, RefusingGraph())
-    assert brief.version == 2 and RATERS_WORDING in brief.text()
+    assert brief.version == 3 and RATED not in brief.text()
+    assert (
+        "No warning that the forecasts have stopped matching recent weeks."
+        in brief.text()
+    )
 
 
 # --- the template brief in the approval queue --------------------------------

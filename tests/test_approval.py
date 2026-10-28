@@ -341,7 +341,7 @@ def test_the_queue_exports_to_csv_and_reads_the_decisions_back(
     with open(tmp_path / "queue.csv", newline="", encoding="utf-8-sig") as fh:
         (row,) = list(csv.DictReader(fh))
     assert row["brief_id"] == "nw" and row["status"] == "verified"
-    assert "Demand level 2" in row["brief"] and row["action"] == ""
+    assert "- Level 2 of 4:" in row["brief"] and row["action"] == ""
     (tmp_path / "edits").mkdir()
     (tmp_path / "edits" / "nw.json").write_text(
         json.dumps(good.model_dump(mode="json")), encoding="utf-8"
@@ -377,7 +377,7 @@ def test_the_queue_csv_shows_the_brief_without_its_author(verified, tmp_path):
     with open(tmp_path / "queue.csv", newline="", encoding="utf-8-sig") as fh:
         (row,) = list(csv.DictReader(fh))
     assert "Written by" not in row["brief"]
-    assert "Demand level 2" in row["brief"]
+    assert "- Level 2 of 4:" in row["brief"]
     assert "Written by: the local backend" in verified.brief.text()
     assert verified.brief.backend == "local"
 

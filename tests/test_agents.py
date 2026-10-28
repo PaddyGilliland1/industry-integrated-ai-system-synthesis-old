@@ -1283,7 +1283,11 @@ def test_a_draft_refused_twice_is_shown_to_the_manager_marked(
     shown = out.display()
     assert shown.startswith("NOT VERIFIED, DO NOT ACT")
     assert "No readable brief" not in shown
-    assert "Demand brief: Ninewells Hospital, week ending 13 Jun 2021" in shown
+    # The manager sees it in the manager's layout, marked all the same.
+    assert (
+        "Ninewells Hospital, week ending 13 Jun 2021 (figures released"
+        in shown
+    )
     assert "[[NOT VERIFIED: SA-MA]] forecasts [[NOT VERIFIED: 1,1" in shown
     assert "[[NOT VERIFIED: next week]]" in shown
     assert "Problems found by code:" in shown

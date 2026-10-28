@@ -138,3 +138,5 @@ examples/template_brief_ninewells.md
 examples/outbox_edinburgh.md
 examples/not_verified_brief_ninewells.md
 figures/fig9_sample_brief.png
+examples/current_brief_edinburgh.md
+tests/test_manager_layout.py

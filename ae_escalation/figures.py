@@ -35,6 +35,7 @@ by the Reviewer before any model reads the brief.
 import re
 from dataclasses import dataclass
 from datetime import date
+from itertools import zip_longest
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -725,12 +726,47 @@ def _level_failures(brief, rule_level):
     ]
 
 
+def _line_failures(brief):
+    """Each line a version 3 template prints against the line code writes
+    from the results its ledger recorded. Version 3 states figures worked
+    out from the tool results, the expected attendances rounded to the
+    nearest 10 and how far the methods differ, and dates each action by the
+    forecast tool's weeks; no cited figure holds these, so a copy gone
+    wrong is caught at the line that prints it."""
+    try:
+        want = brief.refilled().text().splitlines()
+    except (KeyError, IndexError, ValueError) as exc:
+        return [
+            Failure(
+                field="ledger",
+                found="",
+                reason=f"the brief cannot be filled from its tool calls: "
+                f"{exc}",
+            )
+        ]
+    shown = brief.text().splitlines()
+    return [
+        Failure(
+            field=f"line {n}",
+            found=line,
+            reason=f"its tool calls give {expected!r}",
+        )
+        for n, (line, expected) in enumerate(
+            zip_longest(shown, want, fillvalue=""), 1
+        )
+        if line != expected
+    ]
+
+
 def check_template(brief, rule_level):
     """Check a template brief before it is queued, and again once approved,
     by the rules check_brief applies to the agent's: the level against the
     rule's, then every figure it prints against the tool call it cites.
     Code writes all of the template's words, so no text rule applies, and
-    it states every forecast, so no figure is missing.
+    it states every forecast, so no figure is missing. Version 3 is also
+    held line by line to what its tool calls give, so every number and date
+    it prints, worked out or not, is covered; versions 1 and 2 are checked
+    as they were.
 
     Parameters
     ----------
@@ -759,6 +795,8 @@ def check_template(brief, rule_level):
                     reason=problem,
                 )
             )
+    if brief.version >= 3:
+        failures += _line_failures(brief)
     return CheckResult(
         passed=not failures,
         failures=failures,

@@ -28,6 +28,22 @@ The band line says what the level's source means: for the flag, that it
 flagged a week ahead that may reach the first cut of simulated capacity. It
 never states a chance or names a primary model.
 
+The template has three versions, and the version, not a layout, sets its
+order. Version 1 is the template as rated, with the seven fields above in
+that order; the comparison keeps it. Version 2 is the same order with the
+raters' own drift wording, "No drift alarm is recorded; this alone does not
+establish forecast fit", since both raters marked version 1's "The
+forecasts fit recent weeks" a factual error. Version 3, the shipped default,
+is the manager's layout, built after the ratings for a duty manager rather
+than a statistician: it opens "At a glance" with the level, why, the
+attendances to expect, how far the methods' forecasts differ, how accurate
+they have been, the past flags and whether a warning is on, all in plain
+words that code writes from the tool results; then what to do, the staffing
+actions code sets for the level with their owners and dated weeks; then The
+detail, the forecast and error tables. It states no chance and names no
+primary model either. Its watch point is gone, as the actions stand in its
+place. The raters never read version 3, and testing it is a pilot step.
+
 Option A, the comparison's pass rule: in a week, the agent adds value only
 if it meets every criterion the template brief meets, and at least one it
 does not, with no factual error; it adds value overall only if it does so
@@ -231,10 +247,11 @@ def read_ratings(path, seed):
 
 
 def rater_view(outcome):
-    """The agent's brief as a rater sees it in a pair: without the line
-    naming the backend and model that wrote it, which would tell the
-    rater which text is the agent's."""
-    return outcome.display(written_by=False)
+    """The agent's brief as a rater sees it in a pair: in the rated layout,
+    the order the raters read, and without the line naming the backend and
+    model that wrote it, which would tell the rater which text is the
+    agent's."""
+    return outcome.display(written_by=False, layout="rated")
 
 
 def blind_order(week, seed):

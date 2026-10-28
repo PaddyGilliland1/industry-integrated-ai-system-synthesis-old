@@ -576,9 +576,14 @@ def wording_check(brief, *, gateway, prompts, run_id, call_number):
     found = device_words(_agent_text(brief))
     if found:
         return WordingResult(passed=False, problems=found, by="code"), []
+    # The Reviewer reads the brief in the rated layout, the one its
+    # recorded verdicts were given on, so they replay by the same request
+    # hash; the manager's layout came after them.
     messages = [
         SystemMessage(content=prompts["SYSTEM"]),
-        HumanMessage(content=fill(prompts["VERDICT"], brief=brief.text())),
+        HumanMessage(
+            content=fill(prompts["VERDICT"], brief=brief.text(layout="rated"))
+        ),
     ]
     records, slips, errors = [], [], []
     for number in (call_number, call_number + 1):
@@ -778,12 +783,13 @@ class BriefOutcome(BaseModel):
         last = self.attempts[-1] if self.attempts else None
         return list(last.check.failures) if last and last.check else []
 
-    def display(self, written_by=True):
+    def display(self, written_by=True, layout="manager"):
         """The brief as the manager sees it; a brief that is not verified
         carries the banner, its failing figures and words marked and every
         problem code found. A draft the rules refused is shown the same
-        way, from its attempt. written_by=False is the raters' view, without
-        the author's line."""
+        way, from its attempt. written_by=False leaves out the author's
+        line, as the raters' view does; layout="rated" is the order the
+        raters read. A template brief's order is its version's."""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
         if self.template is not None:
             shown = self.template.text(written_by=written_by)
@@ -798,7 +804,9 @@ class BriefOutcome(BaseModel):
                 ]
             )
         if self.status != "not verified":
-            return self.brief.text(written_by=written_by) if self.brief else ""
+            if self.brief is None:
+                return ""
+            return self.brief.text(written_by=written_by, layout=layout)
         last = self.attempts[-1] if self.attempts else None
         shown = (
             last
@@ -812,7 +820,9 @@ class BriefOutcome(BaseModel):
         failed = set(check.failed_figures) if check else set()
         marks = check.failures if check else []
         if self.brief is not None:
-            text = self.brief.text(failed, written_by=written_by)
+            text = self.brief.text(
+                failed, written_by=written_by, layout=layout
+            )
         else:
             text = refused_text(
                 self.entry,
@@ -823,6 +833,7 @@ class BriefOutcome(BaseModel):
                 failed=failed,
                 marks=marks,
                 written_by=written_by,
+                layout=layout,
             )
         notes = []
         if check and not check.passed:

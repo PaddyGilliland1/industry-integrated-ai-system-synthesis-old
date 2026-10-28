@@ -194,9 +194,12 @@ class Settings(_Frozen):
     explanation: Literal["agent", "template_by_default"] = (
         "template_by_default"
     )
-    # The template brief's version for live briefs: 2 says only that no
-    # drift alarm is recorded. The comparison keeps version 1, as rated.
-    template_version: Literal[1, 2] = 2
+    # The template brief's version for live briefs: 3 is the manager's
+    # layout, which opens with what a duty manager needs at a glance and
+    # what to do, in plain words, and puts the tables last. It came after
+    # the ratings. 2 is the rated order with the raters' own drift wording;
+    # the comparison keeps version 1, as rated.
+    template_version: Literal[1, 2, 3] = 3
     local: LocalBackend
     frontier: FrontierBackend
     agents: AgentSettings

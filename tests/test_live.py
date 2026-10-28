@@ -880,7 +880,7 @@ def test_live_briefs_routes_flag_weeks_to_the_template(
     assert latched <= asked and "20210613-T101H-planted" in asked
     assert not {"20210613-T101H", "20230409-C121H"} & asked
     for rid in ("20210613-T101H", "20230409-C121H"):
-        assert f"{rid}: the template brief, version 2" in out
+        assert f"{rid}: the template brief, version 3" in out
 
 
 FLAG_WEEKS = ("20210613-T101H", "20230409-C121H")
@@ -910,11 +910,12 @@ def test_live_briefs_queues_a_flag_week_template_brief_for_approval(
         row = rows[rid]
         assert (row["backend"], row["model"], row["status"]) == (
             "template",
-            "version 2",
+            "version 3",
             "verified",
         )
         assert row["action"] == "" and "Written by" not in row["brief"]
-        assert "Drift: No drift alarm is recorded" in row["brief"]
+        assert row["brief"].split("\n")[2] == "At a glance"
+        assert "No warning that the forecasts have stopped" in row["brief"]
 
 
 def test_only_an_approved_template_brief_sets_actions(tmp_path, pinned):

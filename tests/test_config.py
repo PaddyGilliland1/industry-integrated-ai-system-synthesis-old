@@ -240,6 +240,19 @@ def test_the_template_pairs_order_has_its_own_seed():
     assert s.template_order == 20261025
 
 
+def test_live_template_briefs_are_version_3_by_default(raw):
+    # Version 3 is the manager's layout; versions 1 and 2 stay readable,
+    # as the comparison was rated on 1 and 2 is documented.
+    assert cf.load_config(REPO / "config.json").template_version == 3
+    unset = {k: v for k, v in raw.items() if k != "template_version"}
+    assert cf.Settings.model_validate(unset).template_version == 3
+    for version in (1, 2, 3):
+        held = cf.Settings.model_validate({**raw, "template_version": version})
+        assert held.template_version == version
+    with pytest.raises(ValidationError):
+        cf.Settings.model_validate({**raw, "template_version": 4})
+
+
 def test_the_secret_scan_ignores_image_data_but_not_an_aws_key_id():
     assert not cf.secret_like('"image/png": "iVBORaKiAp98shQAMG7cY4iMN"')
     assert cf.secret_like("AKIA" + "ABCDEFGHIJKLMNOP")

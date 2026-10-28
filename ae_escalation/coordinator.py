@@ -18,6 +18,12 @@ written for the MHRA's device words, as it screens a brief. A draft that
 fails gets one retry; if it fails again, nothing is written for that action
 and the manager sees the draft with its problems marked.
 
+The brief in the manager's layout lists these same actions under "What to
+do, if you approve", each with its owner and its task dated to the four
+weeks ahead (ActionSpec.for_weeks), so the brief and the notifications
+agree. The task text itself is kept as it is, since the recorded
+notifications prompt quotes it.
+
 Assumed and labelled: the actions are illustrative front-door staffing
 actions. OPEL's Appendix F gives only the structure, actions by level with
 an owner each, not its pressure actions (NHS England, 2024). The deadlines,
@@ -77,6 +83,9 @@ SIMULATED_LABEL = (
 )
 
 
+WEEKS_AHEAD = "the weeks ahead"
+
+
 class ActionSpec(BaseModel):
     """One staffing action the code sets for a level, with its owner."""
 
@@ -86,22 +95,33 @@ class ActionSpec(BaseModel):
     task: str
     owner: Literal[ROLES]
 
+    def for_weeks(self, first, last):
+        """The task with its weeks dated, as the manager's brief states it:
+        "the weeks ahead" becomes the span from the first week to the last,
+        and a task that does not name them gets the span added. The task
+        itself stays as it is, since the notifications prompt the
+        recordings hold quotes it."""
+        span = f"{ph.week_text(first)} to {ph.week_text(last)}"
+        if WEEKS_AHEAD in self.task:
+            return self.task.replace(WEEKS_AHEAD, span)
+        return f"{self.task.removesuffix('.')}, for {span}."
+
 
 CHECK_COVER = ActionSpec(
     code="check-cover",
-    task="Check whether extra shifts or bank staff are needed for the "
-    "weeks ahead.",
+    task="Check whether extra shifts or bank staff are needed for "
+    f"{WEEKS_AHEAD}.",
     owner="duty manager",
 )
 HOLD_LEAVE = ActionSpec(
     code="hold-leave",
-    task="Hold new leave requests for the weeks ahead until the duty "
+    task=f"Hold new leave requests for {WEEKS_AHEAD} until the duty "
     "manager's check is done.",
     owner="rota coordinator",
 )
 REQUEST_BANK = ActionSpec(
     code="request-bank",
-    task="Ask the staff bank for cover for the weeks ahead.",
+    task=f"Ask the staff bank for cover for {WEEKS_AHEAD}.",
     owner="staff bank office",
 )
 INFORM_LEAD = ActionSpec(
@@ -536,12 +556,15 @@ class Coordinator:
                 brief_id=item.brief_id, actions=[], drafts=[]
             )
         run_id = f"{item.brief_id}-notify"
+        # The prompt quotes the brief in the rated layout, the one the
+        # recorded notifications were drafted from, so they replay by the
+        # same request hash; the manager's layout came after them.
         messages = [
             SystemMessage(content=self.prompts["SYSTEM"]),
             HumanMessage(
                 content=fill(
                     self.prompts["DRAFT"],
-                    brief=item.current.text(),
+                    brief=item.current.text(layout="rated"),
                     figures=_figure_lines(item.current),
                     dates=_date_lines(item.current),
                     actions=_action_lines(actions),

@@ -1,7 +1,7 @@
 {
   "llm_backend": "frontier",
   "explanation": "template_by_default",
-  "template_version": 2,
+  "template_version": 3,
   "local": {
     "model": "nemotron-3.5-lightning:30b-a3b",
     "digest": "e7a64ff15fb174c42b4f463e5c888c4f2c7b9cabf9e8d65a1c0874405426c1b2",

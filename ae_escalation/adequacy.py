@@ -176,7 +176,7 @@ def _brief_block(outcome):
         f"Status: {outcome.status}.",
         "",
         "```text",
-        outcome.display(),
+        outcome.display(layout="rated"),
         "```",
         "",
         "| # | Criterion | Test | Met? |",
@@ -229,7 +229,7 @@ def write_form(result, paths):
             f"{t.template.version}, filled by code; not scored, since the "
             "test scores the agent's briefs",
             "",
-            t.display(written_by=False),
+            t.display(written_by=False, layout="rated"),
             "",
         ]
     paths.adequacy_form.write_text("\n".join(lines), encoding="utf-8")

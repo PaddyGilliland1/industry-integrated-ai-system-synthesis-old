@@ -19,11 +19,25 @@ fixed sentence, so the agent writes none of them. No schema here has a field
 for the flag's stated chance, which runs about twice what happens; the brief
 quotes the track record instead.
 
+A brief can be shown in two layouts. "rated" is the order the raters and the
+approver read: the level and its meaning, the drift alarm, the agent's
+fields, the fact lines, then the watch points. It stays the default for
+anything a recording holds, the Reviewer's and the coordinator's prompts
+among them, so the recordings replay by the same request hashes. "manager"
+is what the approval queue now shows, built after the ratings for a duty
+manager rather than a statistician: it opens "At a glance" and with what
+to do, every line of which code writes from the brief's facts, then the
+agent's points as written, then its explanation. The raters never read it,
+and testing it is a pilot step; so is asking the Investigator for watch
+points in plainer words, since a new prompt would break the replay hashes.
+The template brief's version 3 is written in the same layout.
+
 I follow Agentic AI Systems' case file (agentic_system.py, CaseFileDraft and
 CaseFile with its evidence items, each citing the tool that returned it):
 the agent explains tool results and never supplies a figure of its own.
 """
 
+import math
 import re
 from datetime import date
 from typing import Any, Literal
@@ -31,6 +45,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import placeholders as ph
+from . import rules as ru
 from . import tools as tl
 from .design import NATIONAL
 from .timing import release_horizon_weeks
@@ -59,6 +74,13 @@ TEXT_FIELDS = (
 # The release horizon whose back-test error the brief states: the first
 # week the manager staffs for.
 FACT_HORIZON = 1
+# The released weeks the manager's layout quotes in a latched week, when it
+# works from actual figures: as many as the weeks ahead.
+RECENT_WEEKS = 4
+# The orders a brief can be shown in. "rated" is the order the raters and
+# the approver read; "manager" opens with what a duty manager needs at a
+# glance and what to do, and came after the ratings.
+LAYOUTS = ("manager", "rated")
 
 
 class ToolCall(BaseModel):
@@ -179,31 +201,57 @@ class BriefDraft(DraftFields):
         return self
 
 
+class GlanceFacts(BaseModel):
+    """The tool results the manager's layout opens with, beyond the fact
+    lines', each as of the origin: every simple model's forecasts, each
+    model's back-test error at release horizon 1, and the latest released
+    weeks. Code calls the tools for them and writes every line they give,
+    so no model writes a figure of the top block."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    forecasts: tl.ForecastResult
+    first_week_errors: tl.BacktestErrorResult
+    recent: tl.HistoryResult
+
+
 class BriefFacts(BaseModel):
     """The facts every brief states as fixed lines, each a tool's result as
     of the origin: the primary model's own back-test error at release
     horizon 1, the hospital's track record and the bank holidays in the four
-    weeks ahead. Code calls the tools for them, so the agent writes none."""
+    weeks ahead, with what the manager's layout opens with. Code calls the
+    tools for them, so the agent writes none."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     backtest_error: tl.BacktestErrorResult
     track_record: tl.TrackRecordResult
     bank_holidays: tl.CalendarResult
+    # None in a brief recorded before the manager's layout, whose facts held
+    # the fact lines alone; the queue shows such a brief as it was queued.
+    glance: GlanceFacts | None = None
 
 
 def brief_facts(run, holidays, entry):
     """Call the tools for one screened brief's facts, as of its origin.
-    These calls are code's own, so they take none of the Investigator's."""
+    These calls are code's own, so they take none of the Investigator's,
+    and no prompt quotes the ones the manager's layout opens with."""
     base = {"hospital": entry.hospital, "as_of": entry.as_of}
     error = tl.BacktestErrorRequest(
         **base, horizon=FACT_HORIZON, model=entry.primary
     )
+    first_week = tl.BacktestErrorRequest(**base, horizon=FACT_HORIZON)
+    recent = tl.HistoryRequest(**base, weeks=RECENT_WEEKS)
     return BriefFacts(
         backtest_error=tl.get_backtest_error(run, error),
         track_record=tl.get_track_record(run, tl.TrackRecordRequest(**base)),
         bank_holidays=tl.get_calendar(
             holidays, tl.CalendarRequest(as_of=entry.as_of)
+        ),
+        glance=GlanceFacts(
+            forecasts=tl.get_forecast(run, tl.ForecastRequest(**base)),
+            first_week_errors=tl.get_backtest_error(run, first_week),
+            recent=tl.get_history(run, recent),
         ),
     )
 
@@ -314,6 +362,7 @@ class DemandBrief(BaseModel):
     backtest_error: tl.BacktestErrorResult
     track_record: tl.TrackRecordResult
     bank_holidays: tl.CalendarResult
+    glance: GlanceFacts | None = None
     summary: str
     expected_range: str
     model_agreement: str
@@ -331,8 +380,15 @@ class DemandBrief(BaseModel):
         """The fact lines state this hospital's own results as of this
         origin, and the back-test error is its primary model's at release
         horizon 1, so no other brief's facts can stand in them."""
-        for name in ("backtest_error", "track_record"):
-            result = getattr(self, name)
+        own = [
+            (n, getattr(self, n)) for n in ("backtest_error", "track_record")
+        ]
+        if self.glance is not None:
+            own += [
+                (f"glance.{n}", getattr(self.glance, n))
+                for n in GlanceFacts.model_fields
+            ]
+        for name, result in own:
             if (result.hospital, result.as_of) != (self.hospital, self.week):
                 raise ValueError(
                     f"{name} is for {result.hospital} as of {result.as_of}, "
@@ -440,12 +496,20 @@ class DemandBrief(BaseModel):
             return "held: forecasts untrusted"
         return ""
 
-    def text(self, failed=frozenset(), written_by=True, marks=()):
-        """The brief as the manager reads it, with every placeholder filled
-        in by code; the cited figures numbered in failed and the problems
-        in marks are marked. The raters' view leaves out the line naming
-        the backend and model that wrote it, which the record keeps."""
-        return brief_text(self, self.rendered(failed, marks), written_by)
+    def text(
+        self, failed=frozenset(), written_by=True, marks=(), layout="rated"
+    ):
+        """The brief with every placeholder filled in by code; the cited
+        figures numbered in failed and the problems in marks are marked.
+        The raters' view leaves out the line naming the backend and model
+        that wrote it, which the record keeps.
+
+        The layout is "rated" unless asked: the order the raters read, and
+        the one the Reviewer's and the coordinator's recorded prompts quote.
+        The approval queue asks for "manager"."""
+        return brief_text(
+            self, self.rendered(failed, marks), written_by, layout
+        )
 
 
 def _from_entry(entry):
@@ -475,13 +539,14 @@ def refused_text(
     failed=frozenset(),
     marks=(),
     written_by=True,
+    layout="rated",
 ):
     """A draft the text rules refused, as the manager sees it: the heading
     code sets from the screen's entry, then the draft's words with every
     placeholder filled, its failed figures and each problem marked where it
-    stands, and code's fact lines. It is shown, never kept: the head is
-    built without the rules, which this draft breaks, so it can never
-    become a brief."""
+    stands, and code's fact lines, in the layout asked for. It is shown,
+    never kept: the head is built without the rules, which this draft
+    breaks, so it can never become a brief."""
     head = DemandBrief.model_construct(
         **_from_entry(entry),
         **dict(facts),
@@ -503,14 +568,25 @@ def refused_text(
         )
         for field, text in draft.texts().items()
     }
-    return brief_text(head, shown, written_by)
+    return brief_text(head, shown, written_by, layout)
 
 
-def brief_text(head, shown, written_by=True):
-    """A brief's lines as the manager reads them: the code-set heading of
-    head, a DemandBrief or a refused draft's stand-in, the rendered text
-    fields in shown, and the fact lines code writes from head's facts."""
-    points = [v for k, v in shown.items() if k.startswith("watch_points")]
+def _field_lines(head, shown):
+    """The agent's three text fields and code's three fact lines, in the
+    order both layouts print them."""
+    return [
+        f"Summary: {shown['summary']}",
+        f"Expected range: {shown['expected_range']}",
+        f"Model agreement: {shown['model_agreement']}",
+        f"Back-test error: {backtest_line(head.backtest_error)}",
+        f"Track record: {track_line(head.track_record)}",
+        "Bank holidays ahead: "
+        f"{holidays_line(head.bank_holidays, head.week)}",
+    ]
+
+
+def _rated_lines(head, shown, points):
+    """The rated layout: the order the raters and the approver read."""
     lines = [
         f"Demand brief: {head.name}, week ending {ph.day_text(head.week)}, "
         f"released {ph.release_text(head.release_date)}",
@@ -527,22 +603,283 @@ def brief_text(head, shown, written_by=True):
         )
     else:
         lines.append("Drift alarm: none.")
-    lines += [
-        f"Summary: {shown['summary']}",
-        f"Expected range: {shown['expected_range']}",
-        f"Model agreement: {shown['model_agreement']}",
-        f"Back-test error: {backtest_line(head.backtest_error)}",
-        f"Track record: {track_line(head.track_record)}",
-        "Bank holidays ahead: "
-        f"{holidays_line(head.bank_holidays, head.week)}",
+    return [
+        *lines,
+        *_field_lines(head, shown),
         "Watch points:",
         *[f"- {w}" for w in points],
     ]
+
+
+def brief_text(head, shown, written_by=True, layout="rated"):
+    """A brief's lines as the manager reads them: the code-set heading of
+    head, a DemandBrief or a refused draft's stand-in, the rendered text
+    fields in shown, and the fact lines code writes from head's facts.
+
+    "rated" is the order the raters read. "manager" opens with what code
+    writes from the brief's facts, at a glance and what to do, then the
+    agent's points, then its explanation as written. A brief recorded
+    before the manager's layout has no facts to open with, so it is shown
+    in the order it was queued in."""
+    if layout not in LAYOUTS:
+        raise ValueError(f"the layout is one of {LAYOUTS}, not {layout!r}")
+    points = [v for k, v in shown.items() if k.startswith("watch_points")]
+    glance = getattr(head, "glance", None)
+    if layout == "manager" and glance is not None:
+        lines = [
+            *manager_top(
+                head, head.drift_alarm, glance, head.track_record, points
+            ),
+            "The agent's explanation:",
+            *_field_lines(head, shown),
+        ]
+    else:
+        lines = _rated_lines(head, shown, points)
     if written_by and head.backend == "template":
         lines.append(f"Written by: the template brief, {head.model}.")
     elif written_by:
         lines.append(f"Written by: the {head.backend} backend, {head.model}.")
     return "\n".join(lines)
+
+
+# --- the manager's layout ----------------------------------------------------
+#
+# The top two blocks are for a duty manager, not a statistician, so they keep
+# off "release horizon", "simulated capacity", "MAPE", "latch", "drift" and
+# "back-test", which The detail may use. Code writes every line of them from
+# the brief's facts and tool results, and the rule's constants, never a model.
+
+TOP_LEVEL = len(ru.CUTS) + 1
+NUMBER_NAMES = {4: "four"}
+AHEAD_WORD = tl.AHEAD
+METHODS_WORD = NUMBER_NAMES[len(tl.SIMPLE_MODELS)]
+RECENT_WORD = NUMBER_NAMES[RECENT_WEEKS]
+
+
+def _over(cut):
+    """A cut on capacity as the share above it: 1.05 is 5%."""
+    return f"{round((cut - 1) * 100)}%"
+
+
+def _gloss():
+    """What the high-week mark is: simulated capacity, the CAPACITY_Q
+    quantile of the same weeks in the past years seasonal_capacity reads,
+    three by default; a test holds this sentence to both."""
+    tenths = round(ru.CAPACITY_Q * 10)
+    return (
+        f"That mark is the level {tenths} weeks in 10 stayed under at this "
+        "time of year over the last three years."
+    )
+
+
+def _who(hospital):
+    """The place a line speaks of: Scotland, or this hospital."""
+    return NATIONAL if hospital == NATIONAL else "this hospital"
+
+
+def _whose(hospital):
+    """The place's, for its high-week mark."""
+    return f"{NATIONAL}'s" if hospital == NATIONAL else "this hospital's"
+
+
+def _latest(recent):
+    """The latest released week, the origin's."""
+    return max(recent.weeks, key=lambda w: w.week_ending)
+
+
+def why_line(head, recent):
+    """Why the level is what it is, in plain words, from its source: the
+    flag's outlook, the latest actual in a surge, or the level held from
+    the week before the drift alarm. Each says what tools.level_band says."""
+    first = _over(ru.CUTS[0])
+    mark = f"{_whose(head.hospital)} high-week mark for the time of year"
+    level, source = head.level, head.level_source
+    if source == "surge":
+        if level == 1:
+            band = f"not {first} or more above"
+        elif level == TOP_LEVEL:
+            band = f"{_over(ru.CUTS[-1])} or more above"
+        else:
+            band = (
+                f"{_over(ru.CUTS[level - 2])} to {_over(ru.CUTS[level - 1])} "
+                "above"
+            )
+        actual = ph.figure_text(round(_latest(recent).attendances))
+        reason = (
+            f"the latest week's actual attendances, {actual}, were {band} "
+            f"the lowest of the next {AHEAD_WORD} weeks' high-week marks."
+        )
+    elif source == "held":
+        then = (
+            f"at least one week ahead might run {first} or more above {mark}"
+            if level >= 2
+            else f"no week ahead looked likely to run {first} or more above "
+            f"{mark}"
+        )
+        reason = (
+            f"the level is held from the week before the warning came on, "
+            f"when {then}. It stays until a person resets the warning."
+        )
+    elif level >= 2:
+        reason = (
+            f"at least one of the next {AHEAD_WORD} weeks may run {first} or "
+            f"more above {mark}."
+        )
+    else:
+        reason = (
+            f"no week of the next {AHEAD_WORD} looks likely to run {first} or "
+            f"more above {mark}."
+        )
+    return f"- Why: {reason} {_gloss()}"
+
+
+def _tens(value):
+    """A forecast rounded to the nearest 10, halves up, with its commas."""
+    return f"{math.floor(value / 10 + 0.5) * 10:,}"
+
+
+def glance_lines(head, latched, glance, track):
+    """The at-a-glance block: the level, why, the attendances to expect,
+    how far the methods' forecasts differ, how accurate they have been, the
+    past flags here and whether a warning is on. A latched week uses no
+    forecast: it quotes the latest released weeks instead."""
+    weeks = sorted({f.week_ending for f in glance.forecasts.forecasts})
+    span = f"from {ph.week_text(weeks[0])} to {ph.week_text(weeks[-1])}"
+    what = (
+        "demand may be higher than usual"
+        if head.level >= 2
+        else "nothing points to demand higher than usual"
+    )
+    lines = [
+        "At a glance",
+        f"- Level {head.level} of {TOP_LEVEL}: {what} for the time of year "
+        f"{span}. The level does not measure pressure, need or priority.",
+        why_line(head, glance.recent),
+    ]
+    if latched:
+        seen = [w.attendances for w in glance.recent.weeks]
+        low, high = (ph.figure_text(round(v)) for v in (min(seen), max(seen)))
+        lines += [
+            "- Expected attendances: the forecasts are not used this week "
+            f"(see the warning). The last {RECENT_WORD} weeks released ran "
+            f"{low} to {high} a week.",
+            "- The forecasts: not used this week.",
+            "- How accurate they have been: the past accuracy figures may "
+            "not hold while the warning is on.",
+        ]
+    else:
+        points = [
+            f.point
+            for f in glance.forecasts.forecasts
+            if f.model in tl.SIMPLE_MODELS
+        ]
+        low, high = min(points), max(points)
+        # Rounded up, so "within" stays true.
+        spread = math.ceil(round(100 * (high - low) / low, 6))
+        lines += [
+            f"- Expected attendances: about {_tens(low)} to {_tens(high)} a "
+            f"week over those {AHEAD_WORD} weeks.",
+            f"- The forecasts: the {METHODS_WORD} methods' central figures "
+            f"are within {spread}% of each other.",
+            accuracy_line(glance.first_week_errors),
+        ]
+    lines += [past_flags_line(track), warning_line(head, latched)]
+    return lines
+
+
+def accuracy_line(errors):
+    """Each simple model's back-test error at release horizon 1, from the
+    lowest to the highest, as how far out the forecasts were."""
+    known = [
+        e.mape
+        for e in errors.errors
+        if e.model in tl.SIMPLE_MODELS and e.mape is not None
+    ]
+    head = "- How accurate they have been:"
+    if not known:
+        return f"{head} no past week has been scored yet."
+    low, high = round(min(known), 1), round(max(known), 1)
+    out = f"{low:.1f}%" if low == high else f"{low:.1f}% to {high:.1f}%"
+    return (
+        f"{head} on past weeks these forecasts were out by {out} on average, "
+        f"for the first of the {AHEAD_WORD} weeks."
+    )
+
+
+def past_flags_line(track):
+    """The track record's flags and how many were borne out. Borne out is
+    the code's busy: a week of the outlook at the first cut or more of its
+    simulated capacity, which the line calls the mark."""
+    who = _who(track.hospital)
+    if track.flags == 0:
+        return f"- Past flags here: {who} has no past flags to judge."
+    times = "time" if track.borne_out == 1 else "times"
+    return (
+        f"- Past flags here: when {who} was flagged before, demand did turn "
+        f"out high, a week {_over(ru.CUTS[0])} or more above the mark, "
+        f"{track.borne_out} {times} out of {track.flags}."
+    )
+
+
+def warning_line(head, latched):
+    """The drift alarm in plain words. With none it says only that no
+    warning is on: both raters marked a claim that the forecasts fit a
+    factual error."""
+    if not latched:
+        return (
+            "- No warning that the forecasts have stopped matching recent "
+            "weeks."
+        )
+    side = "above" if head.breach_direction == "upward" else "below"
+    tail = (
+        "so this brief works from actual figures, not forecasts"
+        if head.level_source == "surge"
+        else "so the level is held and the forecasts are not used"
+    )
+    return (
+        f"- Warning: recent weeks have run {side} the forecasts since "
+        f"{ph.week_text(head.latched_since)}, {tail}, until a person resets "
+        "the warning."
+    )
+
+
+def todo_lines(level, weeks, points=None):
+    """What to do: the staffing actions code sets for the level, each with
+    its owner and the task the coordinator notifies, dated; then any points
+    the agent wrote, as written."""
+    # The coordinator imports the agents, which import this module, so its
+    # actions are read here rather than at the top.
+    from .coordinator import actions_for
+
+    first, last = weeks[0], weeks[-1]
+    lines = ["What to do, if you approve"]
+    lines += [
+        f"- {s.owner[0].upper()}{s.owner[1:]}: {s.for_weeks(first, last)}"
+        for s in actions_for(level)
+    ] or ["- No staffing change this week."]
+    if points is not None:
+        lines += [
+            "Also check (the agent's points):",
+            *[f"- {p}" for p in points],
+        ]
+    return lines
+
+
+def manager_top(head, latched, glance, track, points=None):
+    """The manager's layout down to The detail: the heading, the
+    at-a-glance block and what to do, from head, a brief or a refused
+    draft's stand-in, and its facts. The weeks are the forecast tool's."""
+    weeks = sorted({f.week_ending for f in glance.forecasts.forecasts})
+    return [
+        f"{head.name}, week ending {ph.day_text(head.week)} (figures "
+        f"released {ph.release_text(head.release_date)})",
+        "",
+        *glance_lines(head, latched, glance, track),
+        "",
+        *todo_lines(head.level, weeks, points),
+        "",
+        "The detail",
+    ]
 
 
 # --- the template brief ------------------------------------------------------
@@ -613,7 +950,55 @@ class TemplateBrief(BaseModel):
     errors: list[tl.BacktestErrorResult]
     track: tl.TrackRecordResult
     ledger: list[ToolCall]
-    version: Literal[1, 2] = 1
+    version: Literal[1, 2, 3] = 1
+    # The latest released weeks, which version 3 quotes in a latched week;
+    # versions 1 and 2 never ask for them.
+    recent: tl.HistoryResult | None = None
+
+    def glance(self):
+        """The tool results version 3 opens with, from the template's own
+        calls."""
+        return GlanceFacts(
+            forecasts=self.forecasts,
+            first_week_errors=next(
+                e for e in self.errors if e.release_horizon == FACT_HORIZON
+            ),
+            recent=self.recent,
+        )
+
+    def refilled(self):
+        """The brief filled again from the results its ledger recorded, as
+        code fills it from the tools: what the code check compares version
+        3's lines with. The level and the latch are the screen's, which the
+        check holds to the rule's level."""
+        found = {}
+        for call in self.ledger:
+            found.setdefault(call.name, []).append(call.result)
+        forecasts = tl.ForecastResult.model_validate(found["get_forecast"][0])
+        errors = sorted(
+            (
+                tl.BacktestErrorResult.model_validate(r)
+                for r in found["get_backtest_error"]
+            ),
+            key=lambda r: r.release_horizon,
+        )
+        recent = found.get("get_history")
+        return self.model_copy(
+            update={
+                "week": forecasts.as_of,
+                "release_date": forecasts.release_date,
+                "forecasts": forecasts,
+                "errors": errors,
+                "track": tl.TrackRecordResult.model_validate(
+                    found["get_track_record"][0]
+                ),
+                "recent": (
+                    tl.HistoryResult.model_validate(recent[0])
+                    if recent
+                    else None
+                ),
+            }
+        )
 
     def forecast_rows(self):
         """Field 3: one row per model, one cell per release horizon."""
@@ -648,10 +1033,16 @@ class TemplateBrief(BaseModel):
 
     @property
     def cited_figures(self):
-        """Every figure the template prints, in the order it prints them,
-        each as printed and cited to the tool call it came from: each
-        model's forecast and range ends, each back-test error, then the
-        track record's three."""
+        """Every tool figure the template prints, each as printed and cited
+        to the tool call it came from: each model's forecast and range
+        ends, each back-test error, then the track record's three, in the
+        order versions 1 and 2 print them.
+
+        Version 3 prints the track record's flags borne out and flags,
+        and in a latched week the released weeks it quotes. The figures it
+        works out from these, the expected range rounded to the nearest 10
+        and how far the methods differ, are no tool's, so the code check
+        holds each line it prints to the line its tool calls give."""
         by_name = {}
         for c in self.ledger:
             by_name.setdefault(c.name, []).append(c)
@@ -702,12 +1093,14 @@ class TemplateBrief(BaseModel):
                         )
                     )
         if self.track.flags:
-            # The order track_line states them in.
-            for measure, unit, v in (
+            # The order track_line states them in; version 3's line states
+            # the first two.
+            stated = (
                 ("borne_out", "count", self.track.borne_out),
                 ("flags", "count", self.track.flags),
                 ("unflagged_busy_pct", "%", self.track.unflagged_busy_pct),
-            ):
+            )
+            for measure, unit, v in stated[: 2 if self.version >= 3 else 3]:
                 value = round(v, 1) if unit == "%" else v
                 out.append(
                     CitedFigure(
@@ -717,7 +1110,31 @@ class TemplateBrief(BaseModel):
                         unit=unit,
                     )
                 )
+        if self.version >= 3 and self.latched:
+            out += self._recent_figures(by_name["get_history"][0].id)
         return out
+
+    def _recent_figures(self, call_id):
+        """The released weeks a latched version 3 brief quotes, as it
+        quotes them: a surge's latest actual, then the lowest and highest
+        of the latest weeks."""
+        weeks = self.recent.weeks
+        quoted = [
+            min(weeks, key=lambda w: w.attendances),
+            max(weeks, key=lambda w: w.attendances),
+        ]
+        if self.level_source == "surge":
+            quoted.insert(0, _latest(self.recent))
+        return [
+            CitedFigure(
+                value=round(w.attendances),
+                tool_call_id=call_id,
+                measure="history",
+                week=w.week_ending,
+                unit="attendances",
+            )
+            for w in quoted
+        ]
 
     def text_context(self):
         """What code knows about this brief, for a notification's
@@ -743,10 +1160,14 @@ class TemplateBrief(BaseModel):
         figure it cites."""
         return set(range(1, len(self.cited_figures) + 1))
 
-    def text(self, written_by=False):
+    def text(self, written_by=False, layout=None):
         """The template brief as a reader sees it. The manager's view ends
         with the line saying who wrote it; the raters' view, and the
-        default, leave it out, as the comparison showed it."""
+        default, leave it out, as the comparison showed it.
+
+        Its version sets its order, so layout, which an agent's brief
+        takes, changes nothing here: versions 1 and 2 are in the order
+        rated, and version 3 in the manager's layout."""
         weeks = sorted({f.week_ending for f in self.forecasts.forecasts})
         heads = [
             f"Release horizon {k}, {ph.week_text(w)}"
@@ -762,34 +1183,46 @@ class TemplateBrief(BaseModel):
             out += ["| " + " | ".join(r) + " |" for r in rows]
             return out
 
-        lines = [
-            f"{self.name}, week ending {ph.day_text(self.week)}, released "
-            f"{ph.release_text(self.release_date)}",
-            "",
-            f"Demand level {self.level}, from "
-            f"{LEVEL_FROM[self.level_source]}.",
-            tl.LEVEL_MEANING,
-            tl.level_band(self.level, self.level_source),
-            "",
-            "Forecasts, with their 80% and 95% ranges:",
-            *table(heads, self.forecast_rows()),
-            "",
-            "Back-test error (MAPE) of each model at each release horizon, "
-            "known at the origin:",
-            *table(
-                [f"Release horizon {k}" for k in (1, 2, 3, 4)],
-                self.error_rows(),
-            ),
-            "",
-            track_line(self.track),
-            drift_sentence(
-                self.latched,
-                self.latched_since,
-                self.breach_direction,
-                self.version,
-            ),
-            watch_point(self.latched, self.breach_direction, self.flagged),
-        ]
+        forecasts = table(heads, self.forecast_rows())
+        errors = table(
+            [f"Release horizon {k}" for k in (1, 2, 3, 4)], self.error_rows()
+        )
+        if self.version >= 3:
+            lines = [
+                *manager_top(self, self.latched, self.glance(), self.track),
+                "Each forecast, with the range it expects 8 weeks in 10 (80%) "
+                "and 19 in 20 (95%):",
+                *forecasts,
+                "",
+                "Average forecast error on past weeks (MAPE), by weeks ahead:",
+                *errors,
+            ]
+        else:
+            lines = [
+                f"{self.name}, week ending {ph.day_text(self.week)}, released "
+                f"{ph.release_text(self.release_date)}",
+                "",
+                f"Demand level {self.level}, from "
+                f"{LEVEL_FROM[self.level_source]}.",
+                tl.LEVEL_MEANING,
+                tl.level_band(self.level, self.level_source),
+                "",
+                "Forecasts, with their 80% and 95% ranges:",
+                *forecasts,
+                "",
+                "Back-test error (MAPE) of each model at each release "
+                "horizon, known at the origin:",
+                *errors,
+                "",
+                track_line(self.track),
+                drift_sentence(
+                    self.latched,
+                    self.latched_since,
+                    self.breach_direction,
+                    self.version,
+                ),
+                watch_point(self.latched, self.breach_direction, self.flagged),
+            ]
         if written_by:
             lines.append(
                 f"Written by: the template brief, version {self.version}, "
@@ -801,8 +1234,10 @@ class TemplateBrief(BaseModel):
 def template_brief(run, entry, version=1):
     """Fill the template brief for one screened hospital and origin from
     the tools, as of the origin. Version 1 is the template as rated, which
-    the comparison uses; version 2 is what live briefs get. The run is not
-    changed."""
+    the comparison uses; version 2 is the rated order with the raters' own
+    drift wording; version 3, the manager's layout, is what live briefs get,
+    and asks get_history too for the released weeks a latched week quotes.
+    The run is not changed."""
     ledger = []
 
     def call(name, request, result):
@@ -829,6 +1264,12 @@ def template_brief(run, entry, version=1):
         )
     req = tl.TrackRecordRequest(hospital=entry.hospital, as_of=entry.as_of)
     track = call("get_track_record", req, tl.get_track_record(run, req))
+    recent = None
+    if version >= 3:
+        req = tl.HistoryRequest(
+            hospital=entry.hospital, as_of=entry.as_of, weeks=RECENT_WEEKS
+        )
+        recent = call("get_history", req, tl.get_history(run, req))
     return TemplateBrief(
         hospital=entry.hospital,
         name=entry.name,
@@ -846,6 +1287,7 @@ def template_brief(run, entry, version=1):
         track=track,
         ledger=ledger,
         version=version,
+        recent=recent,
     )
 
 

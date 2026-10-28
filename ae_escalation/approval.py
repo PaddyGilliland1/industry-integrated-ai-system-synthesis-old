@@ -17,6 +17,12 @@ it is approved, and only an approved one sets actions. It has no draft to
 edit in place, so an edit of it is written in the agent's form, citing the
 template's tool calls, and is checked as any edit is.
 
+The queue's display and its sheet show an agent's brief in the manager's
+layout (briefs.py), which opens with what a duty manager needs at a glance
+and what to do. It came after the ratings: the approver's decisions of 26
+Oct 2026 were made on the rated layout, which the recorded sheet keeps and
+display(layout="rated") gives back.
+
 The queue is an append-only JSONL file of events, queued briefs and
 decisions, so the states can always be rebuilt from it, and every act goes
 to the audit log. I adapted the queue and its decision record from Agentic
@@ -198,9 +204,12 @@ class QueueItem(BaseModel):
     edit_wording: WordingResult | None = None
     decisions: list[Decision] = Field(default_factory=list)
 
-    def display(self, written_by=True):
+    def display(self, written_by=True, layout="manager"):
         """The brief as the manager sees it now; written_by=False leaves out
-        the author's line, as the approver's CSV does."""
+        the author's line, as the approver's CSV does. An agent's brief is
+        in the manager's layout unless "rated" is asked for, the order the
+        approver and the raters read; a template brief's order is its
+        version's."""
         banner = f"{NOT_VERIFIED.upper()}: it can never be approved."
         if self.state == "edit failed":
             failures = self.last_edit.failures
@@ -208,7 +217,7 @@ class QueueItem(BaseModel):
                 named = "\n".join(f"- {f.field}: {f.reason}" for f in failures)
                 return f"{banner}\nYour edit was refused:\n{named}"
             failed = set(self.last_edit.failed_figures)
-            text = self.edit.text(failed, written_by=written_by)
+            text = self.edit.text(failed, written_by=written_by, layout=layout)
             wording = self.edit_wording
             if self.last_edit.passed and wording and not wording.passed:
                 named = "\n".join(f"- {p}" for p in wording.problems)
@@ -221,14 +230,14 @@ class QueueItem(BaseModel):
                 f"{banner}\nYour edit failed the code check:\n{named}\n{text}"
             )
         if self.state == "not verified":
-            shown = self.outcome.display(written_by=written_by)
+            shown = self.outcome.display(written_by=written_by, layout=layout)
             if self.edit is not None:
                 verdict = "passed" if self.last_edit.passed else "failed"
                 shown += (
                     f"\nYour edit {verdict} the code check, for the record."
                 )
             return shown
-        return self.current.text(written_by=written_by)
+        return self.current.text(written_by=written_by, layout=layout)
 
 
 def _facts(texts):
