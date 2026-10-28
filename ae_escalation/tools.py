@@ -265,6 +265,34 @@ class TrackRecordResult(Result):
     unflagged_busy_pct: float | None
 
 
+# --- get_capacity ------------------------------------------------------------
+#
+# Code's own tool, never the Investigator's: a new tool or a new field in a
+# tool it calls would change every recorded request. It gives the manager's
+# layout the high-week mark it quotes.
+
+
+class CapacityRequest(Request):
+    pass
+
+
+class CapacityWeek(Result):
+    """One week ahead's simulated capacity, the high-week mark."""
+
+    release_horizon: int
+    week_ending: date
+    capacity: float | None
+
+
+class CapacityResult(Result):
+    """The simulated capacity of each of the four weeks ahead, as known at
+    the origin: none of it reads a week the origin has not released."""
+
+    hospital: str
+    as_of: date
+    weeks: list[CapacityWeek]
+
+
 # --- get_calendar ------------------------------------------------------------
 
 
@@ -448,6 +476,29 @@ def get_track_record(run, request):
     )
     return TrackRecordResult(
         hospital=request.hospital, as_of=request.as_of, **rec
+    )
+
+
+def get_capacity(run, request):
+    """Return the simulated capacity of each release horizon at the origin:
+    data horizons LEAD to H of the run's capacity matrix, each the
+    CAPACITY_Q quantile of past years' weeks released by the origin."""
+    t = _locate(run, request.hospital, request.as_of)
+    caps = run.caps[request.hospital][t]
+    weeks = release_horizon_weeks(request.as_of)
+    return CapacityResult(
+        hospital=request.hospital,
+        as_of=request.as_of,
+        weeks=[
+            CapacityWeek(
+                release_horizon=k,
+                week_ending=weeks[k - 1].date(),
+                capacity=(
+                    float(caps[h - 1]) if np.isfinite(caps[h - 1]) else None
+                ),
+            )
+            for k, h in enumerate(range(ru.LEAD, ru.H + 1), 1)
+        ],
     )
 
 

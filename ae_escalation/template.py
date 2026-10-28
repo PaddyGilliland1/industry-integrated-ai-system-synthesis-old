@@ -35,15 +35,16 @@ raters' own drift wording, "No drift alarm is recorded; this alone does not
 establish forecast fit", since both raters marked version 1's "The
 forecasts fit recent weeks" a factual error. Version 3, the shipped default,
 is the manager's layout, built after the ratings for a duty manager rather
-than a statistician: it opens "At a glance" with the level, why, the
-attendances to expect, how far the methods' forecasts differ, how accurate
-they have been, the past flags and whether a warning is on, all in plain
-words that code writes from the tool results; then what to do, the staffing
-actions code sets for the level with their owners and dated weeks; then The
-detail, the forecast and error tables and version 2's track record
-sentence, so it states every fact version 2 did. A version 3 brief the code
-check failed can never be approved, so it lists no action and says to check
-the released weeks. It states no chance and names no
+than a statistician. It opens "At a glance" with the level, why, what the
+records show, the attendances to expect and the span 8 weeks in 10 should
+fall in, how far the methods' forecasts differ, how accurate they have
+been, the past flags and whether a warning is on, all in plain words that
+code writes from the tool results. Then comes what to do, the staffing
+actions code sets for the level with their owners and dated weeks. Then
+comes The detail: the forecast and error tables and version 2's track
+record sentence, so it states every figure version 2 did. A version 3
+brief the code check failed can never be approved, so it lists no action
+and says to check the released weeks. It states no chance and names no
 primary model either. Its watch point is gone, as the actions stand in its
 place. The raters never read version 3, and testing it is a pilot step.
 

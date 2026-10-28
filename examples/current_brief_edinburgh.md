@@ -1,6 +1,6 @@
 # The current brief: the Royal Infirmary of Edinburgh, w/e 23 Aug 2026
 
-The latest unlatched flag in the data, which runs to w/e 11 Oct 2026, as the shipped code queues it: config.json's rule gives a flag week's brief to the template, and the shipped default is version 3, the manager's layout. Code fills it from the tools as of the origin, with no model call: `python -m ae_escalation.examples`. Figure 5 of the paper draws its heading, At a glance and What to do. The manager's layout came after the ratings: the raters read the rated layout, and testing this one is a pilot step.
+The latest flag with no drift alarm among the five series the system runs on, whose data run to w/e 11 Oct 2026, as the shipped code queues it. config.json's rule gives a flag week's brief to the template, and the shipped default is version 3, in the manager's layout. Code fills it from the tools as of the origin, with no model call: `python -m ae_escalation.examples`. Figure 5 of the paper draws its heading, At a glance and What to do. The manager's layout came after the ratings: the raters read the rated layout, and testing this one is a pilot step.
 
 | | |
 |---|---|
@@ -12,7 +12,7 @@ The latest unlatched flag in the data, which runs to w/e 11 Oct 2026, as the shi
 | Written by | the template brief, version 3, filled by code with no model call |
 | Status | verified |
 
-The code check: 99 figures checked against the tool calls they came from, none wrong; every line it prints held to the line those calls give, none off; the level is the rule's. State in the queue: awaiting decision.
+The code check found all 101 figures match the tool calls they came from. Every printed line matches what those calls give, and the level is the rule's. State in the queue: awaiting decision.
 
 ## As queued
 
@@ -23,9 +23,10 @@ Royal Infirmary of Edinburgh at Little France, week ending 23 Aug 2026 (figures 
 
 At a glance
 - Level 2 of 4: demand may be higher than usual for the time of year from w/e 06 Sep 2026 to w/e 27 Sep 2026. The level does not measure pressure, need or priority.
-- Why: at least one of the next four weeks may run 5% or more above this hospital's high-week mark for the time of year. That mark is the level 9 weeks in 10 stayed under at this time of year over the last three years.
-- Expected attendances: about 2,460 to 2,660 a week over those four weeks.
-- The forecasts: the four methods' central figures are within 9% of each other.
+- Why: at least one of the next four weeks may run 5% or more above this hospital's high-week mark for the time of year. That mark is the weekly count 9 weeks in 10 stayed under at this time of year over the last three years.
+- Records show: the latest week, w/e 23 Aug 2026, had 2,740 attendances. A high week here at this time of year is about 2,540 a week.
+- Expected attendances: the forecasts centre on about 2,460 to 2,660 a week; 8 weeks in 10 should fall between about 2,400 and 2,850.
+- The forecasts: the four methods' central figures differ by up to 8.0% in any one week.
 - How accurate they have been: on past weeks these forecasts were out by 2.9% to 4.5% on average, for the first of the four weeks.
 - Past flags here: when this hospital was flagged before, demand did turn out high, a week 5% or more above the mark, 4 times out of 5.
 - No warning that the forecasts have stopped matching recent weeks.
@@ -56,4 +57,4 @@ This hospital's past outlook flags were borne out 4 times in 5; its unflagged ou
 
 ## What followed
 
-What followed, from the weeks released since: w/e 20 Sep 2026 turned busy, with attendances at 1.05 times its simulated capacity or more, the brief's high-week mark plus 5%; w/e 06 Sep 2026, w/e 13 Sep 2026 and w/e 27 Sep 2026 did not, so the flag was borne out.
+What followed, from the weeks released since: w/e 20 Sep 2026 turned busy, with attendances at 1.05 times its simulated capacity or more, the brief's high-week mark plus 5%. The other three, w/e 06 Sep 2026, w/e 13 Sep 2026 and w/e 27 Sep 2026, did not, so the flag was borne out.

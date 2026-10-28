@@ -1,5 +1,5 @@
-"""Examples for a reader, rendered from the recorded set the approver chose
-and the code, with no model call.
+"""Examples for a reader, rendered by the code with no model call; the
+agent's briefs come from the recorded set the approver chose.
 
     python -m ae_escalation.examples
 
@@ -8,16 +8,17 @@ which is Figure 5 of the paper:
 
 - the current brief: the version 3 template brief the shipped code queues
   for the Royal Infirmary of Edinburgh's flag week, w/e 23 Aug 2026, the
-  latest unlatched flag in the data, with what followed; Figure 5 draws its
-  heading, At a glance and What to do;
+  latest flag with no drift alarm among the five series the system runs
+  on, with what followed; Figure 5 draws its heading, At a glance and What
+  to do;
 - the Royal Infirmary of Edinburgh's surge brief as the approver saw it,
   then as approved with the edit, both in the rated layout, then the
-  approved brief in the manager's layout the code now ships;
+  approved brief in the manager's layout;
 - the version 3 template brief a new run writes for Ninewells Hospital's
   demand week, w/e 13 Jun 2021, as the queue holds it;
 - Edinburgh's staff notifications and escalation, from the outbox;
 - a brief marked "not verified, do not act", as the manager saw it, then in
-  the shipped layout, which lists no action for it.
+  the manager's layout, which lists no action for it.
 
 The manager's layout came after the ratings: the raters and the approver
 read the rated layout, and testing the new one is a pilot step. The
@@ -40,7 +41,7 @@ from . import replay as rp
 from . import rules as ru
 from . import template as tp
 from . import tools as tl
-from .approval import UK, ApprovalQueue
+from .approval import NUMBER_WORDS, UK, ApprovalQueue
 from .briefs import TEXT_FIELDS
 from .config import CONFIG_PATH, REPO, load_config
 from .figures import check_template
@@ -52,8 +53,9 @@ BACKEND, LABEL = "frontier", "round2"
 SURGE = "20191006-S314H"
 NOT_VERIFIED = "20210613-T101H"
 TEMPLATE_WEEK = ("2021-06-13", "T101H")
-# The latest unlatched flag in the data, which runs to w/e 11 Oct 2026: at
-# that origin every series is at level 1, unlatched, with no brief.
+# The latest flag with no drift alarm among the five series the system runs
+# on. The data run to w/e 11 Oct 2026, and at that origin all five are at
+# level 1, unlatched, with no brief.
 CURRENT_WEEK = ("2026-08-23", "S314H")
 CURRENT_FILE = "current_brief_edinburgh.md"
 SURGE_FILE = "surge_brief_edinburgh.md"
@@ -132,8 +134,11 @@ def _head(item):
     )
 
 
-def _intro(what):
-    """The line every example opens with: where it comes from."""
+def _intro(what, recorded=True):
+    """The line every example opens with: where it comes from. A template
+    brief comes from the data and the code alone."""
+    if not recorded:
+        return f"{what} Rendered by the code, with no model call: {COMMAND}."
     return (
         f"{what} Rendered from the recorded {BACKEND} set, {LABEL}, the set "
         f"the approver chose, and the code, with no model call: {COMMAND}."
@@ -189,13 +194,13 @@ def surge(fresh, decided):
         "",
         *_block(item.display(written_by=False, layout="rated")),
         "",
-        "## In the shipped layout",
+        "## In the manager's layout",
         "",
-        "The approved brief as the queue's sheet now shows it, in the "
-        "manager's layout: what a duty manager needs at a glance and what to "
-        "do, which code writes from the brief's facts, then the agent's "
-        "points and its explanation as written. The manager's layout came "
-        "after the ratings: the approver and the raters read the rated "
+        "The approved brief as the queue's sheet shows it, in the manager's "
+        "layout: what a duty manager needs at a glance and what to do, which "
+        "code writes from the brief's facts, then the brief's other points "
+        "and its explanation, as written and approved. The manager's layout "
+        "came after the ratings: the approver and the raters read the rated "
         "layout above, and testing this one is a pilot step.",
         "",
         *_block(item.display(written_by=False)),
@@ -230,11 +235,17 @@ def _check_line(item, check):
     level = (
         "is not" if any(f.field == "level" for f in check.failures) else ("is")
     )
+    state = f"State in the queue: {item.state}."
+    if check.passed:
+        return (
+            f"The code check found all {check.figures_checked} figures match "
+            "the tool calls they came from. Every printed line matches what "
+            f"those calls give, and the level is the rule's. {state}"
+        )
     return (
-        f"The code check: {check.figures_checked} figures checked against "
-        f"the tool calls they came from, {wrong or 'none'} wrong; every line "
-        f"it prints held to the line those calls give, {off or 'none'} off; "
-        f"the level {level} the rule's. State in the queue: {item.state}."
+        f"The code check found {wrong} of {check.figures_checked} figures "
+        f"wrong and {off} printed lines off what the tool calls give, and "
+        f"the level {level} the rule's. {state}"
     )
 
 
@@ -274,18 +285,29 @@ def what_followed(run, entry):
             f"{listed(weeks)} turned busy, its attendances at {cut} or more, "
             "so the flag was not borne out."
         )
-    others = f"; {listed(rest)} did not" if rest else ""
-    return (
+    plus = round((ru.CUTS[0] - 1) * 100)
+    first = (
         f"What followed, from the weeks released since: {listed(hit)} "
         f"turned busy, with attendances at {cut} or more, the brief's "
-        f"high-week mark plus {round((ru.CUTS[0] - 1) * 100)}%{others}, so "
-        "the flag was borne out."
+        f"high-week mark plus {plus}%."
+    )
+    if not rest:
+        return f"{first} So the flag was borne out."
+    other = (
+        f"The other {NUMBER_WORDS[len(rest)]}"
+        if len(rest) > 1
+        else "The other week"
+    )
+    return (
+        f"{first} {other}, {listed(rest)}, did not, so the flag was borne "
+        "out."
     )
 
 
 def current_example(run, holidays, settings):
     """The current brief: the template brief the shipped code queues for
-    the latest unlatched flag in the data, and what followed it."""
+    the latest flag with no drift alarm among the five series the system
+    runs on, and what followed it."""
     entry, item, check = _queued_template(
         run, holidays, settings, CURRENT_WEEK
     )
@@ -293,14 +315,15 @@ def current_example(run, holidays, settings):
         "# The current brief: the Royal Infirmary of Edinburgh, w/e 23 Aug "
         "2026",
         "",
-        "The latest unlatched flag in the data, which runs to w/e 11 Oct "
-        "2026, as the shipped code queues it: config.json's rule gives a flag "
-        "week's brief to the template, and the shipped default is version 3, "
-        "the manager's layout. Code fills it from the tools as of the origin, "
-        f"with no model call: {COMMAND}. Figure 5 of the paper draws its "
-        "heading, At a glance and What to do. The "
-        "manager's layout came after the ratings: the raters read the rated "
-        "layout, and testing this one is a pilot step.",
+        "The latest flag with no drift alarm among the five series the "
+        "system runs on, whose data run to w/e 11 Oct 2026, as the shipped "
+        "code queues it. config.json's rule gives a flag week's brief to the "
+        "template, and the shipped default is version 3, in the manager's "
+        "layout. Code fills it from the tools as of the origin, with no model "
+        f"call: {COMMAND}. Figure 5 of the paper draws its heading, At a "
+        "glance and What to do. The manager's layout came after the ratings: "
+        "the raters read the rated layout, and testing this one is a pilot "
+        "step.",
         "",
         *_head(item),
         "",
@@ -332,10 +355,11 @@ def template_example(run, holidays, settings):
             "Under config.json's rule a flag week's brief is the template "
             "brief, filled by code from the tools as of the origin, and it "
             "goes to the approval queue like any brief. It is version "
-            f"{settings.template_version}, the shipped default: the "
+            f"{settings.template_version}, the shipped default, in the "
             "manager's layout, which came after the ratings. In the "
             "recorded run the agent wrote this week's brief, and the checks "
-            f"refused it (`{NOT_VERIFIED_FILE}`)."
+            f"refused it (`{NOT_VERIFIED_FILE}`).",
+            recorded=False,
         ),
         "",
         *_head(item),
@@ -421,12 +445,13 @@ def not_verified_example(fresh, decided):
         "",
         *_block(seen.display(written_by=False, layout="rated")),
         "",
-        "## In the shipped layout",
+        "## In the manager's layout",
         "",
-        "The same brief as the queue's sheet now shows it, in the manager's "
-        "layout, which came after the ratings: it can never be approved, so "
-        "it lists no action and says to check the released weeks. The "
-        "approver read the rated layout above, and testing this one is a "
+        "The same brief as the queue's sheet shows it, in the manager's "
+        "layout, which came after the ratings. It can never be approved, so "
+        "it lists no action and says to check the released weeks; the "
+        "refused draft's points sit in The detail, marked as not checked. "
+        "The approver read the rated layout above, and testing this one is a "
         "pilot step.",
         "",
         *_block(seen.display(written_by=False)),
@@ -440,9 +465,10 @@ def readme():
     lines = [
         "# Examples",
         "",
-        f"Each file is rendered from the recorded {BACKEND} set, {LABEL}, "
-        f"the set the approver chose, and the code, with no model call. "
-        f"{COMMAND} writes them again, and a test checks that they match. "
+        "Each file is rendered by the code with no model call; the agent's "
+        f"briefs come from the recorded {BACKEND} set, {LABEL}, the set the "
+        f"approver chose. {COMMAND} writes them again, and a test checks "
+        "that they match. "
         "Figure 5 of the paper, `figures/fig9_sample_brief.png`, draws the "
         "top of the current brief, the first file's: its heading, At a "
         "glance and What to do. Briefs open in the manager's "
@@ -451,11 +477,12 @@ def readme():
         "",
         f"- `{CURRENT_FILE}`: the current brief, the version 3 template "
         "brief the shipped code queues for the Royal Infirmary of "
-        "Edinburgh's flag week, w/e 23 Aug 2026, the latest unlatched flag "
-        "in the data, with what followed.",
+        "Edinburgh's flag week, w/e 23 Aug 2026, the latest flag with no "
+        "drift alarm among the five series the system runs on, with what "
+        "followed.",
         f"- `{SURGE_FILE}`: the Royal Infirmary of Edinburgh's surge brief, "
         "w/e 06 Oct 2019, as the approver saw it, then as approved with the "
-        "edit, then in the shipped layout.",
+        "edit, then in the manager's layout.",
         f"- `{TEMPLATE_FILE}`: the version 3 template brief a new run writes "
         "for Ninewells Hospital's demand week, w/e 13 Jun 2021, as queued "
         "for approval.",
@@ -463,7 +490,7 @@ def readme():
         "from the outbox, never sent.",
         f"- `{NOT_VERIFIED_FILE}`: Ninewells Hospital's demand brief, marked "
         '"not verified, do not act", as the manager saw it, then in the '
-        "shipped layout, which lists no action for it.",
+        "manager's layout, which lists no action for it.",
         "",
     ]
     return "\n".join(lines)

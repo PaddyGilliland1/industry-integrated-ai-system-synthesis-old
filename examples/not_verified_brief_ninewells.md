@@ -40,9 +40,9 @@ Wording problems:
 - Watch points: "since recent actual demand reached 1,194 attendances" gives a causal reason for needing extra shifts for w/e 27 Jun 2021, while the forecast for that week is 1,120, lower than that actual, so the stated reason (rising demand) is not shown by a tool result.
 ```
 
-## In the shipped layout
+## In the manager's layout
 
-The same brief as the queue's sheet now shows it, in the manager's layout, which came after the ratings: it can never be approved, so it lists no action and says to check the released weeks. The approver read the rated layout above, and testing this one is a pilot step.
+The same brief as the queue's sheet shows it, in the manager's layout, which came after the ratings. It can never be approved, so it lists no action and says to check the released weeks; the refused draft's points sit in The detail, marked as not checked. The approver read the rated layout above, and testing this one is a pilot step.
 
 ```text
 NOT VERIFIED, DO NOT ACT: it can never be approved.
@@ -50,27 +50,29 @@ Ninewells Hospital, week ending 13 Jun 2021 (figures released Tue 22 Jun 2021)
 
 At a glance
 - Level 2 of 4: demand may be higher than usual for the time of year from w/e 27 Jun 2021 to w/e 18 Jul 2021. The level does not measure pressure, need or priority.
-- Why: at least one of the next four weeks may run 5% or more above this hospital's high-week mark for the time of year. That mark is the level 9 weeks in 10 stayed under at this time of year over the last three years.
-- Expected attendances: about 810 to 1,120 a week over those four weeks.
-- The forecasts: the four methods' central figures are within 39% of each other.
+- Why: at least one of the next four weeks may run 5% or more above this hospital's high-week mark for the time of year. That mark is the weekly count 9 weeks in 10 stayed under at this time of year over the last three years.
+- Records show: the latest week, w/e 13 Jun 2021, had 1,194 attendances. A high week here at this time of year is about 1,060 a week.
+- Expected attendances: the forecasts centre on about 810 to 1,120 a week; 8 weeks in 10 should fall between about 530 and 1,420.
+- The forecasts: the four methods' central figures differ by up to 28.0% in any one week.
 - How accurate they have been: on past weeks these forecasts were out by 11.5% to 24.5% on average, for the first of the four weeks.
 - Past flags here: this hospital has no past flags to judge.
 - No warning that the forecasts have stopped matching recent weeks.
 
 What to do: this brief cannot be approved. Check the released weeks yourself before changing staffing.
-Also check (the agent's points):
-- Check whether extra shifts or bank staff are needed for w/e 27 Jun 2021, since recent actual demand reached 1,194 attendances (actual, w/e 13 Jun 2021).
-- Review rota cover from w/e 04 Jul 2021 to w/e 18 Jul 2021 and hold leave decisions open until more weeks are released.
-- Compare each newly released week with the forecast range and revisit staffing if actuals pass the top of the range.
 
 The detail
-The agent's explanation:
+The brief's explanation:
 Summary: Ninewells Hospital is at demand level 2. The forecasts start at 1,120 attendances (SA-MA forecast for w/e 27 Jun 2021) and ease slightly to 1,085 attendances (SA-MA forecast for w/e 04 Jul 2021). Recent weeks have been rising, reaching 1,194 attendances (actual, w/e 13 Jun 2021), and the forecasts fit them with no drift. Trust them moderately, because the simple models are fairly far apart.
 Expected range: For w/e 27 Jun 2021, the narrower range runs from 982 attendances (low end of SA-MA's 80% range for w/e 27 Jun 2021) to 1,291 attendances (high end of SA-MA's 80% range for w/e 27 Jun 2021). The wider range runs from 714 attendances (low end of SA-MA's 95% range for w/e 27 Jun 2021) to 1,454 attendances (high end of SA-MA's 95% range for w/e 27 Jun 2021).
 Model agreement: The simple models disagree by 25.5% (spread of the four models' forecasts for w/e 27 Jun 2021) at the nearest week. The lowest forecast, 835 attendances (seasonal naive forecast for w/e 27 Jun 2021), has the weakest back-test error at 24.5% (seasonal naive back-test error, release horizon 1), so trust it least. The model forecasting 898 attendances (linear forecast for w/e 27 Jun 2021) is also weaker, with an error of 16.8% (linear back-test error, release horizon 1). SA-MA (the primary model) has the lowest error at 11.5% (SA-MA back-test error, release horizon 1), and the model with an error of 11.9% (4-week moving average back-test error, release horizon 1) is close behind.
 Back-test error: SA-MA's back-test error at release horizon 1 is 11.5%.
 Track record: This hospital has no past flag to judge.
 Bank holidays ahead: none in the four weeks ahead.
+
+The refused draft's points (not checked; do not act on them):
+- Check whether extra shifts or bank staff are needed for w/e 27 Jun 2021, since recent actual demand reached 1,194 attendances (actual, w/e 13 Jun 2021).
+- Review rota cover from w/e 04 Jul 2021 to w/e 18 Jul 2021 and hold leave decisions open until more weeks are released.
+- Compare each newly released week with the forecast range and revisit staffing if actuals pass the top of the range.
 Wording problems:
 - Summary: "the forecasts fit them with no drift" is not clearly supported, and "Recent weeks have been rising" is a trend claim with only one actual figure given in the labels (actual, w/e 13 Jun 2021).
 - Summary: "ease slightly to 1,085 attendances (SA-MA forecast for w/e 04 Jul 2021)" reads as a decline from 1,120, which is consistent, but "The forecasts start at 1,120" gives no basis for the claim that the simple models are "fairly far apart" other than the 25.5% spread; this is acceptable, yet "Trust them moderately" is not backed by a tool result.

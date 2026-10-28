@@ -12,6 +12,7 @@ import hashlib
 import math
 from datetime import date, timedelta
 
+import pandas as pd
 import pytest
 
 from ae_escalation import approval as ap
@@ -65,12 +66,15 @@ EDINBURGH_TOP = (
     "pressure, need or priority.\n"
     "- Why: at least one of the next four weeks may run 5% or more above "
     "this hospital's high-week mark for the time of year. That mark is the "
-    "level 9 weeks in 10 stayed under at this time of year over the last "
-    "three years.\n"
-    "- Expected attendances: about 2,460 to 2,660 a week over those four "
-    "weeks.\n"
-    "- The forecasts: the four methods' central figures are within 9% of "
-    "each other.\n"
+    "weekly count 9 weeks in 10 stayed under at this time of year over the "
+    "last three years.\n"
+    "- Records show: the latest week, w/e 23 Aug 2026, had 2,740 "
+    "attendances. A high week here at this time of year is about 2,540 a "
+    "week.\n"
+    "- Expected attendances: the forecasts centre on about 2,460 to 2,660 a "
+    "week; 8 weeks in 10 should fall between about 2,400 and 2,850.\n"
+    "- The forecasts: the four methods' central figures differ by up to "
+    "8.0% in any one week.\n"
     "- How accurate they have been: on past weeks these forecasts were out "
     "by 2.9% to 4.5% on average, for the first of the four weeks.\n"
     "- Past flags here: when this hospital was flagged before, demand did "
@@ -94,12 +98,13 @@ SURGE_TOP = (
     "- Level 2 of 4: demand may be higher than usual for the time of year "
     "from w/e 20 Oct 2019 to w/e 10 Nov 2019. The level does not measure "
     "pressure, need or priority.\n"
-    "- Why: the latest week's actual attendances, 2,559, were 5% to 10% "
-    "above the lowest of the next four weeks' high-week marks. That mark is "
-    "the level 9 weeks in 10 stayed under at this time of year over the "
-    "last three years.\n"
+    "- Why: the latest week's actual attendances, 2,559, were 5% to under "
+    "10% above the lowest of the next four weeks' high-week marks. That "
+    "mark is the weekly count 9 weeks in 10 stayed under at this time of "
+    "year over the last three years.\n"
     "- Expected attendances: the forecasts are not used this week (see the "
-    "warning). The last four weeks released ran 2,559 to 2,688 a week.\n"
+    "warning). The last four weeks released, w/e 15 Sep 2019 to w/e 06 Oct "
+    "2019, ran 2,559 to 2,688 a week.\n"
     "- The forecasts: not used this week.\n"
     "- How accurate they have been: the past accuracy figures may not hold "
     "while the warning is on.\n"
@@ -107,7 +112,7 @@ SURGE_TOP = (
     "turn out high, a week 5% or more above the mark, 4 times out of 4.\n"
     "- Warning: recent weeks have run above the forecasts since w/e 29 Sep "
     "2019, so this brief works from actual figures, not forecasts, until a "
-    "person resets the warning.\n"
+    "person resets the warning (the drift latch).\n"
     "\n"
     "What to do, if you approve\n"
     "- Duty manager: Check whether extra shifts or bank staff are needed "
@@ -116,7 +121,10 @@ SURGE_TOP = (
     "10 Nov 2019 until the duty manager's check is done.\n"
 )
 
-# Words a duty manager is not expected to know, kept to The detail.
+# Words a duty manager is not expected to know, kept to The detail. The
+# warning line names the drift latch once, so the brief's later uses of the
+# term have something to point back to.
+GLOSS = " (the drift latch)"
 TECHNICAL = (
     "release horizon",
     "simulated capacity",
@@ -166,7 +174,7 @@ def test_version_3_keeps_the_tables_of_version_2(replay_run, edinburgh):
 
 @pytest.mark.parametrize("week", [EDINBURGH, NINEWELLS, SURGE, LATCH])
 def test_the_top_two_blocks_avoid_the_technical_words(replay_run, week):
-    low = top(v3(replay_run, week).text()).lower()
+    low = top(v3(replay_run, week).text()).replace(GLOSS, "").lower()
     for word in TECHNICAL:
         assert word not in low, word
 
@@ -178,32 +186,46 @@ def test_version_3_states_no_chance_and_names_no_primary(replay_run, week):
         assert word not in low, word
 
 
-def test_the_expected_line_is_the_central_forecasts_rounded_to_10(
+def tens(value):
+    """A value rounded to the nearest 10, halves up."""
+    return math.floor(value / 10 + 0.5) * 10
+
+
+def test_the_expected_line_gives_the_centre_and_the_80_per_cent_span(
     replay_run,
 ):
     # Ninewells' seasonal naive forecast sits far below the others, so the
-    # line spans every method's central figure.
+    # centre spans every method's central figure, and the 80% span every
+    # method's 80% range.
     brief = v3(replay_run, NINEWELLS)
-    points = [f.point for f in brief.forecasts.forecasts]
-    assert (min(points), round(max(points))) == (810, 1120)
+    rows = brief.forecasts.forecasts
+    points = [f.point for f in rows]
+    lows = [f.range_80.low for f in rows]
+    highs = [f.range_80.high for f in rows]
+    assert [tens(min(points)), tens(max(points))] == [810, 1120]
+    assert [tens(min(lows)), tens(max(highs))] == [530, 1420]
     assert (
-        "- Expected attendances: about 810 to 1,120 a week over those four "
-        "weeks." in brief.text()
+        "- Expected attendances: the forecasts centre on about 810 to 1,120 "
+        "a week; 8 weeks in 10 should fall between about 530 and 1,420."
+        in brief.text()
     )
 
 
-def test_the_forecasts_line_states_the_spread_never_a_verdict(replay_run):
-    for week in (EDINBURGH, NINEWELLS):
+def test_the_forecasts_line_is_the_widest_week_of_the_tools_spread(
+    replay_run,
+):
+    # The same measure the forecast tool gives the agent, so the top and
+    # The detail can never disagree.
+    for week, shown in ((EDINBURGH, "8.0"), (NINEWELLS, "28.0")):
         brief = v3(replay_run, week)
-        points = [f.point for f in brief.forecasts.forecasts]
-        # Rounded up, so "within" stays true.
-        n = math.ceil(100 * (max(points) - min(points)) / min(points))
+        widest = max(brief.forecasts.spread_pct.values())
+        assert f"{widest:.1f}" == shown
         line = next(
             x for x in brief.text().splitlines() if "The forecasts:" in x
         )
         assert line == (
-            "- The forecasts: the four methods' central figures are within "
-            f"{n}% of each other."
+            "- The forecasts: the four methods' central figures differ by "
+            f"up to {shown}% in any one week."
         )
         assert "agree" not in line
 
@@ -238,6 +260,96 @@ def test_busy_means_a_week_5_per_cent_or_more_above_capacity(replay_run):
     assert bool(row["busy"])
 
 
+def test_the_records_line_gives_the_latest_week_and_the_high_week_mark(
+    replay_run, edinburgh
+):
+    t = replay_run.weeks.get_loc(pd.Timestamp(edinburgh.week))
+    marks = replay_run.caps["S314H"][t][1:5]
+    assert tens(marks[0]) == 2540
+    # Every mark of the four weeks is within 5% of the first, so one is
+    # given.
+    assert max(marks) / min(marks) < 1.05
+    assert edinburgh.recent.weeks[-1].attendances == 2740
+    # A latched brief already quotes the released weeks, so it has no
+    # records line.
+    assert "Records show" not in v3(replay_run, SURGE).text()
+
+
+def test_the_records_line_gives_a_span_when_the_marks_differ():
+    span = tl.CapacityResult(
+        hospital="S314H",
+        as_of=date(2026, 8, 23),
+        weeks=[
+            tl.CapacityWeek(
+                release_horizon=k,
+                week_ending=date(2026, 9, 6) + timedelta(weeks=k - 1),
+                capacity=c,
+            )
+            for k, c in zip((1, 2, 3, 4), (2400.0, 2450.0, 2600.0, 2550.0))
+        ],
+    )
+    assert br.mark_text(span) == "about 2,400 to 2,600"
+    same = span.model_copy(
+        update={
+            "weeks": [
+                w.model_copy(update={"capacity": 2537.6}) for w in span.weeks
+            ]
+        }
+    )
+    assert br.mark_text(same) == "about 2,540"
+
+
+def test_the_capacity_tool_gives_each_weeks_mark_as_of_the_origin(
+    replay_run,
+):
+    got = tl.get_capacity(
+        replay_run, tl.CapacityRequest(hospital="S314H", as_of="2026-08-23")
+    )
+    t = replay_run.weeks.get_loc(pd.Timestamp("2026-08-23"))
+    assert [w.release_horizon for w in got.weeks] == [1, 2, 3, 4]
+    assert [w.capacity for w in got.weeks] == list(
+        replay_run.caps["S314H"][t][1:5]
+    )
+    assert [w.week_ending for w in got.weeks] == [
+        w.date() for w in release_horizon_weeks(date(2026, 8, 23))
+    ]
+    with pytest.raises(ValueError):
+        tl.get_capacity(
+            replay_run,
+            tl.CapacityRequest(hospital="X999X", as_of="2026-08-23"),
+        )
+
+
+def test_the_capacity_tool_is_never_the_investigators():
+    # A new tool for the Investigator would change every recorded request.
+    from ae_escalation import agents as ag
+
+    assert "get_capacity" not in ag.REQUESTS
+
+
+def test_the_mark_is_the_weekly_count_not_a_level(replay_run):
+    for week in (EDINBURGH, SURGE, LATCH):
+        text = top(v3(replay_run, week).text())
+        assert "That mark is the weekly count 9 weeks in 10 stayed under" in (
+            text
+        )
+        assert "is the level" not in text
+
+
+def test_the_warning_names_the_drift_latch_once(replay_run):
+    text = top(v3(replay_run, SURGE).text())
+    assert text.count("(the drift latch)") == 1
+    assert "until a person resets the warning (the drift latch)." in text
+
+
+def test_a_held_level_says_nothing_new_is_assessed(replay_run):
+    assert (
+        "- Level 1 of 4, held from the week before the warning: nothing new "
+        "is assessed while the forecasts are not used. The level does not "
+        "measure pressure, need or priority." in v3(replay_run, LATCH).text()
+    )
+
+
 def test_the_mark_is_the_90th_percentile_of_three_past_years():
     import inspect
 
@@ -251,15 +363,19 @@ def test_the_national_brief_names_scotland_and_holds_its_level(replay_run):
     assert "when Scotland was flagged before" in text
     assert "hospital" not in top(text).lower()
     assert (
+        "The last four weeks released, w/e 01 Mar 2020 to w/e 22 Mar 2020, "
+        "ran 16,394 to 26,390 a week." in text
+    )
+    assert (
         "- Warning: recent weeks have run below the forecasts since w/e 22 "
         "Mar 2020, so the level is held and the forecasts are not used, "
-        "until a person resets the warning." in text
+        "until a person resets the warning (the drift latch)." in text
     )
 
 
 def test_level_1_sets_no_staffing_change(replay_run):
     text = v3(replay_run, LATCH).text()
-    assert "- Level 1 of 4: " in text
+    assert "- Level 1 of 4, held from the week before the warning" in text
     assert (
         "What to do, if you approve\n- No staffing change this week.\n" in text
     )
@@ -331,10 +447,11 @@ def test_version_3_cites_every_tool_figure_it_prints(edinburgh):
     figures = edinburgh.cited_figures
     assert all(printed(f) in edinburgh.text() for f in figures)
     # The tables' 80 forecast figures and 16 errors, then the track
-    # record's three, as version 2 states them: version 3 states every fact
-    # version 2 did.
-    assert len(figures) == 80 + 16 + 3
-    assert fg.check_template(edinburgh, 2).figures_checked == 99
+    # record's three, as version 2 states them, then the widest week's
+    # spread and the latest week's attendances the top block states.
+    assert len(figures) == 80 + 16 + 3 + 1 + 1
+    assert [f.measure for f in figures[-2:]] == ["spread", "history"]
+    assert fg.check_template(edinburgh, 2).figures_checked == 101
 
 
 def test_version_3_ends_its_detail_with_version_2s_track_sentence(
@@ -409,8 +526,41 @@ def test_a_planted_wrong_number_in_the_expected_line_fails_the_check(
     result = fg.check_template(planted, planted.level)
     assert not result.passed
     assert any(
-        f.found.startswith("- Expected attendances: about 2,060")
+        f.found.startswith(
+            "- Expected attendances: the forecasts centre on about 2,060"
+        )
         for f in result.failures
+    )
+
+
+def test_a_planted_wrong_high_week_mark_fails_the_check(edinburgh):
+    weeks = edinburgh.capacity.weeks
+    wrong = weeks[0].model_copy(update={"capacity": 2937.6})
+    capacity = edinburgh.capacity.model_copy(
+        update={"weeks": [wrong, *weeks[1:]]}
+    )
+    planted = edinburgh.model_copy(update={"capacity": capacity})
+    result = fg.check_template(planted, planted.level)
+    assert not result.passed
+    # The planted mark is more than 5% from the others, so a span shows it.
+    assert any(
+        "about 2,530 to 2,940 a week" in f.found for f in result.failures
+    )
+
+
+def test_a_planted_wrong_80_per_cent_bound_fails_the_check(edinburgh):
+    rows = edinburgh.forecasts.forecasts
+    n = next(i for i, f in enumerate(rows) if round(f.range_80.high) == 2849)
+    r80 = rows[n].range_80.model_copy(update={"high": 3049.0})
+    wrong = rows[n].model_copy(update={"range_80": r80})
+    forecasts = edinburgh.forecasts.model_copy(
+        update={"forecasts": [*rows[:n], wrong, *rows[n + 1 :]]}
+    )
+    planted = edinburgh.model_copy(update={"forecasts": forecasts})
+    result = fg.check_template(planted, planted.level)
+    assert not result.passed
+    assert any(
+        "between about 2,400 and 3,050" in f.found for f in result.failures
     )
 
 
@@ -511,10 +661,12 @@ def test_an_agents_brief_opens_as_the_template_does_for_its_week(
 ):
     # Code writes both from the same tool results, so the two kinds of
     # brief tell the manager the same at a glance and set the same actions.
+    # The brief's own points follow in a block of their own, apart from
+    # the code-written lines.
     shown = surge_agent.text(written_by=False, layout="manager")
     points = "".join(f"- {p}\n" for p in surge_agent.watch_points)
     assert top(shown) == (
-        SURGE_TOP + "Also check (the agent's points):\n" + points
+        SURGE_TOP + "\nOther points in this brief, as written:\n" + points
     )
 
 
@@ -531,7 +683,7 @@ def test_an_agents_explanation_follows_as_written(surge_agent):
         "Bank holidays ahead:",
     )
     assert detail.splitlines() == [
-        "The agent's explanation:",
+        "The brief's explanation:",
         *[x for x in rated if x.startswith(fields)],
     ]
 
@@ -547,12 +699,12 @@ def test_the_manager_layout_names_its_author_last(surge_agent):
 def test_each_agent_brief_kind_has_a_plain_top(replay_run, holidays, key):
     entry, brief, _ = natural_brief(replay_run, holidays, key)
     shown = brief.text(written_by=False, layout="manager")
-    code = top(shown).split("\nAlso check (the agent's points):\n")[0]
-    low = code.lower()
+    code = top(shown).split("\nOther points in this brief, as written:\n")[0]
+    low = code.replace(GLOSS, "").lower()
     for word in TECHNICAL:
         assert word not in low, (key, word)
     template = tp.template_brief(replay_run, entry, version=3)
-    assert code + "\n" == top(template.text())
+    assert code == top(template.text())
 
 
 def test_a_brief_recorded_before_the_layout_is_shown_as_queued(surge_agent):
@@ -637,7 +789,15 @@ def test_a_notification_is_offered_version_3s_tool_figures(replay_run):
     # unlatched brief, and in a latched one no forecast, since each is
     # untrusted, and no past week's actual.
     brief = v3(replay_run, EDINBURGH)
-    assert co.offered_figures(brief) == list(range(1, 100))
+    history = [
+        n
+        for n, f in enumerate(brief.cited_figures, 1)
+        if f.measure == "history"
+    ]
+    assert history == [len(brief.cited_figures)]
+    assert co.offered_figures(brief) == list(
+        range(1, len(brief.cited_figures))
+    )
     surge = v3(replay_run, SURGE)
     offered = [surge.cited_figures[n - 1] for n in co.offered_figures(surge)]
     assert {f.measure for f in offered} == {
@@ -656,15 +816,23 @@ CANNOT = (
 )
 
 
+REFUSED = "The refused draft's points (not checked; do not act on them):"
+
+
 def no_action_offered(shown):
     """A not-verified brief's view: the banner, the heading that says it
-    cannot be approved, and no action code sets."""
+    cannot be approved, and no action at the top, neither code's nor the
+    draft's; the draft's points, if any, sit in The detail."""
     assert shown.startswith("NOT VERIFIED, DO NOT ACT")
-    assert f"\n{CANNOT}\n" in shown
+    head, _, detail = shown.partition("\nThe detail\n")
+    assert f"\n{CANNOT}\n" in head
     assert "What to do, if you approve" not in shown
+    assert "Other points in this brief" not in shown
+    assert "\n- " not in head.split(CANNOT)[1]
     for spec in co.ACTIONS_BY_LEVEL[4]:
         owner = spec.owner[0].upper() + spec.owner[1:]
         assert f"- {owner}:" not in shown
+    return detail
 
 
 def test_a_refused_agent_brief_sets_no_action(replay_run, holidays, settings):
@@ -674,9 +842,12 @@ def test_a_refused_agent_brief_sets_no_action(replay_run, holidays, settings):
         replay_run, holidays, settings, plants=2, run_id="nw"
     )
     assert refused.status == "not verified" and refused.entry.level == 2
-    no_action_offered(refused.display())
-    # The agent's points stay, as written and marked.
-    assert "Also check (the agent's points):" in refused.display()
+    detail = no_action_offered(refused.display())
+    # The draft's points stay, as written and marked, in The detail.
+    points = detail.split(f"\n{REFUSED}\n")[1].splitlines()
+    assert points[0] == (
+        "- Check whether extra shifts or bank staff are needed this week."
+    )
     # The rated layout, which has no actions to drop, is as it was.
     assert "Watch points:" in refused.display(layout="rated")
 
@@ -687,7 +858,7 @@ def test_an_edit_that_failed_its_checks_sets_no_action(
     from ae_escalation import demo as dm
 
     shown = dm.safeguards(replay_run, holidays, settings).failed_edit
-    no_action_offered(shown)
+    assert REFUSED in no_action_offered(shown)
 
 
 def test_a_version_3_template_the_check_failed_sets_no_action(
@@ -709,4 +880,27 @@ def test_a_version_3_template_the_check_failed_sets_no_action(
 def test_a_verified_brief_still_sets_its_actions(queued):
     shown = queued.display(written_by=False)
     assert "What to do, if you approve\n- Duty manager:" in shown
-    assert CANNOT not in shown
+    assert CANNOT not in shown and REFUSED not in shown
+    assert "\n\nOther points in this brief, as written:\n- " in shown
+
+
+def test_an_approved_brief_says_its_points_were_approved(queued):
+    q = ap.ApprovalQueue()
+    q.add(queued.outcome)
+    item = q.decide(
+        ap.Decision(
+            brief_id="rie",
+            action="approve",
+            initials="AB",
+            decided_at="2099-01-01T09:30:00+00:00",
+            criteria=ap.Criteria(
+                **{k: True for k in ap.Criteria.model_fields}
+            ),
+        )
+    )
+    shown = item.display(written_by=False)
+    assert "\nOther points in this brief, as written and approved:\n" in (
+        shown
+    )
+    assert "the agent's points" not in shown
+    assert "The agent's explanation" not in shown

@@ -729,10 +729,11 @@ def _level_failures(brief, rule_level):
 def _line_failures(brief):
     """Each line a version 3 template prints against the line code writes
     from the results its ledger recorded. Version 3 states figures worked
-    out from the tool results, the expected attendances rounded to the
-    nearest 10 and how far the methods differ, and dates each action by the
-    forecast tool's weeks; no cited figure holds these, so a copy gone
-    wrong is caught at the line that prints it."""
+    out from the tool results, the expected attendances and their 80% span
+    rounded to the nearest 10 and the high-week mark rounded the same way,
+    and dates each action by the forecast tool's weeks; no cited figure
+    holds these, so a copy gone wrong is caught at the line that prints
+    it."""
     try:
         want = brief.refilled().text().splitlines()
     except (KeyError, IndexError, ValueError) as exc:
@@ -764,9 +765,11 @@ def check_template(brief, rule_level):
     rule's, then every figure it prints against the tool call it cites.
     Code writes all of the template's words, so no text rule applies, and
     it states every forecast, so no figure is missing. Version 3 is also
-    held line by line to what its tool calls give, so every number and date
-    it prints, worked out or not, is covered; versions 1 and 2 are checked
-    as they were.
+    held line by line to what its tool calls give, so every figure and date
+    it takes from a tool, worked out or not, is covered. The hospital's
+    name, the latch date and the level's source are the screen entry's,
+    which the refill keeps, so only the level is held to the rule's.
+    Versions 1 and 2 are checked as they were.
 
     Parameters
     ----------

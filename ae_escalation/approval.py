@@ -240,7 +240,11 @@ class QueueItem(BaseModel):
                     f"\nYour edit {verdict} the code check, for the record."
                 )
             return shown
-        return self.current.text(written_by=written_by, layout=layout)
+        return self.current.text(
+            written_by=written_by,
+            layout=layout,
+            approved=self.state in CLOSED[:2],
+        )
 
 
 def _facts(texts):

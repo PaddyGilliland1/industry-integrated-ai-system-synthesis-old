@@ -556,9 +556,10 @@ class Coordinator:
                 brief_id=item.brief_id, actions=[], drafts=[]
             )
         run_id = f"{item.brief_id}-notify"
-        # The prompt quotes the brief in the rated layout, the one the
-        # recorded notifications were drafted from, so they replay by the
-        # same request hash; the manager's layout came after them.
+        # The prompt quotes an agent's brief in the rated layout, the one
+        # the recorded notifications were drafted from, so they replay by
+        # the same request hash; the manager's layout came after them. A
+        # template brief is quoted in its version's order.
         messages = [
             SystemMessage(content=self.prompts["SYSTEM"]),
             HumanMessage(

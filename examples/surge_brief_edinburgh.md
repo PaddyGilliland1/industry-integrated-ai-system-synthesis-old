@@ -62,32 +62,33 @@ Watch points:
 - Ask for the latch to be reviewed after the next scheduled data release; a person approves a latch reset once the documented reset criteria are met.
 ```
 
-## In the shipped layout
+## In the manager's layout
 
-The approved brief as the queue's sheet now shows it, in the manager's layout: what a duty manager needs at a glance and what to do, which code writes from the brief's facts, then the agent's points and its explanation as written. The manager's layout came after the ratings: the approver and the raters read the rated layout above, and testing this one is a pilot step.
+The approved brief as the queue's sheet shows it, in the manager's layout: what a duty manager needs at a glance and what to do, which code writes from the brief's facts, then the brief's other points and its explanation, as written and approved. The manager's layout came after the ratings: the approver and the raters read the rated layout above, and testing this one is a pilot step.
 
 ```text
 Royal Infirmary of Edinburgh at Little France, week ending 06 Oct 2019 (figures released Tue 15 Oct 2019)
 
 At a glance
 - Level 2 of 4: demand may be higher than usual for the time of year from w/e 20 Oct 2019 to w/e 10 Nov 2019. The level does not measure pressure, need or priority.
-- Why: the latest week's actual attendances, 2,559, were 5% to 10% above the lowest of the next four weeks' high-week marks. That mark is the level 9 weeks in 10 stayed under at this time of year over the last three years.
-- Expected attendances: the forecasts are not used this week (see the warning). The last four weeks released ran 2,559 to 2,688 a week.
+- Why: the latest week's actual attendances, 2,559, were 5% to under 10% above the lowest of the next four weeks' high-week marks. That mark is the weekly count 9 weeks in 10 stayed under at this time of year over the last three years.
+- Expected attendances: the forecasts are not used this week (see the warning). The last four weeks released, w/e 15 Sep 2019 to w/e 06 Oct 2019, ran 2,559 to 2,688 a week.
 - The forecasts: not used this week.
 - How accurate they have been: the past accuracy figures may not hold while the warning is on.
 - Past flags here: when this hospital was flagged before, demand did turn out high, a week 5% or more above the mark, 4 times out of 4.
-- Warning: recent weeks have run above the forecasts since w/e 29 Sep 2019, so this brief works from actual figures, not forecasts, until a person resets the warning.
+- Warning: recent weeks have run above the forecasts since w/e 29 Sep 2019, so this brief works from actual figures, not forecasts, until a person resets the warning (the drift latch).
 
 What to do, if you approve
 - Duty manager: Check whether extra shifts or bank staff are needed for w/e 20 Oct 2019 to w/e 10 Nov 2019.
 - Rota coordinator: Hold new leave requests for w/e 20 Oct 2019 to w/e 10 Nov 2019 until the duty manager's check is done.
-Also check (the agent's points):
+
+Other points in this brief, as written and approved:
 - Compare the released weeks, 2,633 attendances (actual, w/e 29 Sep 2019) and 2,559 attendances (actual, w/e 06 Oct 2019), with the rota already set from w/e 20 Oct 2019 to w/e 10 Nov 2019.
 - Check whether extra shifts, bank staff or holding leave are needed from w/e 20 Oct 2019 to w/e 10 Nov 2019, judged on the released actuals.
 - Ask for the latch to be reviewed after the next scheduled data release; a person approves a latch reset once the documented reset criteria are met.
 
 The detail
-The agent's explanation:
+The brief's explanation:
 Summary: demand level 2 for Royal Infirmary of Edinburgh at Little France comes from the latest released actual, 2,559 attendances (actual, w/e 06 Oct 2019), and not from any forecast. The drift latch has been set since w/e 29 Sep 2019 after an upward breach, so all forecasts are untrusted until a person approves a latch reset. Use the released weeks as the guide for staffing.
 Expected range: No forecast range can be trusted while the drift latch is set. The released weeks ran from 2,417 attendances (actual, w/e 08 Sep 2019) to 2,688 attendances (actual, w/e 22 Sep 2019) in the latest weeks.
 Model agreement: All forecasts are untrusted while the drift latch is set, so no forecast is offered as guidance. The back-test error in this brief is historical and does not establish current forecast reliability while the latch is set.

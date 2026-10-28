@@ -6,6 +6,7 @@ paper, must read in print."""
 import csv
 import json
 
+import pandas as pd
 import pytest
 
 from ae_escalation import examples as ex
@@ -71,12 +72,12 @@ def test_the_approved_surge_brief_is_shown_in_the_shipped_layout_last(
     rendered,
 ):
     text = rendered[ex.SURGE_FILE]
-    shipped = text.split("## In the shipped layout")[1]
+    shipped = text.split("## In the manager's layout")[1]
     assert text.index("As approved with the edit") < text.index(
-        "## In the shipped layout"
+        "## In the manager's layout"
     )
     assert "\nAt a glance\n" in shipped
-    assert "Also check (the agent's points):" in shipped
+    assert "Other points in this brief, as written and approved:" in shipped
     assert "after the ratings" in shipped
 
 
@@ -92,7 +93,21 @@ def test_the_template_example_is_the_version_3_brief_a_new_run_queues(
     )
 
 
-def test_the_current_brief_is_edinburghs_latest_unlatched_flag(rendered):
+def test_the_current_brief_is_the_latest_flag_among_the_five_series(
+    replay_run,
+):
+    # The run covers the five series the system runs on. No later origin
+    # carries a brief of any kind, and this one is a flag with no drift
+    # alarm.
+    f = replay_run.frame
+    origin, hospital = ex.CURRENT_WEEK
+    later = f[f["origin"] > pd.Timestamp(origin)]
+    assert len(later) and not (later["brief"] != "").any()
+    row = f[(f["series"] == hospital) & (f["origin"] == pd.Timestamp(origin))]
+    assert list(row["brief"]) == ["demand"] and not row["latched"].any()
+
+
+def test_the_current_brief_is_edinburghs_as_queued(rendered):
     text = rendered[ex.CURRENT_FILE]
     assert (
         "Royal Infirmary of Edinburgh at Little France, week ending 23 Aug "
@@ -100,8 +115,13 @@ def test_the_current_brief_is_edinburghs_latest_unlatched_flag(rendered):
     )
     assert "awaiting decision" in text and "version 3" in text
     assert (
-        "The code check: 99 figures checked against the tool calls they "
-        "came from, none wrong" in text
+        "The code check found all 101 figures match the tool calls they "
+        "came from. Every printed line matches what those calls give, and "
+        "the level is the rule's." in text
+    )
+    assert (
+        "the latest flag with no drift alarm among the five series the "
+        "system runs on" in text.lower()
     )
     assert "\nAt a glance\n" in text and "What to do, if you approve" in text
     assert (
@@ -123,8 +143,9 @@ def test_what_followed_is_worked_out_from_the_busy_columns(replay_run):
     # times its simulated capacity, and the other three did not.
     assert said.count("w/e 20 Sep 2026") == 1
     assert said.index("w/e 20 Sep 2026") < said.index("turned busy")
-    assert "w/e 06 Sep 2026, w/e 13 Sep 2026 and w/e 27 Sep 2026 did not" in (
-        said
+    assert (
+        "The other three, w/e 06 Sep 2026, w/e 13 Sep 2026 and w/e 27 Sep "
+        "2026, did not" in said
     )
     assert "1.05 times its simulated capacity" in said
     assert said.endswith("so the flag was borne out.")
@@ -165,9 +186,9 @@ def test_the_not_verified_example_in_the_shipped_layout_sets_no_action(
 ):
     text = rendered[ex.NOT_VERIFIED_FILE]
     assert text.index("## As the manager saw it") < text.index(
-        "## In the shipped layout"
+        "## In the manager's layout"
     )
-    shipped = text.split("## In the shipped layout")[1]
+    shipped = text.split("## In the manager's layout")[1]
     assert "```text\nNOT VERIFIED, DO NOT ACT" in shipped
     assert (
         "What to do: this brief cannot be approved. Check the released "
@@ -175,6 +196,12 @@ def test_the_not_verified_example_in_the_shipped_layout_sets_no_action(
     )
     assert "What to do, if you approve" not in shipped
     assert "after the ratings" in shipped
+    head, _, detail = shipped.partition("\nThe detail\n")
+    assert "Other points" not in head
+    assert (
+        "The refused draft's points (not checked; do not act on them):"
+        in detail
+    )
 
 
 def test_no_example_names_the_approver_by_initials(rendered):

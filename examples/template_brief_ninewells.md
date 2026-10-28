@@ -1,6 +1,6 @@
 # The template brief a new run writes for Ninewells Hospital, w/e 13 Jun 2021
 
-Under config.json's rule a flag week's brief is the template brief, filled by code from the tools as of the origin, and it goes to the approval queue like any brief. It is version 3, the shipped default: the manager's layout, which came after the ratings. In the recorded run the agent wrote this week's brief, and the checks refused it (`not_verified_brief_ninewells.md`). Rendered from the recorded frontier set, round2, the set the approver chose, and the code, with no model call: `python -m ae_escalation.examples`.
+Under config.json's rule a flag week's brief is the template brief, filled by code from the tools as of the origin, and it goes to the approval queue like any brief. It is version 3, the shipped default, in the manager's layout, which came after the ratings. In the recorded run the agent wrote this week's brief, and the checks refused it (`not_verified_brief_ninewells.md`). Rendered by the code, with no model call: `python -m ae_escalation.examples`.
 
 | | |
 |---|---|
@@ -12,7 +12,7 @@ Under config.json's rule a flag week's brief is the template brief, filled by co
 | Written by | the template brief, version 3, filled by code with no model call |
 | Status | verified |
 
-The code check: 96 figures checked against the tool calls they came from, none wrong; every line it prints held to the line those calls give, none off; the level is the rule's. State in the queue: awaiting decision.
+The code check found all 98 figures match the tool calls they came from. Every printed line matches what those calls give, and the level is the rule's. State in the queue: awaiting decision.
 
 ## As queued
 
@@ -23,9 +23,10 @@ Ninewells Hospital, week ending 13 Jun 2021 (figures released Tue 22 Jun 2021)
 
 At a glance
 - Level 2 of 4: demand may be higher than usual for the time of year from w/e 27 Jun 2021 to w/e 18 Jul 2021. The level does not measure pressure, need or priority.
-- Why: at least one of the next four weeks may run 5% or more above this hospital's high-week mark for the time of year. That mark is the level 9 weeks in 10 stayed under at this time of year over the last three years.
-- Expected attendances: about 810 to 1,120 a week over those four weeks.
-- The forecasts: the four methods' central figures are within 39% of each other.
+- Why: at least one of the next four weeks may run 5% or more above this hospital's high-week mark for the time of year. That mark is the weekly count 9 weeks in 10 stayed under at this time of year over the last three years.
+- Records show: the latest week, w/e 13 Jun 2021, had 1,194 attendances. A high week here at this time of year is about 1,060 a week.
+- Expected attendances: the forecasts centre on about 810 to 1,120 a week; 8 weeks in 10 should fall between about 530 and 1,420.
+- The forecasts: the four methods' central figures differ by up to 28.0% in any one week.
 - How accurate they have been: on past weeks these forecasts were out by 11.5% to 24.5% on average, for the first of the four weeks.
 - Past flags here: this hospital has no past flags to judge.
 - No warning that the forecasts have stopped matching recent weeks.
