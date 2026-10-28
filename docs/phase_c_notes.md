@@ -554,9 +554,13 @@ study. Two change what a code cell prints; the rest change words only.
       how accurate they have been for the first of the four weeks, the past flags here and whether
       a warning is on, in plain words. "What to do, if you approve" follows, with the staffing
       actions code sets for the level, each with its owner and its task dated to the four weeks
-      ahead, the same text and owner the coordinator's plan uses. The detail, the forecast and
-      error tables, comes last. The top two blocks keep off "release horizon", "simulated
+      ahead, the same text and owner the coordinator's plan uses. The detail comes last: the
+      forecast and error tables, then version 2's track record sentence, so version 3 states
+      every fact version 2 did. The top two blocks keep off "release horizon", "simulated
       capacity", "MAPE", "latch", "drift" and "back-test". The watch line is gone.
+    - A brief that can never be approved, marked "not verified, do not act" or holding an edit
+      that failed its checks, lists no action: its heading reads "What to do: this brief cannot
+      be approved. Check the released weeks yourself before changing staffing."
     - The high-week mark is simulated capacity in plain words: the level 9 weeks in 10 stayed
       under at this time of year over the last three years, since capacity is the 90th percentile
       of those weeks, not a middle value. "Turned out high" is the code's busy, a week 5% or more
@@ -576,10 +580,10 @@ study. Two change what a code cell prints; the rest change words only.
       prompt that asks for watch points in plainer words, recorded afresh.
     - Figure 5, `figures/fig9_sample_brief.png`, now draws the current brief: the version 3
       template brief the shipped code queues for the Royal Infirmary of Edinburgh's flag week, w/e
-      23 Aug 2026, the latest unlatched flag in the data, with 98 figures and every line checked.
+      23 Aug 2026, the latest unlatched flag in the data, with 99 figures and every line checked.
       `examples/current_brief_edinburgh.md` holds it with what followed, worked out from the
       frame's busy1 to busy4: w/e 20 Sep 2026 turned busy and the other three weeks did not. The
-      figure draws every line, its tables whole, at 8 pt and 16.5 cm wide, 20.4 cm tall.
+      figure draws every line, its tables whole, at 8 pt and 16.5 cm wide, 20.7 cm tall.
     - The notebook says the same: section 5's markdown describes the manager's layout and section
       7's says the rule now sends version 3; limitation 6 is reworded and limitation 19 added. The
       cells whose output it changed were re-run: the fields code sets now name `glance`, section

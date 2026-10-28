@@ -221,7 +221,8 @@ why, the attendances to expect, how far the forecasting methods differ, how accu
 past flags here and whether a warning is on, in plain words. "What to do, if you approve" follows, with
 the staffing actions code sets for the level, each with its owner and dated weeks, the same the
 notifications carry; then any points the Investigator wrote; then the detail. Code writes every line of
-the top two blocks from the brief's facts and tool results. This manager's layout came after the
+the top two blocks from the brief's facts and tool results. A brief marked "not verified, do not act" can
+never be approved, so it lists no action and says to check the released weeks. This manager's layout came after the
 ratings: the raters, Reader B and the approver read the earlier, rated layout, which the recorded sheets
 and every recorded prompt keep, and testing the new layout is a pilot step (section 14). The current
 brief, `examples/current_brief_edinburgh.md`, is the template brief the shipped code queues for the

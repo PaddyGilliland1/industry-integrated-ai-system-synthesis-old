@@ -35,7 +35,8 @@
   past flags here and whether a warning is on, in plain words. "What to do, if you approve" follows,
   with the staffing actions code sets for the level, each with its owner and dated weeks, the same the
   notifications carry; then any points the agent wrote; then the detail. Code writes every line of the
-  top two blocks from the brief's facts and tool results. This manager's layout came after the
+  top two blocks from the brief's facts and tool results. A brief marked "not verified, do not act" can
+  never be approved, so it lists no action and says to check the released weeks. This manager's layout came after the
   ratings: the raters, Reader B and the approver read the earlier, rated layout, which the recorded
   sheets, the raters' view and every recorded prompt keep. Testing the new layout with managers is a
   pilot step, and so is asking the Investigator for watch points in plainer words, since a new prompt
