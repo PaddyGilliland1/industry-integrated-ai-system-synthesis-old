@@ -39,10 +39,10 @@ def test_the_examples_readme_gives_one_line_to_each_file(rendered):
     # The current brief is listed first, and it is Figure 5.
     assert lines[0].split("`")[1] == ex.CURRENT_FILE
     readme = rendered["README.md"]
-    assert "Figure 5 of the paper, `figures/fig9_sample_brief.png`, is " in (
-        readme
+    assert (
+        "Figure 5 of the paper, `figures/fig9_sample_brief.png`, draws the "
+        "top of the current brief" in readme
     )
-    assert "the current brief" in readme
 
 
 def test_the_examples_come_from_the_set_the_approver_chose():
@@ -104,6 +104,10 @@ def test_the_current_brief_is_edinburghs_latest_unlatched_flag(rendered):
         "came from, none wrong" in text
     )
     assert "\nAt a glance\n" in text and "What to do, if you approve" in text
+    assert (
+        "Figure 5 of the paper draws its heading, At a glance and What to do"
+        in text
+    )
 
 
 def test_what_followed_is_worked_out_from_the_busy_columns(replay_run):
@@ -186,55 +190,42 @@ def test_the_sample_brief_figure_prints_its_text_at_8_pt_or_more():
     assert (REPO / "figures" / "fig9_sample_brief.png").exists()
 
 
-def test_the_sample_brief_figure_fits_the_apa_kits_height(replay_run):
-    lines = ex.fig9_lines(ex.current_brief_text(replay_run))
-    assert ex.fig9_height_in(lines) <= 8.2
+DETAIL_LINE = (
+    "The detail follows: each forecast with its ranges, past forecast errors "
+    "and the track record (examples/current_brief_edinburgh.md)."
+)
 
 
-def test_the_sample_brief_figure_draws_every_line_tables_and_all(
-    rendered, replay_run
+def test_the_sample_brief_figure_draws_the_top_of_the_current_brief(
+    replay_run,
 ):
-    # Nothing is trimmed: every figure in the tables is drawn, and no line
-    # runs past the figure's width.
+    # The paper's figure shows what a manager reads at a glance: the
+    # heading, At a glance and What to do, then a line saying where the
+    # detail is. The full brief is in the examples file.
     text = ex.current_brief_text(replay_run)
-    lines = ex.fig9_lines(text)
+    drawn = ex.fig9_text(text)
+    top = text.split("\nThe detail\n")[0].rstrip("\n")
+    assert drawn == f"{top}\n\n{DETAIL_LINE}"
+    assert "\nAt a glance\n" in drawn and "What to do, if you approve" in drawn
+    assert "|" not in drawn and "Release horizon" not in drawn
+
+
+def test_the_sample_brief_figure_draws_every_line_it_is_given(replay_run):
+    drawn = ex.fig9_text(ex.current_brief_text(replay_run))
+    lines = ex.fig9_lines(drawn)
     assert all(len(x) <= ex.FIG9_CHARS for x in lines)
-    drawn = "\n".join(lines)
-    for row in (x for x in text.splitlines() if x.startswith("|")):
-        for cell in row.strip("|").split("|"):
-            if cell.strip() and set(cell.strip()) != {"-"}:
-                assert cell.strip() in drawn, cell
-    for x in text.splitlines():
-        if not x.startswith("|"):
-            assert " ".join(x.split()) in " ".join(drawn.split())
+    assert " ".join(" ".join(lines).split()) == " ".join(drawn.split())
 
 
-def test_a_table_too_wide_for_the_figure_is_drawn_a_column_at_a_time():
-    table = [
-        "| Model | Week one | Week two |",
-        "|---|---|---|",
-        "| linear | " + "a" * 60 + " | " + "b" * 60 + " |",
-    ]
-    lines = ex.fig9_table(table)
-    assert lines == [
-        "Week one:",
-        "  linear  " + "a" * 60,
-        "Week two:",
-        "  linear  " + "b" * 60,
-    ]
-
-
-def test_a_table_that_fits_is_drawn_in_columns_its_headings_wrapped():
-    table = [
-        "| Model | Release horizon 1 |",
-        "|---|---|",
-        "| linear | 2.9% |",
-    ]
-    assert ex.fig9_table(table) == [
-        "        Release",
-        "Model   horizon 1",
-        "linear  2.9%",
-    ]
+def test_the_sample_brief_figure_prints_at_full_size_in_the_paper(
+    replay_run,
+):
+    # The paper's kit sets a full-width figure 6.5 in wide and holds it to
+    # 8.2 in less a double-spaced line, 28 pt, for each line its note wraps
+    # to. Under that cap with a five-line note, it is never scaled down, so
+    # its text prints at the size it is set.
+    lines = ex.fig9_lines(ex.fig9_text(ex.current_brief_text(replay_run)))
+    assert ex.fig9_height_in(lines) <= 8.2 - 5 * 28 / 72
 
 
 def test_the_current_brief_is_what_the_figure_draws(replay_run):

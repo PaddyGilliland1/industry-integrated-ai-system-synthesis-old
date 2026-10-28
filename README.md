@@ -118,8 +118,9 @@ Python 3.12.3.
 **Examples.** `examples/` shows five outputs as a reader meets them, each rendered from the
 recorded set and the code with no model call. The first is the current brief: the version 3 template
 brief the shipped code queues for the Royal Infirmary of Edinburgh's flag week, w/e 23 Aug 2026, the
-latest unlatched flag in the data, with what followed; Figure 5 of the paper draws it. Then
-Edinburgh's surge brief as the approver saw it and as approved with the edit, in the rated layout,
+latest unlatched flag in the data, with what followed; Figure 5 of the paper draws its heading, At a
+glance and What to do. Then Edinburgh's surge brief as the approver saw it and as approved with the
+edit, in the rated layout,
 and the approved brief in the manager's layout; the template brief a new run queues for Ninewells'
 demand week; Edinburgh's notifications and escalation; and a brief marked "not verified, do not act".
 `examples/README.md` lists them, and `python -m ae_escalation.examples` writes them again.

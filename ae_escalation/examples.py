@@ -8,7 +8,8 @@ which is Figure 5 of the paper:
 
 - the current brief: the version 3 template brief the shipped code queues
   for the Royal Infirmary of Edinburgh's flag week, w/e 23 Aug 2026, the
-  latest unlatched flag in the data, with what followed; Figure 5 draws it;
+  latest unlatched flag in the data, with what followed; Figure 5 draws its
+  heading, At a glance and What to do;
 - the Royal Infirmary of Edinburgh's surge brief as the approver saw it,
   then as approved with the edit, both in the rated layout, then the
   approved brief in the manager's layout the code now ships;
@@ -62,17 +63,21 @@ NOT_VERIFIED_FILE = "not_verified_brief_ninewells.md"
 COMMAND = "`python -m ae_escalation.examples`"
 
 # The sample brief figure is drawn at the paper's column width, 16.5 cm,
-# so its text prints at the size it is set. Nothing is trimmed: the brief's
-# tables are drawn whole, so the figure is as tall as the brief needs. At 8
-# pt and this leading the current brief's 56 lines come under the APA kit's
-# 8.2 inch cap on a figure's height.
+# so its text prints at the size it is set. It shows what a manager reads at
+# a glance, the brief down to What to do, and says where the detail is: the
+# whole brief, its tables included, is too tall for the paper's kit to print
+# at full size beside a note.
 FIG9_WIDTH_IN = 16.5 / 2.54
 FIG9_FONT_PT = 8
-FIG9_LEADING = 1.25
+FIG9_LEADING = 1.3
 FIG9_PAD_IN = 0.18
 FIG9_CHARS = 88
+FIG9_DETAIL_LINE = (
+    "The detail follows: each forecast with its ranges, past forecast errors "
+    f"and the track record (examples/{CURRENT_FILE})."
+)
 # The block headings of the manager's layout, drawn bold like the heading.
-FIG9_HEADINGS = ("At a glance", "What to do, if you approve", "The detail")
+FIG9_HEADINGS = ("At a glance", "What to do, if you approve")
 
 
 def _block(text):
@@ -292,7 +297,8 @@ def current_example(run, holidays, settings):
         "2026, as the shipped code queues it: config.json's rule gives a flag "
         "week's brief to the template, and the shipped default is version 3, "
         "the manager's layout. Code fills it from the tools as of the origin, "
-        f"with no model call: {COMMAND}. Figure 5 of the paper draws it. The "
+        f"with no model call: {COMMAND}. Figure 5 of the paper draws its "
+        "heading, At a glance and What to do. The "
         "manager's layout came after the ratings: the raters read the rated "
         "layout, and testing this one is a pilot step.",
         "",
@@ -437,8 +443,9 @@ def readme():
         f"Each file is rendered from the recorded {BACKEND} set, {LABEL}, "
         f"the set the approver chose, and the code, with no model call. "
         f"{COMMAND} writes them again, and a test checks that they match. "
-        "Figure 5 of the paper, `figures/fig9_sample_brief.png`, is the "
-        "current brief, the first file's. Briefs open in the manager's "
+        "Figure 5 of the paper, `figures/fig9_sample_brief.png`, draws the "
+        "top of the current brief, the first file's: its heading, At a "
+        "glance and What to do. Briefs open in the manager's "
         "layout, which came after the ratings: the raters and the approver "
         "read the rated layout, and testing the new one is a pilot step.",
         "",
@@ -493,7 +500,7 @@ def _render():
 
 
 def current_brief_text(run, holidays=None, settings=None):
-    """The current brief as the queue's sheet shows it: what Figure 5
+    """The current brief as the queue's sheet shows it, whose top Figure 5
     draws."""
     settings = settings or load_config(CONFIG_PATH)
     if holidays is None:
@@ -507,69 +514,22 @@ def render_examples():
     return _render()[0]
 
 
-def _cells(row):
-    """A Markdown table row's cells."""
-    return [c.strip() for c in row.strip().strip("|").split("|")]
-
-
-def fig9_table(rows, width=FIG9_CHARS):
-    """A Markdown table as the sample brief figure draws it, in columns
-    that fit its width: each heading wrapped over two lines if it needs
-    them, and each column as wide as its widest cell. A table too wide for
-    that is drawn a column at a time, each row's name beside its value, so
-    no cell is cut or broken."""
-    head, body = _cells(rows[0]), [_cells(r) for r in rows[2:]]
-    widths = [
-        max(
-            max(len(r[i]) for r in body),
-            math.ceil(len(head[i]) / 2) if i else len(head[i]),
-            max(len(w) for w in head[i].split()),
-        )
-        for i in range(len(head))
-    ]
-    gap = "  "
-    if sum(widths) + len(gap) * (len(widths) - 1) > width:
-        name = max(len(r[0]) for r in body)
-        out = []
-        for i in range(1, len(head)):
-            out.append(f"{head[i]}:")
-            out += [f"  {r[0].ljust(name)}{gap}{r[i]}" for r in body]
-        return out
-    wrapped = [textwrap.wrap(h, w) for h, w in zip(head, widths)]
-    depth = max(len(h) for h in wrapped)
-    # Headings sit on the row above the cells, as a printed table's do.
-    wrapped = [[""] * (depth - len(h)) + h for h in wrapped]
-
-    def line(cells):
-        """One row of cells, each padded to its column."""
-        return gap.join(c.ljust(w) for c, w in zip(cells, widths)).rstrip()
-
-    return [line([h[d] for h in wrapped]) for d in range(depth)] + [
-        line(r) for r in body
-    ]
+def fig9_text(text):
+    """What the sample brief figure draws of a brief: its heading, At a
+    glance and What to do, then the line saying where the detail is."""
+    top = text.split("\nThe detail\n")[0].rstrip("\n")
+    return f"{top}\n\n{FIG9_DETAIL_LINE}"
 
 
 def fig9_lines(text):
-    """The brief's lines as the sample brief figure draws them: each line
-    wrapped to the figure's width, a bullet's run-on under its words, and
-    each table drawn by fig9_table. Nothing is left out."""
-    lines, table = [], []
-
-    def flush():
-        """Draw the table collected so far, if any."""
-        if table:
-            lines.extend(fig9_table(table))
-            table.clear()
-
+    """The text's lines as the sample brief figure draws them, each wrapped
+    to the figure's width, a bullet's run-on under its words. Nothing is
+    left out."""
+    lines = []
     for line in text.splitlines():
-        if line.startswith("|"):
-            table.append(line)
-            continue
-        flush()
         lines += textwrap.wrap(line, FIG9_CHARS, subsequent_indent="  ") or [
             ""
         ]
-    flush()
     return lines
 
 
@@ -579,10 +539,10 @@ def fig9_height_in(lines):
 
 
 def draw_fig9(text, path):
-    """Draw the current brief as the sample brief figure, Figure 5 of the
-    paper: its text in a plain frame, at the paper's column width, with no
-    title, since the paper's caption is its title. The heading and the
-    block headings are bold. Return the figure's height in inches."""
+    """Draw text, the top of the current brief, as the sample brief figure,
+    Figure 5 of the paper: in a plain frame, at the paper's column width,
+    with no title, since the paper's caption is its title. The heading and
+    the block headings are bold. Return the figure's height in inches."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -630,7 +590,10 @@ def write_examples(folder=REPO / "examples", figure=None):
     folder.mkdir(parents=True, exist_ok=True)
     for name, text in texts.items():
         (folder / name).write_text(text, encoding="utf-8")
-    draw_fig9(current, figure or REPO / "figures" / "fig9_sample_brief.png")
+    draw_fig9(
+        fig9_text(current),
+        figure or REPO / "figures" / "fig9_sample_brief.png",
+    )
     return sorted(texts)
 
 

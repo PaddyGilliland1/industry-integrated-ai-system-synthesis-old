@@ -1,6 +1,6 @@
 # The current brief: the Royal Infirmary of Edinburgh, w/e 23 Aug 2026
 
-The latest unlatched flag in the data, which runs to w/e 11 Oct 2026, as the shipped code queues it: config.json's rule gives a flag week's brief to the template, and the shipped default is version 3, the manager's layout. Code fills it from the tools as of the origin, with no model call: `python -m ae_escalation.examples`. Figure 5 of the paper draws it. The manager's layout came after the ratings: the raters read the rated layout, and testing this one is a pilot step.
+The latest unlatched flag in the data, which runs to w/e 11 Oct 2026, as the shipped code queues it: config.json's rule gives a flag week's brief to the template, and the shipped default is version 3, the manager's layout. Code fills it from the tools as of the origin, with no model call: `python -m ae_escalation.examples`. Figure 5 of the paper draws its heading, At a glance and What to do. The manager's layout came after the ratings: the raters read the rated layout, and testing this one is a pilot step.
 
 | | |
 |---|---|
