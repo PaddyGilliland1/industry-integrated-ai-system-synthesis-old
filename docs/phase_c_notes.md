@@ -580,3 +580,9 @@ study. Two change what a code cell prints; the rest change words only.
       `examples/current_brief_edinburgh.md` holds it with what followed, worked out from the
       frame's busy1 to busy4: w/e 20 Sep 2026 turned busy and the other three weeks did not. The
       figure draws every line, its tables whole, at 8 pt and 16.5 cm wide, 20.4 cm tall.
+    - The notebook says the same: section 5's markdown describes the manager's layout and section
+      7's says the rule now sends version 3; limitation 6 is reworded and limitation 19 added. The
+      cells whose output it changed were re-run: the fields code sets now name `glance`, section
+      5's briefs are shown in the manager's layout, and section 7's template briefs are version
+      3. The safeguards cell's output is unchanged, and the notebook was then run whole in a fresh
+      kernel.
