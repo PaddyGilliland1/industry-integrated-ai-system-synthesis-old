@@ -218,8 +218,8 @@ weekly flow, in nine steps:
    reaching 1.05 times its simulated capacity, and flags an outlook when one week's chance is at
    least 50%. The drift alarm fires when actuals fall outside the drift interval two weeks running,
    and sets the drift latch.
-4. **Screen.** Code sends on only a hospital that is flagged, or latched, which covers a surge or
-   held level of 2 or more. Nothing else reaches the agents.
+4. **Screen.** Code sends on only a hospital that is flagged, or latched at any level: a surge, or a
+   level held from the week before the alarm. Nothing else reaches the agents.
 5. **Investigator.** It drafts the demand brief through five read-only tools: forecast, history,
    back-test error, track record and calendar. Code writes every figure with its label, and the
    level is the rule's.

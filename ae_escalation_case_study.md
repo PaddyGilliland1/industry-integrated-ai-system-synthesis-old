@@ -138,8 +138,8 @@ Each arrow carries only its number, which is its row in the interaction table in
    reaching 1.05 times its simulated capacity, and flags an outlook when one week's chance is at least
    50%. The drift alarm fires when actuals fall outside the drift interval two released weeks running, and
    sets the drift latch.
-4. **Screen.** Code sends on only a hospital that is flagged, or latched, which covers a surge or held
-   level of 2 or more. Nothing else reaches the agents.
+4. **Screen.** Code sends on only a hospital that is flagged, or latched at any level: a surge, or a
+   level held from the week before the alarm. Nothing else reaches the agents.
 5. **Investigator.** It drafts the demand brief through five read-only tools: forecast, history,
    back-test error, track record and calendar. Code writes every figure with a label saying what it is,
    and the level is always the rule's.
@@ -339,7 +339,7 @@ and a model that cannot be pinned the same way.
 | 4 | A missed busy week: the flag caught 21.0% of busy outlooks in the steady years, and the mean steady year left 85.5 of 142.5 busy hospital-weeks with no notice | No extra notice of an unusual week, so staffing rests on the existing process alone | The range and the hospital's own error on every brief; recall and notice reported; learning what planners use (section 14) | Unscheduled-care lead |
 | 5 | Bias by hospital size: seasonal naive's median error is 11.0% at sites under 300 attendances a week and 5.4% at 1,300 and over. The raised share varies more by site than by size: the most raised, the Royal Hospital for Children at 35.7% of its outlooks, and Glasgow Royal Infirmary, raised in none, are both in the largest band, 1,300 attendances a week and over | Attention spread unevenly, by noise at small sites and not by need | Each brief shows its own site's error and track record; the level is never read as need or priority; the level reported by site | Unscheduled-care lead |
 | 6 | Misuse as a league table, a case for cuts, or 4-hour monitoring | Harm to the hospitals the size bias already burdens | The level's meaning on every brief; the stated purpose in the README, the notebook and this case study | Unscheduled-care lead |
-| 7 | Classification as a medical device (Medicines and Healthcare products Regulatory Agency, 2023) | Regulatory duties the design does not meet | Aggregate planning only; a code screen for the MHRA's indicative words; status as additional information; my reading kept as an open risk | Clinical safety reviewer |
+| 7 | Classification as a medical device (Medicines and Healthcare products Regulatory Agency, 2023) | Regulatory duties the design does not meet | Aggregate planning only: the tool informs staffing and no patient's care, so on my reading of the MHRA guidance it is not a medical device; the Reviewer's code screen for the MHRA's indicative words stays; status as additional information | Clinical safety reviewer |
 | 8 | An invented or misattached figure | A manager misled by a wrong number or date beside their usual information | The code figure check on every brief, edit and notification; a "not verified" brief never approved; a planted figure caught in the test | Analytics lead (the check); duty manager (approval) |
 | 9 | Automation bias (Goddard et al., 2012) | A manager approves without reading, or weighs a brief above their usual information | Ranges, disagreement and the track record shown; six approval criteria; a second reader in the evaluation | Duty manager |
 | 10 | In-sample design tuning | Figures better than a new period would give | The notebook re-measures every figure; shadow mode on new releases before any go-live | Analytics lead |
@@ -576,8 +576,9 @@ it and the next step. In short:
    that trial is next;
 5. explaining a demand week overreached; the checks stopped both briefs, in new runs the template writes
    those weeks, and a trend must cite the weeks it rests on;
-6. the rated drift line claimed the forecasts fit recent weeks on the drift rule alone; the shipped
-   template and new runs now use the raters' wording, and the comparison stays on the rated version;
+6. the rated drift line claimed the forecasts fit recent weeks on the drift rule alone; version 2 of the
+   template and the Investigator's prompt in new runs use the raters' wording, version 3 says only that
+   no warning is on, and the comparison stays on the rated version;
 7. neither template pair is blind to Reader B; a blind comparison on new weeks is the next step;
 8. the template comes first in both pairs; a new comparison draws the order for each week;
 9. a level-2 action holds leave while the forecasts are untrusted; the approved edits removed two
