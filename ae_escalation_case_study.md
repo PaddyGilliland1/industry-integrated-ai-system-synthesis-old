@@ -207,13 +207,25 @@ screen to the Investigator.
 | 16 | Assign, notify, track, escalate | Audit log and replay | The actions, owners, outbox notifications and acknowledgements |
 
 **Who writes a brief's explanation.** In a new live run, `live briefs`, a flag week's brief is the
-template brief at version 2, filled by code with no model call, and a drift or surge week's, which is
+template brief at version 3, filled by code with no model call, and a drift or surge week's, which is
 latched, is the Investigator's. This is the rule set before the template comparison's ratings, which the
 demand-week result triggered (section 13). The designed failure still goes to the Investigator. Each
 label records which way it ran, so the recorded runs, where the Investigator wrote every brief, replay as
 they ran. A template brief goes to the same approval queue: code checks every figure it prints against the tool
 call it came from, the duty manager approves, edits or rejects it, an edit is checked again, and only an
 approved brief sets actions (`examples/template_brief_ninewells.md`).
+
+**What a brief opens with.** The duty manager is not a statistician, so every brief on the approval
+queue's sheet, the template's version 3 and the Investigator's alike, opens "At a glance": the level,
+why, the attendances to expect, how far the forecasting methods differ, how accurate they have been, the
+past flags here and whether a warning is on, in plain words. "What to do, if you approve" follows, with
+the staffing actions code sets for the level, each with its owner and dated weeks, the same the
+notifications carry; then any points the Investigator wrote; then the detail. Code writes every line of
+the top two blocks from the brief's facts and tool results. This manager's layout came after the
+ratings: the raters, Reader B and the approver read the earlier, rated layout, which the recorded sheets
+and every recorded prompt keep, and testing the new layout is a pilot step (section 14). The current
+brief, `examples/current_brief_edinburgh.md`, is the template brief the shipped code queues for the
+Royal Infirmary of Edinburgh's flag week, w/e 23 Aug 2026, the latest unlatched flag in the data.
 
 ## 4. Assumptions
 
@@ -520,9 +532,9 @@ week it does not, for both raters. That text is the refused demand-week brief. B
 not correct because it is marked not verified, though its figures had passed the code check. They also
 marked its uncertainty not stated, and a factual error in its claims that recent weeks were rising and
 the forecasts fit them. Both also marked a factual error in the template's drift line, the line code gave
-the Investigator too. The shipped template, version 2, and new runs now use the raters' own wording, "No
-drift alarm is recorded; this alone does not establish forecast fit.", and the comparison stays on the
-rated version 1.
+the Investigator too. Version 2 of the template and new runs use the raters' own wording, "No drift
+alarm is recorded; this alone does not establish forecast fit."; the shipped template, version 3, says
+in plain words only that no warning is on, and the comparison stays on the rated version 1.
 
 The comparison failed in the demand week, whose brief the checks had already stopped, so no manager
 could approve it. A rule set before any rating then applies. The template writes the brief's
@@ -547,7 +559,7 @@ writes those weeks. The local backend: no brief verified in either round. Round 
 out blind, a fault in my code that calls the model, fixed before round 2, and its budget stopped it after 3 of 7; round 2's drafts all
 reached the output cap, and thinking turned off is the untried next step.
 
-**Limits.** The notebook's section 9 sets out eighteen limitations, each with its evidence, what held
+**Limits.** The notebook's section 9 sets out nineteen limitations, each with its evidence, what held
 it and the next step. In short:
 
 1. the track-record line drops the unflagged busy share when a hospital has no past flag; the next step
@@ -581,7 +593,10 @@ it and the next step. In short:
     and horizon comes before any threshold moves;
 18. the adequacy test assumed the agent writes every brief; under the template rule it writes fewer,
     so the 6 of 7 threshold needs restating, for example as all but one of the agent's briefs, before
-    the next live run.
+    the next live run;
+19. the manager's layout, which opens every brief with what to do and why in plain words, came after
+    the ratings; no rater read it, and the Investigator's watch points stay as recorded, since a new
+    prompt would break the replay hashes. Testing both is a pilot step.
 
 Every figure here is in-sample.
 
@@ -599,7 +614,9 @@ they are the path from that additional information to a primary operational tool
    model-disagreement ground also needs a threshold.
 2. **A pilot that measures throughput**, link 5 of the value chain, with managers who did not build the
    system, and bands set per hospital for fairness. Within the pilot, the managers' feedback includes
-   learning what planners use.
+   learning what planners use, and testing the manager's layout, which came after the ratings, with
+   them, along with an Investigator prompt that asks for watch points in plainer words, recorded
+   afresh.
 
     **Learn what planners use.** Ask the duty managers what they weigh beyond the tool, and measure
     which factors would have explained past busy weeks. Then route each one:

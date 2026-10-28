@@ -25,9 +25,21 @@
   approval queue like the agent's: code checks every figure it prints, the duty manager approves,
   edits or rejects it, an edit is checked again, and only an approved brief sets actions. The rule's model-disagreement ground has no threshold set
   before the ratings, so no week is kept for the agent on that ground; defining one is a next step.
-  The template sent is version 2: where no drift alarm has fired, it says "No drift alarm is
-  recorded; this alone does not establish forecast fit.", the raters' own wording for the rated
-  line they marked a factual error. The comparison stays on the rated version 1.
+  The template sent is version 3, the manager's layout below. Version 2, the rated order with the
+  raters' own drift wording, "No drift alarm is recorded; this alone does not establish forecast
+  fit.", for the rated line they marked a factual error, stays readable. The comparison stays on the
+  rated version 1.
+- **What a brief opens with:** the duty manager is not a statistician, so every brief on the approval
+  queue's sheet, the template's version 3 and the agent's alike, opens "At a glance": the level, why,
+  the attendances to expect, how far the forecasting methods differ, how accurate they have been, the
+  past flags here and whether a warning is on, in plain words. "What to do, if you approve" follows,
+  with the staffing actions code sets for the level, each with its owner and dated weeks, the same the
+  notifications carry; then any points the agent wrote; then the detail. Code writes every line of the
+  top two blocks from the brief's facts and tool results. This manager's layout came after the
+  ratings: the raters, Reader B and the approver read the earlier, rated layout, which the recorded
+  sheets, the raters' view and every recorded prompt keep. Testing the new layout with managers is a
+  pilot step, and so is asking the Investigator for watch points in plainer words, since a new prompt
+  would break the recordings' replay hashes.
 - **Who decides:** a duty manager approves, edits or rejects each brief. Code sets the staffing
   actions for an approved brief, and the language model drafts each notification, which code checks
   before writing it to an outbox file, never sent.
@@ -102,11 +114,14 @@ Python 3.12.3.
    python -m pytest
    ```
 
-**Examples.** `examples/` shows four outputs as a reader meets them, each rendered from the
-recorded set and the code with no model call. They are Edinburgh's surge brief as the approver saw it
-and as approved with the edit, the template brief a new run queues for Ninewells' demand week, Edinburgh's
-notifications and escalation, and a brief marked "not verified, do not act". `examples/README.md`
-lists them, and `python -m ae_escalation.examples` writes them again.
+**Examples.** `examples/` shows five outputs as a reader meets them, each rendered from the
+recorded set and the code with no model call. The first is the current brief: the version 3 template
+brief the shipped code queues for the Royal Infirmary of Edinburgh's flag week, w/e 23 Aug 2026, the
+latest unlatched flag in the data, with what followed; Figure 5 of the paper draws it. Then
+Edinburgh's surge brief as the approver saw it and as approved with the edit, in the rated layout,
+and the approved brief in the manager's layout; the template brief a new run queues for Ninewells'
+demand week; Edinburgh's notifications and escalation; and a brief marked "not verified, do not act".
+`examples/README.md` lists them, and `python -m ae_escalation.examples` writes them again.
 
 **The model backend.** `config.json` sets `llm_backend` to `"frontier"`, because the frontier set is
 the one approved, and the recordings make the notebook reproducible on either setting: the replay
@@ -141,7 +156,7 @@ It holds no key, token or password.
 |---|---|
 | `llm_backend` | The model backend: `frontier`, as shipped, or `local` |
 | `explanation` | Who writes a brief's explanation: `template_by_default`, as shipped, the template in flag weeks and the agent in latched weeks, or `agent` in every week |
-| `template_version` | The template brief live briefs get: 2, as shipped, with the raters' drift line, or 1, as rated |
+| `template_version` | The template brief live briefs get: 3, as shipped, the manager's layout, built after the ratings; 2, the rated order with the raters' drift line; or 1, as rated |
 | `local.model` | The local model's name in Ollama, `nemotron-3.5-lightning:30b-a3b` |
 | `local.digest` | The digest Ollama lists for that model, so a run traces to the exact weights |
 | `local.temperature` | The local model's temperature, 0 |
@@ -230,7 +245,7 @@ use them, and the notebook as the table shows.
 | `fig2_value_chain.png` | 2 | 2 | 1 |
 | `fig3_weekly_cycle.png` | 3 | 3 | 4 |
 | `fig4_month_chart.png` | 4 | 4 | 2 |
-| `fig9_sample_brief.png` | 5 | none; its brief is in `examples/surge_brief_edinburgh.md` | none |
+| `fig9_sample_brief.png` | 5 | none; its brief, the current one, is in `examples/current_brief_edinburgh.md` | none |
 | `fig5_goals_scorecard.png` | 6 | 5 | 5 |
 | `fig6_flag_outcomes.png` | 7 | 6 | 6 |
 | `fig7_template_comparison.png` | 8 | 7 | 7 |
