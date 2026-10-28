@@ -550,10 +550,10 @@ study. Two change what a code cell prints; the rest change words only.
     latched surge brief of w/e 06 Oct 2019, the fallback to released actuals rather than a normal
     week. Both layouts led with evidence and ended with one generic watch line. The reader is a
     duty manager, not a statistician.
-    - Template version 3, the shipped default, is in the manager's layout. It opens "At a glance":
-      the level, why, what the records show, the attendances to expect and the span 8 weeks in 10
-      should fall in, how far the methods' forecasts differ, how accurate they have been, the
-      past flags here and whether a warning is on.
+    - Template version 3, the shipped default, is in the manager's layout. It opens "At a glance"
+      with the level, why and what the records show. Then come the attendances to expect and the
+      span 8 weeks in 10 should fall in, how far the methods' forecasts differ, how accurate they
+      have been, the past flags here and whether a warning is on.
     - "What to do, if you approve" follows, with the staffing actions code sets for the level.
       Each has its owner and its task dated to the four weeks ahead, the same text and owner the
       coordinator's plan uses. The detail comes last: the forecast and error tables, then version

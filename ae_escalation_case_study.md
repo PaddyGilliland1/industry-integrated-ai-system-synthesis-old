@@ -600,7 +600,7 @@ it and the next step. In short:
     so the 6 of 7 threshold needs restating, for example as all but one of the agent's briefs, before
     the next live run;
 19. the manager's layout, which opens every readable brief with what a duty manager needs at a glance
-    and what to do, came after the ratings; no rater read it, and the Investigator's watch points stay as recorded, since a new
+    and what to do, came after the ratings. No rater read it, and the Investigator's watch points stay as recorded, since a new
     prompt would break the replay hashes. Testing both is a pilot step.
 
 Every figure here is in-sample.
