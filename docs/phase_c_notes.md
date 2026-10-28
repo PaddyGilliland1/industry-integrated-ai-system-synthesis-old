@@ -546,50 +546,60 @@ study. Two change what a code cell prints; the rest change words only.
     notes, kept as written, and that their references to "the main session" and to `reviews/` paths
     point to the author's private working records. No notebook output changed.
 63. **Every brief opens with what a duty manager needs, and Figure 5 is the current brief.** Ruled
-    on 28 Oct 2026. Figure 5 showed the latched surge brief of w/e 06 Oct 2019, the fallback to
-    released actuals rather than a normal week, and both layouts led with evidence and ended with
-    one generic watch line. The reader is a duty manager, not a statistician.
-    - Template version 3, the shipped default, is the manager's layout. It opens "At a glance": the
-      level, why, the attendances to expect, how far the four methods' central forecasts differ,
-      how accurate they have been for the first of the four weeks, the past flags here and whether
-      a warning is on, in plain words. "What to do, if you approve" follows, with the staffing
-      actions code sets for the level, each with its owner and its task dated to the four weeks
-      ahead, the same text and owner the coordinator's plan uses. The detail comes last: the
-      forecast and error tables, then version 2's track record sentence, so version 3 states
-      every fact version 2 did. The top two blocks keep off "release horizon", "simulated
-      capacity", "MAPE", "latch", "drift" and "back-test". The watch line is gone.
-    - A brief that can never be approved, marked "not verified, do not act" or holding an edit
-      that failed its checks, lists no action: its heading reads "What to do: this brief cannot
-      be approved. Check the released weeks yourself before changing staffing."
-    - The high-week mark is simulated capacity in plain words: the level 9 weeks in 10 stayed
-      under at this time of year over the last three years, since capacity is the 90th percentile
-      of those weeks, not a middle value. "Turned out high" is the code's busy, a week 5% or more
-      above the mark. Where no drift alarm has fired, the line says only that no warning is on.
-    - The code check holds every line version 3 prints to the line its own tool calls give, so the
-      worked-out figures, the expected range rounded to 10 and the methods' spread, and each
-      action's dates are covered; a planted wrong date in an action line fails it. Versions 1 and
-      2 are unchanged, byte for byte, and checked as before.
-    - The approval queue's display and sheet show an agent's brief in the same layout, its top two
-      blocks written by code from the brief's facts, then the agent's points and its explanation
-      as written. The rated layout stays for the raters' view, Reader B's pack, the template
-      comparison, the approver's 26 Oct view in the examples, and the Reviewer's and the
-      coordinator's prompts, so every recording replays by the same request hash and
-      `recordings_manifest.tsv` is unchanged. The agent's watch points stay as recorded.
+    on 28 Oct 2026, then corrected the same day after a focused recheck. Figure 5 showed the
+    latched surge brief of w/e 06 Oct 2019, the fallback to released actuals rather than a normal
+    week. Both layouts led with evidence and ended with one generic watch line. The reader is a
+    duty manager, not a statistician.
+    - Template version 3, the shipped default, is in the manager's layout. It opens "At a glance":
+      the level, why, what the records show, the attendances to expect and the span 8 weeks in 10
+      should fall in, how far the methods' forecasts differ, how accurate they have been, the
+      past flags here and whether a warning is on.
+    - "What to do, if you approve" follows, with the staffing actions code sets for the level.
+      Each has its owner and its task dated to the four weeks ahead, the same text and owner the
+      coordinator's plan uses. The detail comes last: the forecast and error tables, then version
+      2's track record sentence, so version 3 states every figure version 2 did.
+    - The records line gives the latest released week's attendances and the high-week mark of the
+      weeks ahead, from a new code-only tool, `get_capacity`. The Investigator never has it, so no
+      recorded request changes. The expected line gives the span of the methods' central
+      forecasts and then the span of their 80% ranges, each rounded to 10.
+    - The spread line quotes the forecast tool's own spread at its widest week, the measure the
+      agent is given, so the top and the detail never disagree. It names no verdict.
+    - The top two blocks keep off "release horizon", "simulated capacity", "MAPE", "latch",
+      "drift" and "back-test", except that a latched brief's warning names the drift latch once.
+      The watch line is gone.
+    - The high-week mark is simulated capacity in plain words: the weekly count 9 weeks in 10
+      stayed under at this time of year over the last three years. Capacity is the 90th
+      percentile of those weeks, not a middle value. "Turned out high" is the code's busy, a week
+      5% or more above the mark. Where no drift alarm has fired, the line says only that no
+      warning is on.
+    - The code check holds every line version 3 prints to the line its own tool calls give. So
+      the worked-out figures, the two spans rounded to 10 and the high-week mark, and each
+      action's dates are covered. Planted wrong dates, figures and marks each fail it. The
+      hospital's name, the latch date and the level's source are the screen entry's, and only the
+      level is held to the rule's. Versions 1 and 2 are unchanged, byte for byte.
+    - The approval queue's display and sheet show an agent's brief in the same layout. Code writes
+      its top two blocks from the brief's facts; its other points follow in a block of their own,
+      as written and approved once approved, with no author named, then its explanation.
+    - A brief that can never be approved lists no action. Its heading reads "What to do: this
+      brief cannot be approved. Check the released weeks yourself before changing staffing." The
+      refused draft's points sit in the detail, marked as not checked. A brief with no readable
+      draft shows the banner and the model's error, so every readable brief opens this way.
+    - The rated layout stays for the raters' view, Reader B's pack, the template comparison, the
+      approver's 26 Oct view in the examples, and the Reviewer's and the coordinator's prompts. So
+      every recording replays by the same request hash, and `recordings_manifest.tsv` is
+      unchanged. The agent's watch points stay as recorded.
     - The manager's layout came after the ratings: the raters, Reader B and the approver read the
-      rated layout. Testing the new one with managers is a pilot step, and so is an Investigator
-      prompt that asks for watch points in plainer words, recorded afresh.
-    - Figure 5, `figures/fig9_sample_brief.png`, now draws the current brief: the version 3
-      template brief the shipped code queues for the Royal Infirmary of Edinburgh's flag week, w/e
-      23 Aug 2026, the latest unlatched flag in the data, with 99 figures and every line checked.
-      `examples/current_brief_edinburgh.md` holds it with what followed, worked out from the
-      frame's busy1 to busy4: w/e 20 Sep 2026 turned busy and the other three weeks did not. The
-      figure draws the brief's heading, At a glance and What to do, with a last line saying where
-      the detail is, at 8 pt, 16.5 cm wide and 10.1 cm tall. The whole brief, at 20.7 cm, was too tall
-      for the paper's kit to print at full size beside its note, and the owner's ask was the
-      headlines at a glance.
-    - The notebook says the same: section 5's markdown describes the manager's layout and section
-      7's says the rule now sends version 3; limitation 6 is reworded and limitation 19 added. The
-      cells whose output it changed were re-run: the fields code sets now name `glance`, section
-      5's briefs are shown in the manager's layout, and section 7's template briefs are version
-      3. The safeguards cell's output is unchanged, and the notebook was then run whole in a fresh
-      kernel.
+      rated layout. Testing the manager's layout with managers is a pilot step, and so is an
+      Investigator prompt that asks for watch points in plainer words, recorded afresh.
+    - Figure 5, `figures/fig9_sample_brief.png`, draws the current brief: the version 3 template
+      brief the shipped code queues for the Royal Infirmary of Edinburgh's flag week, w/e 23 Aug
+      2026. It is the latest flag with no drift alarm among the five series the system runs on, and
+      a test holds that no later origin in the run carries a brief.
+    - `examples/current_brief_edinburgh.md` holds the whole brief, with 101 figures checked, and
+      what followed, worked out from the frame's busy1 to busy4. W/e 20 Sep 2026 turned busy and
+      the other three weeks did not. The figure draws the heading, At a glance and What to do,
+      with a last line saying where the detail is. It is 8 pt, 16.5 cm wide and 11.2 cm tall, so
+      the paper's kit prints it at full size beside its note.
+    - The notebook says the same: section 5's and section 7's markdown describe the manager's
+      layout, limitation 6 is reworded and limitation 19 added. The cells whose output changed
+      were re-run, and the notebook was then run whole in a fresh kernel.

@@ -215,18 +215,21 @@ they ran. A template brief goes to the same approval queue: code checks every fi
 call it came from, the duty manager approves, edits or rejects it, an edit is checked again, and only an
 approved brief sets actions (`examples/template_brief_ninewells.md`).
 
-**What a brief opens with.** The duty manager is not a statistician, so every brief on the approval
-queue's sheet, the template's version 3 and the Investigator's alike, opens "At a glance": the level,
-why, the attendances to expect, how far the forecasting methods differ, how accurate they have been, the
-past flags here and whether a warning is on, in plain words. "What to do, if you approve" follows, with
-the staffing actions code sets for the level, each with its owner and dated weeks, the same the
-notifications carry; then any points the Investigator wrote; then the detail. Code writes every line of
-the top two blocks from the brief's facts and tool results. A brief marked "not verified, do not act" can
-never be approved, so it lists no action and says to check the released weeks. This manager's layout came after the
-ratings: the raters, Reader B and the approver read the earlier, rated layout, which the recorded sheets
-and every recorded prompt keep, and testing the new layout is a pilot step (section 14). The current
-brief, `examples/current_brief_edinburgh.md`, is the template brief the shipped code queues for the
-Royal Infirmary of Edinburgh's flag week, w/e 23 Aug 2026, the latest unlatched flag in the data.
+**What a brief opens with.** Every readable brief on the approval queue's sheet, the template's
+version 3 and the Investigator's alike, opens "At a glance" in plain words, for a duty manager who is not a
+statistician. It gives the level, why, what the records show, the attendances to expect and the span
+8 weeks in 10 should fall in, how far the forecasting methods differ, how accurate they have been,
+the past flags here and whether a warning is on. "What to do, if you approve" follows, with the
+staffing actions code sets for the level, each with its owner and dated weeks, the same the
+notifications carry. Code writes every line of these two blocks from the brief's facts and tool
+results. The brief's other points follow in a block of their own, as written, then the detail. A
+brief marked "not verified, do not act" can never be approved, so it lists no action and says to
+check the released weeks; the refused draft's points sit in the detail, marked as not checked. The manager's layout came after the ratings: the raters, Reader B and the
+approver read the rated layout, which the recorded sheets and every recorded prompt keep, and testing
+the manager's layout is a pilot step (section 14). The current brief,
+`examples/current_brief_edinburgh.md`, is the template brief the shipped code queues for the Royal
+Infirmary of Edinburgh's flag week, w/e 23 Aug 2026. It is the latest flag with no drift alarm among
+the five series the system runs on.
 
 ## 4. Assumptions
 
@@ -533,9 +536,10 @@ week it does not, for both raters. That text is the refused demand-week brief. B
 not correct because it is marked not verified, though its figures had passed the code check. They also
 marked its uncertainty not stated, and a factual error in its claims that recent weeks were rising and
 the forecasts fit them. Both also marked a factual error in the template's drift line, the line code gave
-the Investigator too. Version 2 of the template and new runs use the raters' own wording, "No drift
-alarm is recorded; this alone does not establish forecast fit."; the shipped template, version 3, says
-in plain words only that no warning is on, and the comparison stays on the rated version 1.
+the Investigator too. Version 2 of the template uses the raters' own wording, "No drift alarm is
+recorded; this alone does not establish forecast fit.", and so does the Investigator's prompt in new
+runs. The shipped template, version 3, says only that no warning is on. The comparison stays on the
+rated version 1.
 
 The comparison failed in the demand week, whose brief the checks had already stopped, so no manager
 could approve it. A rule set before any rating then applies. The template writes the brief's
@@ -595,8 +599,8 @@ it and the next step. In short:
 18. the adequacy test assumed the agent writes every brief; under the template rule it writes fewer,
     so the 6 of 7 threshold needs restating, for example as all but one of the agent's briefs, before
     the next live run;
-19. the manager's layout, which opens every brief with what to do and why in plain words, came after
-    the ratings; no rater read it, and the Investigator's watch points stay as recorded, since a new
+19. the manager's layout, which opens every readable brief with what a duty manager needs at a glance
+    and what to do, came after the ratings; no rater read it, and the Investigator's watch points stay as recorded, since a new
     prompt would break the replay hashes. Testing both is a pilot step.
 
 Every figure here is in-sample.
