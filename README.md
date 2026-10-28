@@ -10,6 +10,8 @@
 - **What it does:** each week, code forecasts unplanned attendances at Scotland's emergency
   departments for the four weeks after the Tuesday data release, and sets each hospital's demand
   level by fixed rules.
+- **Executable components:** the design ships with the notebook `ae_escalation_spot_check.ipynb`,
+  the `ae_escalation` package and its tests (`python -m pytest`), and worked outputs in `examples/`.
 - **Where the AI sits:** for a latched hospital the rules pick out, a language-model Investigator
   drafts the demand brief from read-only tools, and a Reviewer checks every figure in code, then the
   wording. In a flag week code fills the template brief (below).

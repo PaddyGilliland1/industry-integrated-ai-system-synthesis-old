@@ -365,8 +365,8 @@ reviewer, not the system's Reviewer, scored the adequacy test, so my approval st
 
 ## 9. Reuse register
 
-Each pattern is adapted for this project, never copied in as a file, and each module names the pattern it
-reuses in a comment. Each repository is at github.com/PaddyGilliland1, and cell numbers count from 0.
+Each pattern is adapted for this project, never copied in as a file, and each module of the
+`ae_escalation` package (the modules below) names the pattern it reuses in a comment. Each repository is at github.com/PaddyGilliland1, and cell numbers count from 0.
 
 | Project | Repository | File: function or cell | Commit | Component here |
 |---|---|---|---|---|
