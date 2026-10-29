@@ -97,10 +97,11 @@ REQUESTS = {
     "get_track_record": tl.TrackRecordRequest,
     "get_calendar": tl.CalendarRequest,
 }
-# The words the MHRA lists as indicative of a medical device, which every
-# brief avoids (MHRA, 2023, PDF p. 20).
-# Each pattern catches every form of its word: "predict" with no leading
-# word boundary, so "unpredictable" and "predictive" are caught too.
+# Four of the words the MHRA lists as indicative of a medical device, which
+# every brief avoids (MHRA, 2023, PDF p. 20). The patterns catch any word
+# containing "predict", so "unpredictable" and "predictive" too; the whole
+# words "prognosis", "prognoses" and "prognostic"; any word starting
+# "triage"; and "risk of" or "risks of".
 DEVICE_WORDS = [
     (r"predict\w*", "says predict, not forecast"),
     (r"\bprognos(?:is|es|tic)\b", "says prognosis"),

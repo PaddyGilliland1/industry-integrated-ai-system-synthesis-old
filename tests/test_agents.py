@@ -1052,7 +1052,7 @@ def test_two_reviewer_slips_fail_closed_without_the_investigator(
     assert "no readable verdict" in wording.problems[0]
 
 
-# --- the device-word screen catches each form of a listed word --------------
+# --- the code's word check catches the forms its patterns list ---------------
 
 
 @pytest.mark.parametrize(
@@ -1065,9 +1065,12 @@ def test_two_reviewer_slips_fail_closed_without_the_investigator(
         "The risks of a busy week.",
         "The risk of a busy week.",
         "Demand predicted to rise.",
+        "Two prognoses for the week.",
+        "A prognostic score.",
+        "Patients were triaged.",
     ],
 )
-def test_the_device_screen_catches_each_form_of_a_listed_word(text):
+def test_the_word_check_catches_the_listed_forms(text):
     assert ag.device_words(text)
 
 
