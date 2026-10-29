@@ -91,7 +91,7 @@ holds no beds, so uses for beds and social care need admissions and occupancy da
 
 ![Figure 2: monthly attendances against 4-hour performance](figures/fig4_month_chart.png)
 
-*Figure 2 (notebook Figure 4). Monthly attendances against 4-hour performance.* Seasonality only: PHS says
+*Figure 2 (notebook Figure 7). Monthly attendances against 4-hour performance.* Seasonality only: PHS says
 these weekly figures "should not be used to monitor against the 4-hour A&E access standard" (PHS, 2026a,
 data set description).
 
@@ -553,7 +553,7 @@ template was Text A in both weeks.
 
 ![Figure 7: template against agent, both raters, both weeks](figures/fig7_template_comparison.png)
 
-*Figure 7 (notebook Figure 7). Template against agent: both raters, both weeks.*
+*Figure 7 (notebook Figure 4). Template against agent: both raters, both weeks.*
 
 **Failure cases.** COVID, real: the alarm confirms a shock and does not warn; the first breach was w/e 15
 Mar 2020. The latch then held each series' level and marked its forecasts untrusted, and shadow mode on

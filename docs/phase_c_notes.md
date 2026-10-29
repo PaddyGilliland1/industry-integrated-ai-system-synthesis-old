@@ -603,3 +603,14 @@ study. Two change what a code cell prints; the rest change words only.
     - The notebook says the same: section 5's and section 7's markdown describe the manager's
       layout, limitation 6 is reworded and limitation 19 added. The cells whose output changed
       were re-run, and the notebook was then run whole in a fresh kernel.
+64. **The notebook numbers its figures in the order they appear.** Ruled on 29 Oct 2026. The
+    template comparison is now the notebook's Figure 4 and the monthly chart its Figure 7; Figures 1
+    to 3, 5 and 6 keep their numbers, and every file keeps its name.
+    - The captions, the comparison cell's comment and section 8's mention follow, and so do the
+      README's figure map and the case study's captions. Earlier items here keep the numbers of
+      their day.
+    - `tests/test_notebook_figures.py` holds the captions to 1 to 7 down the page, with no figure
+      named before every lower number has been.
+    - The README says the glossary defines every term used in the paper, the case study, the
+      notebook and the README.
+    - The notebook was then run whole in a fresh kernel.

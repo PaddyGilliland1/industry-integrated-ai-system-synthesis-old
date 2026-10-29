@@ -61,7 +61,7 @@
 - **The case study:** `ae_escalation_case_study.md`, rendered to `ae_escalation_case_study.pdf`, sets
   out the design, its evaluation and its limits.
 - **The paper:** `module_summary.pdf` is the synthesis paper the brief requires, and `glossary.pdf`
-  defines the terms it uses.
+  defines every term used in the paper, the case study, the notebook and this README.
 
 ## Dataset
 
@@ -241,19 +241,18 @@ one replay week, Ninewells Hospital's demand week ending 13 Jun 2021; that week'
 
 ### The figures, by number
 
-Each document numbers the figures its own way: the paper and the case study in the order they
-use them, and the notebook as the table shows.
+Each document numbers the figures its own way, in the order it uses them.
 
 | File in `figures/` | Paper | Notebook | Case study |
 |---|---|---|---|
 | `fig1_architecture.png` | 1 | 1 | 3 |
 | `fig2_value_chain.png` | 2 | 2 | 1 |
 | `fig3_weekly_cycle.png` | 3 | 3 | 4 |
-| `fig4_month_chart.png` | 4 | 4 | 2 |
+| `fig4_month_chart.png` | 4 | 7 | 2 |
 | `fig9_sample_brief.png` | 5 | none; its brief, the current one, is in `examples/current_brief_edinburgh.md` | none |
 | `fig5_goals_scorecard.png` | 6 | 5 | 5 |
 | `fig6_flag_outcomes.png` | 7 | 6 | 6 |
-| `fig7_template_comparison.png` | 8 | 7 | 7 |
+| `fig7_template_comparison.png` | 8 | 4 | 7 |
 | `fig8_pilot_path.png` | 9 | none | none |
 | `national_weekly_attendances.png`, `drift_march_2020.png` | none | unnumbered, sections 2 and 4 | none |
 
