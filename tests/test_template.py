@@ -371,7 +371,7 @@ def test_only_a_factual_error_in_the_agents_text_counts(tmp_path):
 
 
 def test_the_templates_factual_error_is_kept_but_never_counted(tmp_path):
-    # Figure 7 shows each text's factual error; option A reads the agent's.
+    # Figure 4 shows each text's factual error; option A reads the agent's.
     on_template = ratings_sheet(
         tmp_path / "t.csv", marked("approver", "template")
     )
