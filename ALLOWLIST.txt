@@ -115,8 +115,8 @@ approvals/adequacy_frontier_round2.csv
 approvals/reader_b_frontier_round2.csv
 approvals/template_ratings_frontier_round2.csv
 figures/fig4_month_chart.png
-# figures/month_attendances_and_4_hours.png: an earlier copy of figures/fig4_month_chart.png, deleted
-# on Paddy's word of 27 Oct 2026, kept so the history publishes
+# figures/month_attendances_and_4_hours.png: an earlier copy of figures/fig4_month_chart.png. I keep its
+# path listed because it is in the published history.
 figures/month_attendances_and_4_hours.png*
 figures/fig5_goals_scorecard.png
 figures/fig6_flag_outcomes.png
