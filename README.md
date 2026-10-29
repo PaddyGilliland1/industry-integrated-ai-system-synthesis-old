@@ -61,7 +61,7 @@
 - **The case study:** `ae_escalation_case_study.md`, rendered to `ae_escalation_case_study.pdf`, sets
   out the design, its evaluation and its limits.
 - **The paper:** `module_summary.pdf` is the synthesis paper the brief requires, and `glossary.pdf`
-  defines every term used in the paper, the case study, the notebook and this README.
+  defines the terms used in the paper, the case study, the notebook and this README.
 
 ## Dataset
 
