@@ -170,8 +170,8 @@ that week's brief was rejected.
 - A verified brief reaches the duty manager, who approves, edits or rejects it.
 - A brief that fails a check goes back to the Investigator once, with every problem named. A brief that
   fails again reaches the manager marked "not verified, do not act", and can never be approved.
-- An edit is checked again: the code figure check, the code's word check against the words the Medicines
-  and Healthcare products Regulatory Agency (MHRA) lists as indicative of a medical device, and the Reviewer's wording check. An edit that fails comes back to the
+- An edit is checked again: the code figure check, the code's word check against four of the words the
+  Medicines and Healthcare products Regulatory Agency (MHRA) lists as indicative of a medical device, and the Reviewer's wording check. An edit that fails comes back to the
   manager marked "not verified, do not act", never to the Investigator.
 - A rejection is logged, and nothing is sent.
 
@@ -339,7 +339,7 @@ and a model that cannot be pinned the same way.
 | 4 | A missed busy week: the flag caught 21.0% of busy outlooks in the steady years, and the mean steady year left 85.5 of 142.5 busy hospital-weeks with no notice | No extra notice of an unusual week, so staffing rests on the existing process alone | The range and the hospital's own error on every brief; recall and notice reported; learning what planners use (section 14) | Unscheduled-care lead |
 | 5 | Bias by hospital size: seasonal naive's median error is 11.0% at sites under 300 attendances a week and 5.4% at 1,300 and over. The raised share varies more by site than by size: the most raised, the Royal Hospital for Children at 35.7% of its outlooks, and Glasgow Royal Infirmary, raised in none, are both in the largest band, 1,300 attendances a week and over | Attention spread unevenly, by noise at small sites and not by need | Each brief shows its own site's error and track record; the level is never read as need or priority; the level reported by site | Unscheduled-care lead |
 | 6 | Misuse as a league table, a case for cuts, or 4-hour monitoring | Harm to the hospitals the size bias already burdens | The level's meaning on every brief; the stated purpose in the README, the notebook and this case study | Unscheduled-care lead |
-| 7 | Classification as a medical device (Medicines and Healthcare products Regulatory Agency, 2023) | Regulatory duties the design does not meet | Aggregate planning only: the tool informs staffing and no patient's care, so on my reading of the MHRA guidance it is not a medical device; the code's word check against the MHRA's indicative words stays; status as additional information | Clinical safety reviewer |
+| 7 | Classification as a medical device (Medicines and Healthcare products Regulatory Agency, 2023) | Regulatory duties the design does not meet | Aggregate planning only: the tool informs staffing and no patient's care, so on my reading of the MHRA guidance it is not a medical device; the code's word check against four of the MHRA's indicative words stays; status as additional information | Clinical safety reviewer |
 | 8 | An invented or misattached figure | A manager misled by a wrong number or date beside their usual information | The code figure check on every brief, edit and notification; a "not verified" brief never approved; a planted figure caught in the test | Analytics lead (the check); duty manager (approval) |
 | 9 | Automation bias (Goddard et al., 2012) | A manager approves without reading, or weighs a brief above their usual information | Ranges, disagreement and the track record shown; six approval criteria; a second reader in the evaluation | Duty manager |
 | 10 | In-sample design tuning | Figures better than a new period would give | The notebook re-measures every figure; shadow mode on new releases before any go-live | Analytics lead |
@@ -413,7 +413,7 @@ Each pattern is adapted for this project, never copied in as a file, and each mo
 
 **Built beyond the plan, new in this project:**
 
-- the code's word check against the words the MHRA lists as indicative of a medical device;
+- the code's word check against four of the words the MHRA lists as indicative of a medical device;
 - the tool-call cap, and a time budget that holds for a whole run;
 - the "Written by" line naming the backend and model on every brief;
 - the scripted demonstrations of the safeguards;
