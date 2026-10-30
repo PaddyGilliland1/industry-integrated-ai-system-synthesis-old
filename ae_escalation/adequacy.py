@@ -1,0 +1,516 @@
+"""The adequacy test of the local briefs, stated before any brief existed:
+it decides whether the frontier backend may run.
+
+A brief is adequate if it passes the code figure check and meets at least 5
+of the 6 approval criteria, as an AI reviewer, on my instruction, judges it.
+The approver never scores it, so the approval stays independent. Code fills in
+the brief's status; the reviewer marks the six criteria on the form this
+module writes. A brief counts only when its status is verified: one that
+passed the code check but failed the wording check twice can never be
+approved, so it cannot count towards 6 of 7. Fewer than 6 of
+the 7 local briefs adequate after one bounded prompt-tuning round is the
+stated case for running the frontier backend, once, on the same replay set.
+The result, either way, is recorded in approvals/ with the briefs and
+criteria that failed, before the approver reads any brief; the live
+command releases the approver's queue only once this record sends the set
+to approval. A set stopped at its time budget is recorded from the briefs
+it completed, and its record says plainly whether the stop or the briefs
+decided the verdict.
+"""
+
+import csv
+import re
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
+
+from .approval import CRITERIA, Criteria
+from .placeholders import day_text
+
+THRESHOLD_CRITERIA = 5
+THRESHOLD_BRIEFS = 6
+
+
+def code_check_passed(outcome):
+    """Whether the brief, as it stands, passed the code figure check."""
+    last = outcome.attempts[-1] if outcome.attempts else None
+    return bool(last and last.check and last.check.passed)
+
+
+def verified(outcome):
+    """Whether the brief passed both checks, so it could be approved."""
+    return outcome.status == "verified"
+
+
+def is_adequate(is_verified, criteria):
+    """The adequacy rule: the brief verified, its code check passed among
+    its checks, and at least 5 of the 6 criteria met."""
+    return is_verified and criteria.count() >= THRESHOLD_CRITERIA
+
+
+class BriefScore(BaseModel):
+    """The reviewer's marks for one brief."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    brief_id: str
+    criteria: Criteria
+    reviewer: str
+    scored_at: datetime
+    notes: str = ""
+
+
+class BriefAdequacy(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    brief_id: str
+    verified: bool
+    # Why a brief is not verified: the code check, the wording check, the
+    # Reviewer that could not run, a draft reply cut at the output cap, the
+    # Investigator that could not run, or no readable draft.
+    cause: str | None = None
+    # None when the brief was not scored: a brief that can never be
+    # adequate needs no marks.
+    criteria_met: int | None
+    unmet: list[str]
+    adequate: bool
+    # False for a brief the run stopped at its budget before finishing.
+    finished: bool = True
+
+
+class BudgetStop(BaseModel):
+    """What a live run stopped at its time budget left: why it stopped, the
+    runs it completed, the run in progress, the briefs it never finished
+    and the designed failure, when that never ran either."""
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: str
+    completed: list[str]
+    in_progress: str
+    unfinished: list[str]
+    designed_failure: str | None = None
+
+    def line(self):
+        """The record's line on the stop, every unfinished run named."""
+
+        def named(run_id):
+            """A run id, marked when the stop came in it."""
+            return run_id + (
+                " (in progress)" if run_id == self.in_progress else ""
+            )
+
+        parts = [named(r) for r in self.unfinished]
+        if self.designed_failure:
+            failure = f"the designed failure, {named(self.designed_failure)}"
+            parts = (
+                [*parts[:-1], f"{parts[-1]}, and {failure}"]
+                if parts
+                else [failure]
+            )
+        return (
+            f"Stopped at its budget: {self.reason}. Completed: "
+            f"{', '.join(self.completed) or 'none'}. Unfinished: "
+            f"{', '.join(parts)}. Each unfinished brief is counted not "
+            "adequate."
+        )
+
+
+def budget_line(started):
+    """The record's line on the run's time budget, from the progress file's
+    first start of the briefs step (replay.started_budget), so a budget
+    raised for one run with --budget-s is in the evidence."""
+    if started is None:
+        return (
+            "Run budget: not in the progress file, which this label wrote "
+            "before the budget was recorded there."
+        )
+    shown = f"{started['budget_s']:,g} s"
+    if started["budget_from"] == "--budget-s":
+        return (
+            f"Run budget: {shown}, set by --budget-s over config.json's "
+            f"run_budget_s of {started['config_budget_s']:,g} s."
+        )
+    return f"Run budget: {shown}, config.json's run_budget_s."
+
+
+class AdequacyRecord(BaseModel):
+    """The adequacy test's result for one backend's run of the set."""
+
+    model_config = ConfigDict(frozen=True)
+
+    backend: str
+    model: str
+    label: str
+    round: Literal[1, 2]
+    briefs: list[BriefAdequacy]
+    adequate: int
+    total: int
+    frontier_case: bool
+    # True when this set goes to the approver: the local set with 6 of 7
+    # adequate. A frontier set waits for the approver's choice of set.
+    to_approval: bool
+    # True when the verdict is the one bounded prompt-tuning round, so the
+    # local set may be scored once more, under a new label.
+    tuning_next: bool = False
+    verdict: str
+    # The line on a run stopped at its budget; empty for a run completed.
+    stopped: str = ""
+    # The line on the run's time budget and where it came from.
+    budget: str = ""
+    # For a local set stopped at its budget, whether the stop, not the
+    # briefs, decided the verdict; None for a run completed.
+    decided_by_stop: bool | None = None
+
+
+def _brief_block(outcome):
+    """One brief's part of the form: status, text, criteria."""
+    entry = outcome.entry
+    passed = code_check_passed(outcome)
+    lines = [
+        f"## {outcome.run_id}: {entry.name}, week ending "
+        f"{day_text(entry.as_of)}, {entry.kind} brief, level {entry.level}",
+        "",
+        f"Code figure check: {'passed' if passed else 'failed'}. "
+        f"Status: {outcome.status}.",
+        "",
+        "```text",
+        outcome.display(layout="rated"),
+        "```",
+        "",
+        "| # | Criterion | Test | Met? |",
+        "|---|---|---|---|",
+    ]
+    lines += [
+        f"| {n} | {c.name} | {c.test} | yes / no |"
+        for n, c in enumerate(CRITERIA, 1)
+    ]
+    return lines + [""]
+
+
+def write_form(result, paths):
+    """Write the reviewer's form and the scores sheet for one run of the
+    set; neither is ever written over."""
+    for path in (paths.adequacy_form, paths.adequacy_scores):
+        if path.exists():
+            raise FileExistsError(f"{path} exists; it is never replaced")
+    for path in (paths.adequacy_form, paths.adequacy_scores):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"# Adequacy test: {result.backend} backend, {result.model}, "
+        f"{paths.label}",
+        "",
+        "For the main session's reviewer. The approver never scores this "
+        "form, so the approval stays independent.",
+        "",
+        "A brief is adequate if it passes the code figure check and meets at "
+        "least 5 of the 6 approval criteria. Only a verified brief counts, "
+        "since only a verified brief can be approved. Code has filled in "
+        "each brief's status. Mark each verified brief's criteria yes or no "
+        f"in the scores sheet, `approvals/{paths.adequacy_scores.name}`, "
+        "one row per brief. A brief that is not verified needs no marks: "
+        "leave its row blank. Then run "
+        "`python -m ae_escalation.live adequacy --label "
+        f"{paths.label}` to record the verdict.",
+        "",
+        "Fewer than 6 of the 7 briefs adequate after one bounded "
+        "prompt-tuning round is the stated case for running the frontier "
+        "backend once on the same replay set.",
+        "",
+    ]
+    for outcome in result.outcomes:
+        lines += _brief_block(outcome)
+    # Under the template rule the flag weeks' briefs are the template's;
+    # they are listed for the record, and the test scores the agent's.
+    for t in result.templates:
+        lines += [
+            f"## {t.run_id}: the template brief, version "
+            f"{t.template.version}, filled by code; not scored, since the "
+            "test scores the agent's briefs",
+            "",
+            t.display(written_by=False, layout="rated"),
+            "",
+        ]
+    paths.adequacy_form.write_text("\n".join(lines), encoding="utf-8")
+    fields = [
+        "brief_id",
+        "status",
+        *[c.field for c in CRITERIA],
+        "reviewer",
+        "scored_at",
+        "notes",
+    ]
+    with open(paths.adequacy_scores, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        for outcome in result.outcomes:
+            writer.writerow(
+                {"brief_id": outcome.run_id, "status": outcome.status}
+            )
+    return paths.adequacy_form
+
+
+def _yes(value):
+    """A yes or no cell as True or False; anything else fails."""
+    text = (value or "").strip().lower()
+    if text not in ("yes", "no"):
+        raise ValueError(f"write yes or no, not {value!r}")
+    return text == "yes"
+
+
+def _unmarked(row):
+    """Whether the reviewer left every criterion of a row blank."""
+    return all(not (row[c.field] or "").strip() for c in CRITERIA)
+
+
+def read_scores(path):
+    """The reviewer's filled-in scores sheet. A row with no criterion
+    marked is a brief not scored, which assess allows only for a brief that
+    is not verified; a row marked in part fails."""
+    with open(path, newline="", encoding="utf-8") as fh:
+        return [
+            BriefScore(
+                brief_id=row["brief_id"],
+                criteria=Criteria(
+                    **{c.field: _yes(row[c.field]) for c in CRITERIA}
+                ),
+                reviewer=row["reviewer"],
+                scored_at=row["scored_at"],
+                notes=row.get("notes", ""),
+            )
+            for row in csv.DictReader(fh)
+            if not _unmarked(row)
+        ]
+
+
+def assess(result, scores, round, label, stop=None, budget=""):
+    """Score one run of the set and say what follows.
+
+    Parameters
+    ----------
+    result : replay.ReplaySetResult
+    scores : list of BriefScore
+        One for every verified brief, since no other can be adequate,
+        whether the run completed or stopped at its budget.
+    round : 1 or 2
+        2 is after the one bounded prompt-tuning round.
+    label : str
+    stop : BudgetStop, optional
+        Given when the run stopped at its budget: result holds the briefs
+        it completed, scored as they stand, and each unfinished brief
+        counts as not adequate.
+    budget : str, optional
+        The record's line on the run's time budget (budget_line).
+
+    Returns
+    -------
+    AdequacyRecord
+
+    Raises
+    ------
+    ValueError
+        If a verified brief has no score, or a stopped run would go to
+        approval, which needs a ruling, since its designed failure never
+        showed the planted figure caught.
+    """
+    by_id = {s.brief_id: s for s in scores}
+    need = [o for o in result.outcomes if verified(o)]
+    missing = [o.run_id for o in need if o.run_id not in by_id]
+    if missing:
+        raise ValueError(f"score every verified brief; missing {missing}")
+    briefs = []
+    for o in result.outcomes:
+        ok = verified(o)
+        if o.run_id not in by_id:
+            briefs.append(
+                BriefAdequacy(
+                    brief_id=o.run_id,
+                    verified=ok,
+                    cause=o.cause,
+                    criteria_met=None,
+                    unmet=[],
+                    adequate=False,
+                )
+            )
+            continue
+        c = by_id[o.run_id].criteria
+        briefs.append(
+            BriefAdequacy(
+                brief_id=o.run_id,
+                verified=ok,
+                cause=o.cause,
+                criteria_met=c.count(),
+                unmet=[x.name for x in CRITERIA if not getattr(c, x.field)],
+                adequate=is_adequate(ok, c),
+            )
+        )
+    for run_id in stop.unfinished if stop else []:
+        briefs.append(
+            BriefAdequacy(
+                brief_id=run_id,
+                verified=False,
+                criteria_met=None,
+                unmet=[],
+                adequate=False,
+                finished=False,
+            )
+        )
+    adequate = sum(b.adequate for b in briefs)
+    total = len(briefs)
+    case = to_approval = tuning = False
+    if result.backend == "frontier":
+        verdict = (
+            f"{adequate} of {total} adequate on the frontier backend. Both "
+            "sets are reported, and the approver chooses on these facts "
+            "which goes to approval."
+        )
+    elif adequate >= THRESHOLD_BRIEFS:
+        to_approval = True
+        verdict = (
+            f"{adequate} of {total} adequate: the local briefs go to "
+            "approval, and the frontier backend does not run."
+        )
+    elif round == 1:
+        tuning = True
+        verdict = (
+            f"{adequate} of {total} adequate: one bounded prompt-tuning "
+            "round, then score the set again."
+        )
+    else:
+        case = True
+        verdict = (
+            f"{adequate} of {total} adequate after the prompt-tuning round: "
+            "the stated case to run the frontier backend once on the same "
+            "replay set."
+        )
+    if stop is not None and to_approval:
+        raise ValueError(
+            f"{adequate} of {total} adequate, but the run stopped at its "
+            "budget before the designed failure showed the planted figure "
+            "caught, so whether the set goes to approval needs a ruling; "
+            "nothing is recorded"
+        )
+    decided = None
+    if stop is not None and result.backend == "local":
+        decided, why = _decider(adequate, total, stop)
+        verdict = f"{verdict} {why}"
+    return AdequacyRecord(
+        backend=result.backend,
+        model=result.model,
+        label=label,
+        round=round,
+        briefs=briefs,
+        adequate=adequate,
+        total=total,
+        frontier_case=case,
+        to_approval=to_approval,
+        tuning_next=tuning,
+        verdict=verdict,
+        stopped=stop.line() if stop else "",
+        budget=budget,
+        decided_by_stop=decided,
+    )
+
+
+def _decider(adequate, total, stop):
+    """Whether the stop, not the briefs, decided a stopped local set's
+    verdict, and the sentence that says so: it did when the unfinished
+    briefs, each counted not adequate, could have lifted the set to the 6
+    the verdict turns on."""
+    left = len(stop.unfinished)
+    best = adequate + left
+    need = f"the {THRESHOLD_BRIEFS} the verdict needs"
+    if best >= THRESHOLD_BRIEFS:
+        were = "brief was" if left == 1 else "briefs were"
+        it = "it" if left == 1 else "they"
+        return True, (
+            "The stop at its budget, not the briefs, decided this verdict: "
+            f"{left} unfinished {were} counted not adequate, and had {it} "
+            f"been adequate the set would have had {best} of {total}, "
+            f"enough for {need}."
+        )
+    if not left:
+        return False, (
+            "The briefs, not the stop, decided this verdict: every brief "
+            f"finished, and {adequate} of {total} is short of {need}."
+        )
+    return False, (
+        "The briefs, not the stop, decided this verdict: had every "
+        "unfinished brief been adequate, the set would have had "
+        f"{best} of {total}, short of {need}."
+    )
+
+
+def _status(brief):
+    """A brief's status for the record, with why if not verified."""
+    if not brief.finished:
+        return "unfinished at the budget"
+    if brief.verified:
+        return "verified"
+    return f"not verified: {brief.cause}" if brief.cause else "not verified"
+
+
+def _marks(brief):
+    """A brief's criteria met and not met, for the record's table."""
+    if brief.criteria_met is None:
+        why = (
+            "not scored" if not brief.finished else "not scored, not verified"
+        )
+        return why, "n/a"
+    return f"{brief.criteria_met} of 6", ", ".join(brief.unmet) or "none"
+
+
+def write_record(record, paths):
+    """Record the adequacy test's result in approvals/, with the briefs
+    and criteria that failed; an existing record is never written over."""
+    path = paths.adequacy_record
+    if path.exists():
+        raise FileExistsError(f"{path} exists; it is never replaced")
+    lines = [
+        f"# Adequacy test record: {record.backend} backend, {record.model}, "
+        f"{record.label} (round {record.round})",
+        "",
+        record.verdict,
+        "",
+        *([record.stopped, ""] if record.stopped else []),
+        f"Round: {record.round}",
+        f"Frontier case: {'yes' if record.frontier_case else 'no'}",
+        f"Goes to approval: {'yes' if record.to_approval else 'no'}",
+        "Prompt-tuning round next: "
+        f"{'yes' if record.tuning_next else 'no'}",
+        *([record.budget] if record.budget else []),
+        *(
+            []
+            if record.decided_by_stop is None
+            else [
+                "Decided by the stop: "
+                f"{'yes' if record.decided_by_stop else 'no'}"
+            ]
+        ),
+        "",
+        "| Brief | Status | Criteria met | Not met | Adequate |",
+        "|---|---|---|---|---|",
+    ]
+    lines += [
+        f"| {b.brief_id} | {_status(b)} | {' | '.join(_marks(b))} "
+        f"| {'yes' if b.adequate else 'no'} |"
+        for b in record.briefs
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def record_says(path):
+    """The record's verdict lines, read back: its round, whether it states
+    the frontier case, whether its set goes to approval and whether the
+    prompt-tuning round follows."""
+    text = path.read_text(encoding="utf-8")
+    found = re.search(r"^Round: (\d)$", text, re.M)
+    return {
+        "round": int(found.group(1)) if found else None,
+        "frontier_case": "Frontier case: yes" in text,
+        "to_approval": "Goes to approval: yes" in text,
+        "tuning_next": "Prompt-tuning round next: yes" in text,
+    }

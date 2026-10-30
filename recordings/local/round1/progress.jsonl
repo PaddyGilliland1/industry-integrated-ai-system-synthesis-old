@@ -1,0 +1,2 @@
+{"event": "started", "at": "2026-10-25T23:02:22.581930+00:00", "step": "briefs", "resume": false}
+{"event": "stopped", "at": "2026-10-25T23:17:36.148650+00:00", "step": "briefs", "reason": "the live run reached its budget of 840 s during model call 4 of run 20200322-T101H", "completed": ["20191006-S314H", "20200322-Scotland", "20200322-S314H"], "in_progress": "20200322-T101H", "spent_s": 840.0}

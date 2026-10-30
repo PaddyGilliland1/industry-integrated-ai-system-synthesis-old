@@ -1,0 +1,39 @@
+{
+  "summary": "{LEVEL} is held from the week before the alarm. It does not come from any week ahead being unusually high. The drift latch has been set since {LATCHED} after a downward breach, so all forecasts are untrusted until a person approves a latch reset. Attendances fell from {F1} to {F2} and then to {F3}, so look at the released weeks rather than any forecast.",
+  "expected_range": "No forecast range can be trusted while the drift latch is set, so this brief gives no range to plan within for the weeks from {WEEK1} to {WEEK4}.",
+  "model_agreement": "All forecasts are untrusted while the drift latch is set. This brief names no model to trust less and offers no forecast as a basis for planning. The back-test error in this brief is historical and does not override the latch.",
+  "watch_points": [
+    "Compare the released weeks up to {ORIGIN} with the rota already set, and note how far attendances have fallen below the usual.",
+    "Hold any decision to release extra shifts or bank staff until attendances in the latest released weeks are checked.",
+    "Ask for the latch to be reviewed; a person approves a latch reset once the documented reset criteria are met. Review the rota after the next data release, and keep the forecasts out of planning while the latch is set."
+  ],
+  "cited_figures": [
+    {
+      "value": 1024.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-08",
+      "unit": "attendances"
+    },
+    {
+      "value": 883.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-15",
+      "unit": "attendances"
+    },
+    {
+      "value": 657.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-22",
+      "unit": "attendances"
+    }
+  ]
+}

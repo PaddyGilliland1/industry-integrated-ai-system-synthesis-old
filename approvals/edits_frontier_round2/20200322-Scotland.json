@@ -1,0 +1,30 @@
+{
+  "summary": "{LEVEL} is held from before the alarm, not read from the forecasts. The drift latch has been set since {LATCHED} after a downward breach, because attendances fell to {F1} from {F2}. All forecasts are untrusted until a person approves a latch reset, so look at the released weeks and do not plan on a forecast.",
+  "expected_range": "No forecast range can be trusted while the drift latch is set. Use the released weeks of attendances as the guide.",
+  "model_agreement": "All forecasts are untrusted while the drift latch is set, so the models' agreement or disagreement is not a guide and none is ranked above another. The back-test error in this brief is historical and does not restore trust in the forecasts while the latch is set.",
+  "watch_points": [
+    "Check the released weeks of attendances up to {ORIGIN} and compare them with the current rota.",
+    "Review staffing and leave using released actuals and current operational information; do not base changes on the untrusted forecasts.",
+    "Ask for the latch to be reviewed as more weeks are released; a person approves a latch reset once the documented reset criteria are met, not merely after a further release. Note Good Friday in the rota check."
+  ],
+  "cited_figures": [
+    {
+      "value": 16394.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-22",
+      "unit": "attendances"
+    },
+    {
+      "value": 23950.0,
+      "tool_call_id": "T3",
+      "measure": "history",
+      "model": null,
+      "horizon": null,
+      "week": "2020-03-15",
+      "unit": "attendances"
+    }
+  ]
+}

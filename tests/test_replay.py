@@ -1,0 +1,1050 @@
+"""The replay set runner: the five named series at the six
+origins give seven briefs; the second reader's four and the two template
+weeks are picked by the stated rules; a designed failure plants a figure no
+tool returned; every run is recorded so it replays without the model. The
+live side is a scripted stand-in: no test calls a language model."""
+
+import csv
+import json
+from datetime import date, datetime, timedelta, timezone
+
+import pytest
+
+from ae_escalation import agents as ag
+from ae_escalation import approval as ap
+from ae_escalation import briefs as br
+from ae_escalation import figures as fg
+from ae_escalation import gateway as gw
+from ae_escalation import replay as rp
+
+from .conftest import AFTER_ANY_RUN
+from .scripted import answer, stand_in
+
+# --- the set and its rules ---------------------------------------------------
+
+
+def test_the_pre_run_check_counts_seven_briefs_with_a_flag(replay_run):
+    check = rp.pre_run_check(replay_run)
+    assert check["total"] == 7
+    assert check["by_source"] == {"latch": 4, "demand": 2, "surge": 1}
+    assert check["flag_briefs"] == 2
+    assert check["sixth_origin"] == "2023-04-09"
+    assert check["matches_probe"]
+
+
+def test_the_replay_set_is_the_five_series_at_the_six_origins(replay_run):
+    entries = rp.replay_entries(replay_run)
+    assert [(str(e.as_of), e.hospital, e.kind) for e in entries] == [
+        ("2019-10-06", "S314H", "surge"),
+        ("2020-03-22", "Scotland", "latch"),
+        ("2020-03-22", "S314H", "latch"),
+        ("2020-03-22", "T101H", "latch"),
+        ("2020-03-22", "G405H", "latch"),
+        ("2021-06-13", "T101H", "demand"),
+        ("2023-04-09", "C121H", "demand"),
+    ]
+    assert rp.run_id(entries[5]) == "20210613-T101H"
+
+
+def test_reader_b_reads_four_briefs_picked_by_the_rule(replay_run, flagged):
+    entries = rp.replay_entries(replay_run)
+    four = rp.reader_b_four(entries, rp.sizes(replay_run))
+    assert [(str(e.as_of), e.hospital, e.kind) for e in four] == [
+        ("2021-06-13", "T101H", "demand"),
+        ("2019-10-06", "S314H", "surge"),
+        ("2020-03-22", "Scotland", "latch"),
+        ("2020-03-22", "T101H", "latch"),
+    ]
+
+
+def test_the_two_template_weeks_are_picked_by_the_rule(replay_run):
+    weeks = rp.template_weeks(rp.replay_entries(replay_run))
+    assert (
+        str(weeks["national latch week"].as_of),
+        weeks["national latch week"].hospital,
+    ) == ("2020-03-22", "Scotland")
+    assert (
+        str(weeks["demand week"].as_of),
+        weeks["demand week"].hospital,
+    ) == ("2021-06-13", "T101H")
+    assert weeks["demand week"].release_date == date(2021, 6, 22)
+
+
+def test_the_designed_failure_is_the_demand_weeks_brief(replay_run):
+    entry = rp.planted_entry(rp.replay_entries(replay_run))
+    assert (str(entry.as_of), entry.hospital) == ("2021-06-13", "T101H")
+
+
+# --- the planted figure ------------------------------------------------------
+
+
+def test_a_planted_figure_is_one_no_tool_returned(replay_run):
+    from .scripted import good_draft
+
+    draft = br.BriefDraft.model_validate(good_draft(replay_run))
+    ledger = [
+        br.ToolCall(
+            id="T1",
+            name="get_forecast",
+            request={"hospital": "T101H", "as_of": "2021-06-13"},
+            result={
+                "hospital": "T101H",
+                "as_of": "2021-06-13",
+                "release_date": "2021-06-22",
+                "primary": "SA-MA",
+                "forecasts": [
+                    {
+                        "model": "SA-MA",
+                        "release_horizon": 1,
+                        "week_ending": "2021-06-27",
+                        "point": 1120.3,
+                        "range_80": None,
+                        "range_95": None,
+                    }
+                ],
+                "spread_pct": {"1": 25.5},
+            },
+        )
+    ]
+    planted = rp.plant_figure(draft, ledger)
+    added = planted.cited_figures[-1]
+    numbers = fg.ledger_numbers(ledger, "T101H", date(2021, 6, 13))
+    assert not any(
+        fg.within_rounding(fg.plain(added.value), v) for v in numbers
+    )
+    n = len(planted.cited_figures)
+    # Its sentence starts a line of its own, so it never joins the last
+    # sentence of the summary, whatever that ends with.
+    assert (
+        planted.summary == f"{draft.summary}\n{{PRIMARY}} forecasts {{F{n}}}."
+    )
+    assert (added.measure, added.model, added.horizon) == ("point", "SA-MA", 1)
+    assert added.unit == "attendances" and added.tool_call_id == "T1"
+    bare = rp.plant_figure(draft, [])
+    assert bare.cited_figures[-1].tool_call_id == "T0"
+    assert bare.summary.endswith(
+        f"\n{{PRIMARY}} forecasts {{F{len(draft.cited_figures) + 1}}}."
+    )
+
+
+# --- live with the stand-in, then replay -------------------------------------
+
+
+def test_the_set_runs_records_and_replays_exactly(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    live = rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    assert len(live.outcomes) == 7
+    assert all(o.status == "verified" for o in live.outcomes)
+    assert live.planted.attempts[0].planted
+    assert not live.planted.attempts[0].check.passed
+    assert paths.briefs.exists() and paths.audit.exists()
+    again = rp.run_set(replay_run, holidays, settings, paths, live=False)
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]
+    assert all(c.replayed for o in again.outcomes for c in o.calls)
+    assert {o.brief.backend for o in again.outcomes} == {"local"}
+
+
+def test_the_queue_and_the_reviewer_form_are_written(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    q = rp.write_queue(result, paths)
+    assert len(q.items()) == 7
+    assert paths.queue_csv.exists()
+    assert "planted" not in {i.brief_id for i in q.items()}
+
+
+def test_the_coordinator_runs_on_the_approved_briefs_only(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    q = rp.write_queue(result, paths)
+    crit = ap.Criteria(**{k: True for k in ap.Criteria.model_fields})
+    when = "2026-10-27T09:30:00+00:00"
+    for item in q.items()[:2]:
+        q.decide(
+            ap.Decision(
+                brief_id=item.brief_id,
+                action="approve",
+                initials="AB",
+                decided_at=when,
+                criteria=crit,
+            )
+        )
+    q.decide(
+        ap.Decision(
+            brief_id=q.items()[2].brief_id,
+            action="reject",
+            initials="AB",
+            decided_at=when,
+            criteria=crit,
+        )
+    )
+    done = rp.coordinate_approved(
+        q, settings, paths, live=True, chat_model=stand_in()
+    )
+    assert [d.brief_id for d in done] == [i.brief_id for i in q.items()[:2]]
+    again = rp.coordinate_approved(q, settings, paths, live=False)
+    assert [a.history for d in again for a in d.actions] == [
+        a.history for d in done for a in d.actions
+    ]
+
+
+def test_a_run_past_its_budget_is_stopped(
+    replay_run, holidays, settings, tmp_path
+):
+    tight = settings.model_copy(
+        update={
+            "agents": settings.agents.model_copy(update={"run_budget_s": 1e-9})
+        }
+    )
+    paths = rp.Paths.under(tmp_path, tight.llm_backend, "round1")
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            tight,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+        )
+
+
+# --- the prompts are kept with each label ------------------------------------
+
+
+def test_a_label_keeps_its_prompts_and_replays_from_them(
+    replay_run, holidays, settings, tmp_path, monkeypatch
+):
+    from ae_escalation import agents as ag
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    live = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    kept = sorted(p.name for p in paths.prompts.glob("*.md"))
+    assert kept == ["coordinator.md", "investigator.md", "reviewer.md"]
+    for name in kept:
+        assert (paths.prompts / name).read_text() == (
+            ag.PROMPTS_PATH / name
+        ).read_text()
+    # A tuning round changes the package's prompts; the first label still
+    # replays.
+    tuned = tmp_path / "tuned"
+    tuned.mkdir()
+    for name in kept:
+        text = (ag.PROMPTS_PATH / name).read_text()
+        (tuned / name).write_text(text.replace("plan them", "plan them well"))
+    monkeypatch.setattr(ag, "PROMPTS_PATH", tuned)
+    again = rp.run_set(replay_run, holidays, settings, paths, live=False)
+    assert [o.status for o in again.outcomes] == [
+        o.status for o in live.outcomes
+    ]
+
+
+def test_a_frontier_label_takes_its_prompts_from_the_local_label(tmp_path):
+    from ae_escalation import agents as ag
+
+    local = rp.Paths.under(tmp_path, "local", "round2")
+    local.prompts.mkdir(parents=True)
+    for source in ag.PROMPTS_PATH.glob("*.md"):
+        tuned = source.read_text(encoding="utf-8") + "\nTuned.\n"
+        (local.prompts / source.name).write_text(tuned, encoding="utf-8")
+    frontier = rp.Paths.under(tmp_path, "frontier", "round2")
+    rp.label_prompts(frontier, live=True)
+    for source in local.prompts.glob("*.md"):
+        copy = frontier.prompts / source.name
+        assert copy.read_text(encoding="utf-8").endswith("Tuned.\n")
+    (frontier.prompts / "reviewer.md").write_text("changed", encoding="utf-8")
+    with pytest.raises(rp.PromptsDiffer, match="reviewer.md"):
+        rp.label_prompts(frontier, live=False)
+
+
+def test_a_frontier_label_needs_the_local_labels_prompts(tmp_path):
+    frontier = rp.Paths.under(tmp_path, "frontier", "round2")
+    with pytest.raises(rp.ReplayMiss, match="local"):
+        rp.label_prompts(frontier, live=True)
+    assert not frontier.prompts.exists()
+
+
+# --- the budget, a stop and a resume -----------------------------------------
+
+
+def ticking():
+    """A clock that moves on one second each time it is read."""
+    state = {"t": 0}
+
+    def clock():
+        state["t"] += 1
+        return state["t"]
+
+    return clock
+
+
+def test_the_budget_is_checked_before_every_model_call(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    budget = gw.Budget(5, clock=ticking())
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=budget,
+        )
+    assert len(gw.RecordingStore(paths.briefs)) == 5
+    events = rp.progress(paths)
+    assert [e["event"] for e in events] == ["started", "stopped"]
+    stopped = events[-1]
+    assert stopped["step"] == "briefs" and stopped["completed"] == [
+        "20191006-S314H"
+    ]
+    assert stopped["in_progress"] == "20200322-Scotland"
+
+
+def interrupting(after):
+    """A stand-in that answers this many calls, then is interrupted, as by
+    Ctrl-C."""
+
+    def interrupt(messages):
+        """The operator's interrupt, mid-call."""
+        raise KeyboardInterrupt
+
+    return gw.ScriptedModel(script=[answer] * after + [interrupt])
+
+
+def test_an_interrupted_run_records_its_stop_and_the_time_spent(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    with pytest.raises(KeyboardInterrupt):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=interrupting(3),
+        )
+    last = rp.progress(paths)[-1]
+    assert last["event"] == "stopped" and last["spent_s"] is not None
+
+
+def progress_at(paths, *events):
+    """A progress file holding these (event, seconds ago, extra) entries."""
+    now = datetime.now(timezone.utc)
+    paths.progress.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        json.dumps(
+            {
+                "event": event,
+                "at": (now - timedelta(seconds=ago)).isoformat(),
+                "step": "briefs",
+                **extra,
+            }
+        )
+        for event, ago, extra in events
+    ]
+    paths.progress.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_killed_run_is_charged_the_time_since_it_started(tmp_path):
+    # A kill leaves no stop, only the start: a resume is charged the time
+    # since then, never a fresh budget.
+    paths = rp.Paths.under(tmp_path, "frontier", "t1")
+    progress_at(paths, ("started", 100, {}))
+    assert rp.spent(paths, "briefs") >= 100
+
+
+def test_a_killed_resume_adds_its_time_to_the_earlier_stops(tmp_path):
+    paths = rp.Paths.under(tmp_path, "frontier", "t1")
+    progress_at(
+        paths,
+        ("started", 500, {}),
+        ("stopped", 400, {"spent_s": 50.0}),
+        ("started", 30, {"resume": True}),
+    )
+    assert 80 <= rp.spent(paths, "briefs") < 90
+
+
+def test_a_completed_or_stopped_run_carries_its_recorded_spend(tmp_path):
+    paths = rp.Paths.under(tmp_path, "frontier", "t1")
+    progress_at(
+        paths, ("started", 500, {}), ("stopped", 400, {"spent_s": 50.0})
+    )
+    assert rp.spent(paths, "briefs") == 50.0
+
+
+def test_a_stopped_run_resumes_from_its_recordings_then_runs_live(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    whole = rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        rp.Paths.under(tmp_path / "whole", settings.llm_backend, "round1"),
+        live=True,
+        chat_model=stand_in(),
+    )
+    paths = rp.Paths.under(tmp_path / "cut", settings.llm_backend, "round1")
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(5, clock=ticking()),
+        )
+    resumed = rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+        resume=True,
+    )
+    assert [o.brief for o in resumed.outcomes] == [
+        o.brief for o in whole.outcomes
+    ]
+    first = resumed.outcomes[0].calls
+    assert all(c.replayed for c in first)
+    assert not any(c.replayed for c in resumed.outcomes[-1].calls)
+    assert [e["event"] for e in rp.progress(paths)] == [
+        "started",
+        "stopped",
+        "started",
+        "completed",
+    ]
+
+
+def generation(settings, **local):
+    """The settings with other local generation settings."""
+    return settings.model_copy(
+        update={"local": settings.local.model_copy(update=local)}
+    )
+
+
+def test_a_label_replays_with_the_generation_settings_it_ran_with(
+    replay_run, holidays, settings, tmp_path
+):
+    # The tuning round changes the generation settings, as it changes the
+    # prompts; a label recorded before it still replays as it ran.
+    before = generation(settings, num_predict=None, reasoning_effort="low")
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    live = rp.run_set(
+        replay_run, holidays, before, paths, live=True, chat_model=stand_in()
+    )
+    after = generation(settings, num_predict=8192, reasoning_effort="medium")
+    again = rp.run_set(replay_run, holidays, after, paths, live=False)
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]
+    assert rp.label_settings(after, gw.RecordingStore(paths.briefs)) == before
+    # A resume carries on live under config.json's settings, so a recording
+    # made under others is refused, never mixed in.
+    with pytest.raises(rp.ReplayMiss, match="differs"):
+        rp.run_set(
+            replay_run,
+            holidays,
+            after,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            resume=True,
+        )
+
+
+def test_recordings_made_under_two_settings_are_refused(settings, tmp_path):
+    store = gw.RecordingStore(tmp_path / "rec.jsonl")
+    for n, temperature in enumerate((0.0, 0.7)):
+        store.put(
+            {
+                "key": f"k{n}",
+                "request": {"options": {"temperature": temperature}},
+            }
+        )
+    with pytest.raises(rp.ReplayMiss, match="different generation"):
+        rp.label_settings(settings, store)
+
+
+def stopped_at_budget(replay_run, holidays, settings, tmp_path, calls):
+    """A labelled run stopped at its budget after so many model calls."""
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(calls, clock=ticking()),
+        )
+    return paths
+
+
+def test_a_stop_at_the_budget_is_told_from_any_other_stop(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = stopped_at_budget(replay_run, holidays, settings, tmp_path, 9)
+    stop = rp.budget_stop(paths)
+    assert stop["completed"] == ["20191006-S314H", "20200322-Scotland"]
+    other = rp.Paths.under(tmp_path, settings.llm_backend, "round2")
+    rp.note_progress(
+        other,
+        "stopped",
+        step="briefs",
+        reason="Connection refused",
+        completed=[],
+        in_progress="20191006-S314H",
+        spent_s=3.0,
+    )
+    assert rp.budget_stop(other) is None
+    assert rp.budget_stop(rp.Paths.under(tmp_path, "local", "none")) is None
+    # Both of the gateway's budget stops are told as one.
+    for reason in (
+        "the live run passed its budget of 840 s (841 s spent)",
+        "the live run reached its budget of 840 s during model call 4 of "
+        "run 20200322-T101H",
+    ):
+        assert rp.BUDGET_STOP.search(reason)
+
+
+def test_the_runs_a_stopped_set_completed_replay_alone(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = stopped_at_budget(replay_run, holidays, settings, tmp_path, 9)
+    done = rp.budget_stop(paths)["completed"]
+    again = rp.run_set(
+        replay_run, holidays, settings, paths, live=False, only=done
+    )
+    assert [o.run_id for o in again.outcomes] == done
+    assert again.planted is None
+    assert all(c.replayed for o in again.outcomes for c in o.calls)
+    ids = [rid for _, rid, _ in rp.set_runs(replay_run)]
+    assert len(ids) == 8 and ids[-1].endswith("-planted")
+
+
+def test_a_label_stopped_at_its_budget_replays_what_it_completed(
+    replay_run, holidays, settings, tmp_path
+):
+    # As the notebook replays every label: a stopped one gives the runs it
+    # completed and its stop, as the adequacy record states it.
+    paths = stopped_at_budget(replay_run, holidays, settings, tmp_path, 9)
+    result, stop = rp.replay_label(replay_run, holidays, settings, paths)
+    done = ["20191006-S314H", "20200322-Scotland"]
+    assert [o.run_id for o in result.outcomes] == done
+    assert result.planted is None
+    assert all(c.replayed for o in result.outcomes for c in o.calls)
+    assert stop.completed == done and stop.in_progress == "20200322-S314H"
+    assert stop.unfinished[0] == "20200322-S314H" and len(stop.unfinished) == 5
+    assert stop.designed_failure == "20210613-T101H-planted"
+    assert stop.line().startswith("Stopped at its budget: the live run")
+
+
+def test_a_label_that_completed_replays_whole_with_no_stop(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round2")
+    rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    result, stop = rp.replay_label(replay_run, holidays, settings, paths)
+    assert stop is None and len(result.outcomes) == 7
+    assert result.planted is not None
+    assert all(c.replayed for o in result.outcomes for c in o.calls)
+
+
+def test_reader_bs_sheet_and_the_raters_sheet_sit_in_approvals(tmp_path):
+    paths = rp.Paths.under(tmp_path, "frontier", "round2")
+    approvals = tmp_path / "approvals"
+    assert paths.reader_b == approvals / "reader_b_frontier_round2.csv"
+    assert paths.template_ratings == (
+        approvals / "template_ratings_frontier_round2.csv"
+    )
+
+
+def recorded(store, run_id, calls, agent="investigator"):
+    """Put recordings for one run, numbered after any it holds."""
+    first = 1 + sum(r["run_id"] == run_id for r in store.records())
+    for n, (purpose, digest) in enumerate(calls, first):
+        store.put(
+            {
+                "key": f"local|m|{run_id}|c{n:03d}",
+                "run_id": run_id,
+                "call_number": n,
+                "agent": agent,
+                "purpose": purpose,
+                "request_hash": digest,
+            }
+        )
+
+
+def test_a_retry_that_repeats_the_first_request_went_out_blind(tmp_path):
+    # Label round1's retries sent the first attempt's request again, byte
+    # for byte, so they never saw the problems they were refused for.
+    paths = rp.Paths.under(tmp_path, "local", "round1")
+    store = gw.RecordingStore(paths.briefs)
+    loop, draft = "tool loop", "draft"
+    recorded(store, "blind", [(loop, "a"), (draft, "b"), (loop, "a")])
+    recorded(store, "told", [(loop, "a"), (draft, "b"), (loop, "c")])
+    recorded(store, "told", [("wording", "d")], agent="reviewer")
+    recorded(store, "once", [(loop, "a"), (draft, "b")])
+    assert rp.blind_retries(paths) == {"blind": True, "told": False}
+
+
+def test_a_retry_after_a_refused_draft_is_told_its_problems(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round2")
+    rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    blind = rp.blind_retries(paths)
+    assert "20210613-T101H-planted" in blind
+    assert not any(blind.values())
+
+
+def test_notify_has_the_same_budget_and_writes_no_outbox_on_a_stop(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    q = rp.write_queue(result, paths)
+    crit = ap.Criteria(**{k: True for k in ap.Criteria.model_fields})
+    for item in q.items()[-2:]:
+        q.decide(
+            ap.Decision(
+                brief_id=item.brief_id,
+                action="approve",
+                initials="AB",
+                decided_at="2026-10-27T09:30:00+00:00",
+                criteria=crit,
+            )
+        )
+    with pytest.raises(rp.BudgetExceeded):
+        rp.coordinate_approved(
+            q,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(1, clock=ticking()),
+        )
+    assert not paths.outbox.exists()
+    assert rp.progress(paths)[-1]["step"] == "notify"
+    done = rp.coordinate_approved(
+        q, settings, paths, live=True, chat_model=stand_in(), resume=True
+    )
+    assert len(done) == 2 and paths.outbox.exists()
+
+
+# --- decisions reach the audit file and the queue file -----------------------
+
+
+def decisions_csv(paths, rows):
+    """Write the approver's decisions sheet."""
+    paths.decisions.parent.mkdir(parents=True, exist_ok=True)
+    with open(paths.decisions, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def approval_row(brief_id):
+    """One approval by AB, every criterion met, after the run began."""
+    return {
+        "brief_id": brief_id,
+        "action": "approve",
+        "initials": "AB",
+        "decided_at": AFTER_ANY_RUN,
+        "factual_edit": "no",
+        **{c.field: "yes" for c in ap.CRITERIA},
+        "note": "",
+        "edited_file": "",
+    }
+
+
+def kinds(path):
+    """The kind of each entry in a JSONL file."""
+    return [json.loads(x)["kind"] for x in path.read_text().splitlines()]
+
+
+def test_the_queue_and_each_decision_reach_the_audit_and_queue_files(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    rp.write_queue(result, paths)
+    assert kinds(paths.audit).count("queued") == 7
+    decisions_csv(paths, [approval_row(result.outcomes[0].run_id)])
+    rp.queue_with_decisions(result, paths, record=True)
+    events = [
+        json.loads(x)["event"] for x in paths.queue.read_text().splitlines()
+    ]
+    assert events.count("decision") == 1
+    assert kinds(paths.audit).count("decision") == 1
+    again = rp.queue_with_decisions(result, paths, record=True)
+    events = [
+        json.loads(x)["event"] for x in paths.queue.read_text().splitlines()
+    ]
+    assert events.count("decision") == 1
+    assert again.item(result.outcomes[0].run_id).state == "approved"
+    before = paths.queue.read_text()
+    rp.queue_with_decisions(result, paths)
+    assert paths.queue.read_text() == before
+
+
+def test_a_resumed_notify_skips_each_recorded_decision_and_asks_no_reviewer(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation.agents import WordingResult
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    rp.write_queue(result, paths)
+    first, second = [o for o in result.outcomes if o.status == "verified"][:2]
+    # An edit code finds factual, though the sheet says no: it names one
+    # more week. And an edit that fails the code check.
+    draft = first.brief.draft()
+    factual = draft.model_copy(
+        update={"summary": f"{draft.summary} Check {{WEEK2}} too."}
+    )
+    other = second.brief.draft()
+    wrong = other.cited_figures[0].model_copy(
+        update={"value": other.cited_figures[0].value + 50}
+    )
+    bad = other.model_copy(
+        update={"cited_figures": [wrong, *other.cited_figures[1:]]}
+    )
+    (paths.edits / "factual.json").write_text(factual.model_dump_json())
+    (paths.edits / "bad.json").write_text(bad.model_dump_json())
+    rows = [
+        {
+            **approval_row(o.run_id),
+            "action": "edit",
+            "edited_file": f"{paths.edits.name}/{name}",
+        }
+        for o, name in ((first, "factual.json"), (second, "bad.json"))
+    ]
+    decisions_csv(paths, rows)
+    calls = []
+
+    def reviewer(brief, run_id):
+        calls.append(run_id)
+        return WordingResult(passed=True, problems=[], by="model")
+
+    once = rp.queue_with_decisions(
+        result, paths, record=True, reviewer=reviewer
+    )
+    assert once.item(first.run_id).state == "approved with edit"
+    assert once.item(first.run_id).decisions[-1].factual_edit
+    assert once.item(second.run_id).state == "edit failed"
+    assert calls == [f"{first.run_id}-edit1"]
+    again = rp.queue_with_decisions(
+        result, paths, record=True, reviewer=reviewer
+    )
+    assert again.refusals == [] and calls == [f"{first.run_id}-edit1"]
+    assert again.item(first.run_id).state == "approved with edit"
+    assert again.item(second.run_id).state == "edit failed"
+    events = [
+        json.loads(x)["event"] for x in paths.queue.read_text().splitlines()
+    ]
+    assert events.count("decision") == 2
+    assert kinds(paths.audit).count("decision") == 2
+    assert kinds(paths.audit).count("refused") == 0
+    # The queue rebuilt from its file keeps each edit's recorded wording
+    # check, with no Reviewer to ask.
+    rebuilt = ap.ApprovalQueue(paths.queue)
+    assert rebuilt.item(first.run_id).state == "approved with edit"
+    assert rebuilt.item(first.run_id).edit_wording.passed
+
+
+def test_the_run_start_bounds_the_approvers_decisions(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    assert rp.run_started(paths) is None
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    started = rp.run_started(paths)
+    first = rp.progress(paths)[0]
+    assert started.isoformat() == first["at"]
+    queue = rp.queue_with_decisions(result, paths)
+    assert queue.not_before == started
+
+
+# --- one bad row stops nothing -----------------------------------------------
+
+
+def test_each_bad_row_is_refused_and_logged_and_the_rest_apply(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    ids = [o.run_id for o in result.outcomes]
+    early = {**approval_row(ids[0]), "decided_at": "2020-01-01T09:00:00"}
+    unknown = approval_row("19990101-NOPE")
+    garbled = {**approval_row(ids[2]), "figures_correct": "maybe"}
+    good = approval_row(ids[3])
+    decisions_csv(paths, [early, unknown, garbled, good])
+    log = gw.AuditLog()
+    queue = rp.queue_with_decisions(result, paths, log=log)
+    assert queue.item(ids[3]).state == "approved"
+    assert queue.item(ids[0]).state == "awaiting decision"
+    reasons = " | ".join(r["reason"] for r in queue.refusals)
+    assert len(queue.refusals) == 3
+    assert "before the run" in reasons and "NOPE" in reasons
+    assert "maybe" in reasons
+    assert [e["kind"] for e in log.entries].count("refused") == 3
+
+
+# --- the approver's files survive a spreadsheet ------------------------------
+
+
+def test_each_brief_gets_a_prefilled_edit_file_named_in_the_sheet(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    result = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    rp.write_queue(result, paths)
+    with open(paths.queue_csv, newline="", encoding="utf-8-sig") as fh:
+        rows = list(csv.DictReader(fh))
+    first = result.outcomes[0]
+    edit = paths.queue_csv.parent / rows[0]["edited_file"]
+    assert edit.parent == paths.edits
+    assert br.BriefDraft.model_validate_json(edit.read_text()) == (
+        first.brief.draft()
+    )
+    assert paths.queue_csv.read_bytes().startswith(b"\xef\xbb\xbf")
+    rows[0].update(
+        action="approve",
+        initials="AB",
+        decided_at="27/10/2026 09:30",
+        factual_edit="no",
+        **{c.field: "yes" for c in ap.CRITERIA},
+    )
+    with open(paths.decisions, "w", newline="", encoding="utf-8-sig") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerow(rows[0])
+    (d,) = ap.read_decisions(paths.decisions)
+    assert d.action == "approve" and d.edited is None
+    assert (d.decided_at.hour, d.decided_at.tzname()) == (9, "GMT")
+
+
+def test_a_sheet_saved_in_the_wrong_encoding_is_named(tmp_path):
+    sheet = tmp_path / "decisions.csv"
+    sheet.write_bytes("brief_id,action,note\nx,approve,£5\n".encode("cp1252"))
+    with pytest.raises(ValueError, match="CSV UTF-8"):
+        ap.read_decisions(sheet)
+
+
+def test_the_pre_run_check_is_the_first_entry_in_the_audit_log(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    first = json.loads(paths.audit.read_text().splitlines()[0])
+    assert first["kind"] == "pre-run check"
+    assert first["total"] == 7 and first["matches_probe"] is True
+    assert first["by_source"] == {"latch": 4, "demand": 2, "surge": 1}
+
+
+def test_a_resume_marks_the_audit_entries_it_repeats(
+    replay_run, holidays, settings, tmp_path
+):
+    from ae_escalation import gateway as gw
+
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "round1")
+    with pytest.raises(rp.BudgetExceeded):
+        rp.run_set(
+            replay_run,
+            holidays,
+            settings,
+            paths,
+            live=True,
+            chat_model=stand_in(),
+            budget=gw.Budget(12, clock=ticking()),
+        )
+    stopped = rp.progress(paths)[-1]
+    assert stopped["event"] == "stopped" and stopped["spent_s"] > 12
+    rp.run_set(
+        replay_run,
+        holidays,
+        settings,
+        paths,
+        live=True,
+        chat_model=stand_in(),
+        resume=True,
+    )
+    entries = [json.loads(x) for x in paths.audit.read_text().splitlines()]
+    fresh = [e for e in entries if not e.get("replayed")]
+    outcomes = [e["run_id"] for e in fresh if e["kind"] == "outcome"]
+    assert len(outcomes) == len(set(outcomes)) == 8
+    assert sum(e["kind"] == "pre-run check" for e in fresh) == 1
+    assert rp.progress(paths)[-1]["spent_s"] >= stopped["spent_s"]
+
+
+# --- a label replays with the no-drift line it was recorded with -------------
+
+
+def with_no_drift_line(settings, version):
+    """The settings with the Investigator's no-drift line at a version."""
+    agents = settings.agents.model_copy(update={"no_drift_line": version})
+    return settings.model_copy(update={"agents": agents})
+
+
+def test_a_label_recorded_with_the_old_line_replays_under_the_new(
+    replay_run, holidays, settings, tmp_path
+):
+    # The recorded runs gave the Investigator the old line; new runs get
+    # the raters' wording, and a replay rebuilds each request as recorded.
+    old = with_no_drift_line(settings, 1)
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    live = rp.run_set(
+        replay_run, holidays, old, paths, live=True, chat_model=stand_in()
+    )
+    recorded = paths.briefs.read_text(encoding="utf-8")
+    assert ag.NO_DRIFT_LINES[1] in recorded
+    assert ag.NO_DRIFT_LINES[2] not in recorded
+    new = with_no_drift_line(settings, 2)
+    again = rp.run_set(replay_run, holidays, new, paths, live=False)
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]
+
+
+def test_a_new_live_run_gives_the_investigator_the_raters_wording(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    rp.run_set(
+        replay_run,
+        holidays,
+        with_no_drift_line(settings, 2),
+        paths,
+        live=True,
+        chat_model=stand_in(),
+    )
+    recorded = paths.briefs.read_text(encoding="utf-8")
+    assert ag.NO_DRIFT_LINES[2] in recorded
+    assert ag.NO_DRIFT_LINES[1] not in recorded
+
+
+# --- the template rule on the replay set -------------------------------------
+
+FLAG_WEEKS = ["20210613-T101H", "20230409-C121H"]
+
+
+def under_the_rule(settings):
+    """The settings with the template rule, as config.json ships it."""
+    return settings.model_copy(update={"explanation": "template_by_default"})
+
+
+def test_a_new_run_under_the_rule_writes_flag_weeks_from_the_template(
+    replay_run, holidays, settings, tmp_path
+):
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    rule = under_the_rule(settings)
+    live = rp.run_set(
+        replay_run, holidays, rule, paths, live=True, chat_model=stand_in()
+    )
+    assert [t.run_id for t in live.templates] == FLAG_WEEKS
+    assert all(t.template.version == 3 for t in live.templates)
+    assert all(t.status == "verified" for t in live.templates)
+    assert not {o.run_id for o in live.outcomes} & set(FLAG_WEEKS)
+    assert len(live.outcomes) == 5 and live.planted is not None
+    again = rp.run_set(replay_run, holidays, rule, paths, live=False)
+    assert again.templates == live.templates
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]
+    # The run's record says how it routed, so it replays the same way under
+    # either setting.
+    back = rp.run_set(replay_run, holidays, settings, paths, live=False)
+    assert back.templates == live.templates
+
+
+def test_a_label_recorded_with_the_agent_replays_with_the_agent(
+    replay_run, holidays, settings, tmp_path
+):
+    # The recorded runs had the agent write every brief, so a replay under
+    # the template rule still runs them through the agent.
+    paths = rp.Paths.under(tmp_path, settings.llm_backend, "t1")
+    live = rp.run_set(
+        replay_run, holidays, settings, paths, live=True, chat_model=stand_in()
+    )
+    assert {o.run_id for o in live.outcomes} >= set(FLAG_WEEKS)
+    again = rp.run_set(
+        replay_run, holidays, under_the_rule(settings), paths, live=False
+    )
+    assert not again.templates
+    assert [o.brief for o in again.outcomes] == [
+        o.brief for o in live.outcomes
+    ]

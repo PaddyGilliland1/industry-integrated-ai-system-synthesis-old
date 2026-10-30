@@ -1,0 +1,92 @@
+"""The second reader's materials: a one-page plain-English instruction sheet
+and a rating form, for an anonymous reader who did not build the system,
+with no name anywhere."""
+
+import re
+
+import pytest
+
+from ae_escalation import approval as ap
+
+from .conftest import REPO
+
+SHEET = REPO / "docs" / "reader_b_instructions.md"
+FORM = REPO / "docs" / "reader_b_rating_form.md"
+NAMES = ("paddy", "patrick", "gilliland", "pg ")
+
+
+@pytest.fixture(params=[SHEET, FORM], ids=["sheet", "form"])
+def doc(request):
+    """The text of each Reader B document."""
+    return request.param.read_text(encoding="utf-8")
+
+
+def sentences(text):
+    """The prose sentences of a Markdown document."""
+    prose = re.sub(r"^\s*(#|\||\[|- \[).*$", "", text, flags=re.M)
+    prose = re.sub(r"\s+", " ", prose)
+    return [s for s in re.split(r"(?<=[.?!])\s+", prose) if s.strip()]
+
+
+def test_no_name_appears_and_none_is_asked_for(doc):
+    low = doc.lower()
+    assert not any(n in low for n in NAMES)
+    assert not re.search(r"\b(your )?name\s*:", low)
+    assert "reader b" in low
+
+
+def test_no_em_or_en_dash(doc):
+    assert not re.search("[\u2013\u2014]", doc)
+
+
+def test_the_sheet_fits_one_page_in_plain_sentences():
+    text = SHEET.read_text(encoding="utf-8")
+    assert len(text.split()) <= 480
+    assert max(len(s.split()) for s in sentences(text)) < 45
+
+
+def test_the_sheet_says_what_the_level_means_and_what_to_do():
+    text = SHEET.read_text(encoding="utf-8")
+    assert (
+        "The demand level shows demand unusually high for the time of "
+        "year. It is not pressure, need or priority." in text
+    )
+    for word in ("approve", "edit", "reject", "Text A", "Text B"):
+        assert word in text
+
+
+def test_the_form_carries_the_six_criteria_as_the_queue_does():
+    text = FORM.read_text(encoding="utf-8")
+    for c in ap.CRITERIA:
+        assert text.count(f"| {c.name} | {c.test} |") == 4 + 4
+
+
+def test_the_form_has_a_decision_and_notes_for_each_of_four_briefs():
+    text = FORM.read_text(encoding="utf-8")
+    for n in (1, 2, 3, 4):
+        assert f"### Brief {n}" in text
+    assert text.count("[ ] Approve") == 4
+    assert text.count("[ ] Edit") == 4
+    assert text.count("[ ] Reject") == 4
+    assert text.count("Notes:") >= 4 + 4
+
+
+def test_the_form_rates_both_texts_of_both_template_pairs():
+    text = FORM.read_text(encoding="utf-8")
+    for week in (1, 2):
+        for label in ("A", "B"):
+            assert f"### Week {week}, Text {label}" in text
+    assert text.count("Any factual error?") == 4
+
+
+def test_the_sheet_says_what_the_figure_check_proves_and_no_more():
+    # Saying every figure was checked would prime the automation bias the
+    # risks list names.
+    text = SHEET.read_text(encoding="utf-8")
+    assert "already checked every figure" not in text
+    assert "checked against its source" in text
+    assert "does not judge" in text
+    # Each figure carries a label saying what it is, which the reader can
+    # hold the sentence to.
+    assert "label in brackets saying what it is" in text
+    assert "calls a figure something its label does not" in text

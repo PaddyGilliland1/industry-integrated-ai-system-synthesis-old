@@ -1,0 +1,87 @@
+---
+config:
+  theme: base
+  themeVariables:
+    fontSize: 17px
+    fontFamily: "DejaVu Sans, Arial, sans-serif"
+    primaryTextColor: "#0b0b0b"
+    lineColor: "#52514e"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#f7f7f5"
+    clusterBorder: "#bdbcb6"
+  flowchart:
+    curve: basis
+    htmlLabels: true
+    wrappingWidth: 300
+    nodeSpacing: 18
+    rankSpacing: 18
+    padding: 8
+    subGraphTitleMargin:
+      top: 22
+      bottom: 12
+---
+flowchart LR
+%% Figure 1: code decides, the agents explain, a person approves. Each arrow
+%% carries only its number, which is its row in the case study's interaction
+%% table, and each box names the prior project it comes from, or says it is
+%% new in this project. The code lane's first part stands on the left and the
+%% other lanes on the right, its second part last, so the figure is no taller
+%% than 1.26 times its width and its smallest text prints at 8 pt or more at
+%% 6.5 inches wide. Arrow 8 joins the two columns, not two boxes,
+%% because a column keeps its own top-to-bottom order only while no box inside
+%% it links outside it; the table says it runs from the screen to the
+%% Investigator. The spaces before the person lane's title move it off the
+%% dashed route.
+  subgraph CODE["Code lane: decides"]
+    direction TB
+    DATA["Weekly PHS data<br/><i>real, OGL</i>"]
+    CLEAN["Clean, flag, keep<br/><i>AI Programming<br/>Foundations</i>"]
+    FC["Forecasts and back-test<br/><i>Statistical Analysis;<br/>GRU (gated recurrent unit)<br/>from Deep Learning Systems,<br/>never shown</i>"]
+    CAP["Simulated seasonal<br/>capacity<br/><i>new, simulated</i>"]
+    LEVEL["Demand level rule:<br/>flag, surge or held<br/><i>new</i>"]
+    DRIFT["Drift check<br/>and latch<br/><i>new</i>"]
+    SCREEN["Screen<br/><i>Agentic AI Systems</i>"]
+    DATA -->|"1"| CLEAN
+    CLEAN -->|"2"| FC
+    FC -->|"3"| LEVEL
+    FC -->|"4"| DRIFT
+    CAP -->|"5"| LEVEL
+    LEVEL -->|"6"| SCREEN
+    DRIFT -->|"7"| SCREEN
+  end
+  subgraph RIGHT[" "]
+    direction TB
+    subgraph AGENTS["Agents lane: explain"]
+      INV["Investigator<br/>language model,<br/>five read-only tools<br/><i>Agentic AI Systems</i>"]
+      REV["Reviewer<br/>code figure check, then<br/>language-model wording check<br/><i>Agentic AI Systems, extended</i>"]
+    end
+    subgraph PERSON["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Person lane: approves"]
+      MGR["Duty manager<br/>approve, edit or reject<br/><i>approval queue from<br/>Agentic AI Systems</i>"]
+    end
+    subgraph RECORD["Code lane: acts and records"]
+      ACT["Assign, notify,<br/>track, escalate<br/><i>new; outbox, never sent</i>"]
+      AUDIT["Audit log and replay<br/><i>Agentic AI Systems</i>"]
+    end
+    INV -->|"9"| REV
+    REV -->|"10"| INV
+    REV -->|"11"| MGR
+    REV -->|"12"| MGR
+    MGR -->|"13"| REV
+    MGR -->|"14"| ACT
+    MGR -->|"15"| AUDIT
+    ACT -->|"16"| AUDIT
+  end
+  CODE -->|"8"| RIGHT
+  classDef data fill:#eeeeee,stroke:#6b7280,stroke-width:2px
+  classDef apf fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+  classDef stat fill:#d1fae5,stroke:#047857,stroke-width:2px
+  classDef agentic fill:#fde68a,stroke:#b45309,stroke-width:2px
+  classDef new fill:#ffffff,stroke:#0b0b0b,stroke-width:2px,stroke-dasharray:5 3
+  classDef person fill:#fecaca,stroke:#b91c1c,stroke-width:3px
+  class DATA data
+  class CLEAN apf
+  class FC stat
+  class CAP,LEVEL,DRIFT,ACT new
+  class SCREEN,INV,REV,AUDIT agentic
+  class MGR person
+  linkStyle 10 stroke:#b91c1c,stroke-width:2.5px,stroke-dasharray:6 4

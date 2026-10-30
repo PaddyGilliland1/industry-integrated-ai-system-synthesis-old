@@ -1,0 +1,7 @@
+# Black formats this repository at 79 characters, the same limit flake8 checks.
+[tool.black]
+line-length = 79
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

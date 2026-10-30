@@ -1,0 +1,4 @@
+{"event": "started", "at": "2026-10-26T10:25:51.704210+00:00", "step": "briefs", "resume": false, "budget_s": 1800.0, "budget_from": "--budget-s", "config_budget_s": 840.0}
+{"event": "completed", "at": "2026-10-26T10:28:41.924699+00:00", "step": "briefs", "spent_s": 170.1}
+{"event": "started", "at": "2026-10-26T11:52:58.963515+00:00", "step": "notify", "resume": false}
+{"event": "completed", "at": "2026-10-26T11:53:02.191212+00:00", "step": "notify", "spent_s": 12.1}

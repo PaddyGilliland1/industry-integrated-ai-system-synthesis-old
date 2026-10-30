@@ -1,0 +1,2 @@
+{"event": "started", "at": "2026-10-26T08:41:09.563286+00:00", "step": "briefs", "resume": false, "budget_s": 1800.0, "budget_from": "--budget-s", "config_budget_s": 840.0}
+{"event": "completed", "at": "2026-10-26T08:53:20.002464+00:00", "step": "briefs", "spent_s": 657.2}

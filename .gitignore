@@ -14,7 +14,7 @@
 *.pickle
 *.h5
 *.hdf5
-data/
+data/*
 datasets/
 
 # Model weights
@@ -42,3 +42,22 @@ __pycache__/
 Thumbs.db
 
 # PDF files are not ignored: the report PDF is a deliverable.
+
+# The PHS weekly A&E file, the frozen GOV.UK bank holidays and their manifest, published with
+# the project. data/* above ignores the folder's contents, not the folder, so these lines can
+# bring each file back.
+!data/weekly_ae_activity_20261011.csv
+!data/bank-holidays_20261024.json
+!data/MANIFEST.tsv
+!recordings_manifest.tsv
+
+# The approval sheets of the frontier set, the approver's decisions and the adequacy scores,
+# published as the replay's evidence.
+!approvals/decisions_frontier_round2.csv
+!approvals/queue_frontier_round2.csv
+!approvals/adequacy_frontier_round2.csv
+!approvals/adequacy_local_round2.csv
+# Reader B's four decisions and both raters' marks on the template pairs, typed from the
+# returned forms.
+!approvals/reader_b_frontier_round2.csv
+!approvals/template_ratings_frontier_round2.csv

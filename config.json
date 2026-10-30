@@ -1,0 +1,52 @@
+{
+  "llm_backend": "frontier",
+  "explanation": "template_by_default",
+  "template_version": 3,
+  "local": {
+    "model": "nemotron-3.5-lightning:30b-a3b",
+    "digest": "e7a64ff15fb174c42b4f463e5c888c4f2c7b9cabf9e8d65a1c0874405426c1b2",
+    "temperature": 0.0,
+    "endpoint": "http://localhost:11434/v1",
+    "reasoning_effort": "medium",
+    "num_predict": 8192
+  },
+  "frontier": {
+    "model": "claude-sonnet-5-5",
+    "temperature": null,
+    "max_tokens": 16000,
+    "effort": "medium",
+    "time_limit_s": 420,
+    "api_key_env": "ANTHROPIC_API_KEY"
+  },
+  "agents": {
+    "tool_call_cap": 8,
+    "retries": 1,
+    "time_limit_s": 240,
+    "run_budget_s": 840,
+    "no_drift_line": 2
+  },
+  "coordinator": {
+    "start_hour": 10,
+    "reply_deadline_hours": {"2": 48, "3": 24, "4": 12},
+    "acknowledged_share": 0.75,
+    "ack_hours": [2, 72]
+  },
+  "data": [
+    {
+      "file": "data/weekly_ae_activity_20261011.csv",
+      "sha256": "9ffe7f3364a1592f7c8d2d083df9fe4425d4fd2bd84dfed0a3567bececcd1a38"
+    },
+    {
+      "file": "data/bank-holidays_20261024.json",
+      "sha256": "538b3482c28b85ecd2db606a0d5ae6ad17248900b6498700ce0a48d26a3ecde6"
+    }
+  ],
+  "seeds": {
+    "gru": [0, 1, 2],
+    "bootstrap": 0,
+    "data_test_intervals": 1,
+    "data_test_paired": 2,
+    "acknowledgements": 20261025,
+    "template_order": 20261025
+  }
+}
