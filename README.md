@@ -63,6 +63,21 @@
 - **The paper:** `module_summary.pdf` is the synthesis paper the brief requires, and `glossary.pdf`
   defines the terms used in the paper, the case study, the notebook and this README.
 
+## Additional files, for information
+
+The brief asks for the system, the paper and the files needed to run it. The files below go beyond
+that. They are here to make the work easier to read and to check.
+
+| File or folder | What it holds |
+|---|---|
+| `glossary.pdf` | Plain-English definitions of the terms used in the paper, the case study, the notebook and this README |
+| `ae_escalation_case_study.pdf`, from `ae_escalation_case_study.md` | The design, its evaluation and its limits in full, beyond the paper's word limit |
+| `examples/` | Briefs and notifications as a duty manager would receive them; `examples/README.md` lists them |
+| `approvals/` | The approval queue, the approver's decisions and edits, the adequacy test records, Reader B's ratings and the template comparison ratings |
+| `outbox/` | The notifications drafted after approval, which are never sent |
+| `diagram/` | The Mermaid sources of the diagrams in `figures/` |
+| `docs/` | My build notes, and the instructions and rating form Reader B used |
+
 ## Dataset
 
 - **Name:** Weekly A&E Activity and Waiting Times, Public Health Scotland, on Scottish Health and
